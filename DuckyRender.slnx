@@ -1,0 +1,7 @@
+<Solution>
+  <Configurations>
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Project Path="DuckyRender/DuckyRender.vcxproj" Id="65e1d890-6279-4860-8921-393578ca303a" />
+</Solution>
