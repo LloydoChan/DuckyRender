@@ -30,7 +30,48 @@ XMFLOAT3 vertices[] =
 	{ 0.5f, -0.7f, 0.f},
 };
 
+std::wofstream logFile("log.txt");
+
 unsigned short indices[] = { 0,1,2 };
+
+struct VBPair
+{
+	ID3D12Resource* vertBuffPointer = nullptr;
+	D3D12_VERTEX_BUFFER_VIEW vbView = {};
+};
+
+struct IBPair
+{
+	ID3D12Resource* idxBuffPointer = nullptr;
+	D3D12_INDEX_BUFFER_VIEW ibView = {};
+};
+
+struct PipelineAndRootSig
+{
+	ID3D12RootSignature* rootSig = nullptr;
+	ID3D12PipelineState* pipeLineState = nullptr;
+};
+
+struct ViewportScissor
+{
+	// default - wholescreen
+	ViewportScissor()
+	{ 
+		viewport.Height = WINDOW_HEIGHT;
+		viewport.Width = WINDOW_WIDTH;
+		viewport.TopLeftX = viewport.TopLeftY = 0;
+		viewport.MaxDepth = 1.f;
+		viewport.MinDepth = 0.f; 
+	
+		scissor.left = scissor.top = 0;
+		scissor.bottom = WINDOW_HEIGHT;
+		scissor.right = WINDOW_WIDTH;
+	};
+
+
+	D3D12_VIEWPORT viewport = {};
+	D3D12_RECT scissor = {};
+};
 
 bool OutputErrorFromHResult(HRESULT hResult, const char* message, std::wofstream& logFile)
 {
@@ -55,10 +96,175 @@ LRESULT WindowProcedure(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 	return DefWindowProc(hwnd, msg, wparam, lparam);
 }
 
+bool MapAndCreateVertexView(VBPair* newVertexBufferPair, XMFLOAT3* vertData, unsigned int numElems)
+{
+	XMFLOAT3* vertMap = nullptr;
+	HRESULT hResult = newVertexBufferPair->vertBuffPointer->Map(0, nullptr, (void**)&vertMap);
+
+	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "problem mapping buffer : ", logFile)) return false;
+
+	std::copy(vertData, vertData + numElems, vertMap);
+	newVertexBufferPair->vertBuffPointer->Unmap(0, nullptr);
+
+	newVertexBufferPair->vbView.BufferLocation = newVertexBufferPair->vertBuffPointer->GetGPUVirtualAddress();
+	newVertexBufferPair->vbView.SizeInBytes = sizeof(XMFLOAT3) * numElems;
+	newVertexBufferPair->vbView.StrideInBytes = sizeof(XMFLOAT3);
+}
+
+bool MapAndCreateIndexView(IBPair* newIndexBufferPair, unsigned short* indexData, unsigned int numElems)
+{
+	unsigned short* idxMap = nullptr;
+	HRESULT hResult = newIndexBufferPair->idxBuffPointer->Map(0, nullptr, (void**)&idxMap);
+
+	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "problem mapping buffer : ", logFile)) return 1;
+
+	std::copy(indexData, indexData + numElems, idxMap);
+	newIndexBufferPair->idxBuffPointer->Unmap(0, nullptr);
+
+	newIndexBufferPair->ibView.BufferLocation = newIndexBufferPair->idxBuffPointer->GetGPUVirtualAddress();
+	newIndexBufferPair->ibView.Format = DXGI_FORMAT_R16_UINT;
+	newIndexBufferPair->ibView.SizeInBytes = sizeof(unsigned short) * numElems;
+}
+
+ID3DBlob* CompileShaderReturnBlob(LPCWSTR ShaderFilePath, LPCSTR entryPoint, LPCSTR profile)
+{
+	ID3DBlob* blob = nullptr;
+
+	HRESULT hResult = D3DCompileFromFile(
+		ShaderFilePath,
+		nullptr,
+		D3D_COMPILE_STANDARD_FILE_INCLUDE,
+		entryPoint,
+		profile,
+		D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION,
+		0,
+		&blob,
+		nullptr
+	);
+
+	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "problem creating vs shader : ", logFile)) return nullptr;
+
+	return blob;
+}
+
+ID3D12Resource* CreateBuffer(ID3D12Device* device, void** sourceBuffer)
+{
+	// new for creating triangle data
+	D3D12_HEAP_PROPERTIES heapprop = {};
+
+	heapprop.Type = D3D12_HEAP_TYPE_UPLOAD;
+	heapprop.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
+	heapprop.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
+
+	D3D12_RESOURCE_DESC resdesc = {};
+
+	resdesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+	resdesc.Width = sizeof(*sourceBuffer);
+	resdesc.Height = 1;
+	resdesc.DepthOrArraySize = 1;
+	resdesc.MipLevels = 1;
+	resdesc.Format = DXGI_FORMAT_UNKNOWN;
+	resdesc.SampleDesc.Count = 1;
+	resdesc.Flags = D3D12_RESOURCE_FLAG_NONE;
+	resdesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+
+	ID3D12Resource* newBuff = nullptr;
+
+	HRESULT hResult;
+
+	hResult = device->CreateCommittedResource(
+		&heapprop,
+		D3D12_HEAP_FLAG_NONE,
+		&resdesc,
+		D3D12_RESOURCE_STATE_GENERIC_READ,
+		nullptr,
+		IID_PPV_ARGS(&newBuff)
+	);
+
+	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "problem creating committed resource : ", logFile)) return nullptr;
+
+	return newBuff;
+}
+
+PipelineAndRootSig CreatePSO(ID3D12Device* device, LPCWSTR vertexShader, LPCWSTR pixelShader)
+{
+	PipelineAndRootSig newPipeline;
+	ID3DBlob* vsBlob = CompileShaderReturnBlob(vertexShader, "BasicVS", "vs_5_0");
+	ID3DBlob* psBlob = CompileShaderReturnBlob(pixelShader, "BasicPS", "ps_5_0");
+
+	if (vsBlob == nullptr || psBlob == nullptr) return newPipeline;
+
+	D3D12_ROOT_SIGNATURE_DESC rootSigDesc = {};
+	rootSigDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
+
+	ID3DBlob* rootSigBlob = nullptr;
+
+	HRESULT hResult = D3D12SerializeRootSignature(
+		&rootSigDesc,
+		D3D_ROOT_SIGNATURE_VERSION_1_0,
+		&rootSigBlob,
+		nullptr
+	);
+
+	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "couldn't serialize root sig ", logFile)) return newPipeline;
+
+	hResult = device->CreateRootSignature(0, rootSigBlob->GetBufferPointer(), rootSigBlob->GetBufferSize(), IID_PPV_ARGS(&newPipeline.rootSig));
+	rootSigBlob->Release();
+	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "couldn't create root sig ", logFile)) return newPipeline;;
+
+	D3D12_GRAPHICS_PIPELINE_STATE_DESC gPipeline = {};
+
+	gPipeline.pRootSignature = newPipeline.rootSig;
+
+	gPipeline.VS.pShaderBytecode = vsBlob->GetBufferPointer();
+	gPipeline.VS.BytecodeLength = vsBlob->GetBufferSize();
+	gPipeline.PS.pShaderBytecode = psBlob->GetBufferPointer();
+	gPipeline.PS.BytecodeLength = psBlob->GetBufferSize();
+
+	gPipeline.SampleMask = D3D12_DEFAULT_SAMPLE_MASK;
+	gPipeline.RasterizerState.MultisampleEnable = false;
+
+	gPipeline.RasterizerState.CullMode = D3D12_CULL_MODE_BACK;
+	gPipeline.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
+	gPipeline.RasterizerState.DepthClipEnable = true;
+
+	gPipeline.BlendState.AlphaToCoverageEnable = false;
+	gPipeline.BlendState.IndependentBlendEnable = false;
+
+	D3D12_RENDER_TARGET_BLEND_DESC renderTargetBlendDesc = {};
+	renderTargetBlendDesc.BlendEnable = false;
+	renderTargetBlendDesc.LogicOpEnable = false;
+	renderTargetBlendDesc.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+
+	gPipeline.BlendState.RenderTarget[0] = renderTargetBlendDesc;
+
+
+	D3D12_INPUT_ELEMENT_DESC elemLayout[] = { {"POSITION",
+												0,
+												DXGI_FORMAT_R32G32B32_FLOAT,
+												0,
+												D3D12_APPEND_ALIGNED_ELEMENT,
+												D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+												0} };
+
+	gPipeline.InputLayout.pInputElementDescs = elemLayout;
+	gPipeline.InputLayout.NumElements = 1;
+	gPipeline.IBStripCutValue = D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED;
+
+	gPipeline.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+	gPipeline.NumRenderTargets = 1;
+	gPipeline.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
+	gPipeline.SampleDesc.Count = 1;
+	gPipeline.SampleDesc.Quality = 0;
+
+	hResult = device->CreateGraphicsPipelineState(&gPipeline, IID_PPV_ARGS(&newPipeline.pipeLineState));
+	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "couldn't create graphics pipeline ", logFile));
+
+	return newPipeline;
+}
+
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 {
-	std::wofstream logFile("log.txt");
-
 	RECT wrc = { 0, 0, WINDOW_WIDTH, WINDOW_HEIGHT };
 	AdjustWindowRect(&wrc, WS_OVERLAPPEDWINDOW, false);
 
@@ -116,7 +322,6 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 
 	// enumerated by high perf so take first adapter in list
 	IDXGIAdapter* chosenAdapter = adapters[0];
-
 
 	// create lists and queues
 	ID3D12CommandAllocator* cmdAllocator = nullptr;
@@ -190,193 +395,21 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 		handle.ptr += device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 	}
 
-	// new for creating triangle data
-	D3D12_HEAP_PROPERTIES heapprop = {};
+	VBPair trianglePair;
+	trianglePair.vertBuffPointer = CreateBuffer(device, (void**)&vertices);
+	if (trianglePair.vertBuffPointer == nullptr) return 1;
+	if (!MapAndCreateVertexView(&trianglePair, vertices, 3)) return 1;
 
-	heapprop.Type = D3D12_HEAP_TYPE_UPLOAD;
-	heapprop.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
-	heapprop.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
+	IBPair triangleIndexPair;
+	triangleIndexPair.idxBuffPointer = CreateBuffer(device, (void**)&indices);
+	if (triangleIndexPair.idxBuffPointer == nullptr) return 1;
 
-	D3D12_RESOURCE_DESC resdesc = {};
+	if(!MapAndCreateIndexView(&triangleIndexPair, indices, 3)) return 1;
 
-	resdesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-	resdesc.Width = sizeof(vertices);
-	resdesc.Height = 1;
-	resdesc.DepthOrArraySize = 1;
-	resdesc.MipLevels = 1;
-	resdesc.Format = DXGI_FORMAT_UNKNOWN;
-	resdesc.SampleDesc.Count = 1;
-	resdesc.Flags = D3D12_RESOURCE_FLAG_NONE;
-	resdesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+	PipelineAndRootSig pipeline = CreatePSO(device, L"BasicVertTransformation.hlsl", L"BasicColorPixelShader.hlsl");
+	if (pipeline.rootSig == nullptr || pipeline.pipeLineState == nullptr) return 1;
 
-	ID3D12Resource* vertBuff = nullptr;
-
-	hResult = device->CreateCommittedResource(
-		&heapprop,
-		D3D12_HEAP_FLAG_NONE,
-		&resdesc,
-		D3D12_RESOURCE_STATE_GENERIC_READ,
-		nullptr,
-		IID_PPV_ARGS(&vertBuff)
-	);
-	
-	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "problem creating committed resource : ", logFile)) return 1;
-
-	XMFLOAT3* vertMap = nullptr;
-	hResult = vertBuff->Map(0, nullptr, (void**)&vertMap);
-
-	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "problem mapping buffer : ", logFile)) return 1;
-
-	std::copy(std::begin(vertices), std::end(vertices), vertMap);
-	vertBuff->Unmap(0, nullptr);
-
-	D3D12_VERTEX_BUFFER_VIEW vbView = {};
-	vbView.BufferLocation = vertBuff->GetGPUVirtualAddress();
-	vbView.SizeInBytes = sizeof(vertices);
-	vbView.StrideInBytes = sizeof(vertices[0]);
-
-	ID3D12Resource* idxBuff = nullptr;
-
-	resdesc.Width = sizeof(indices);
-
-	hResult = device->CreateCommittedResource(
-		&heapprop,
-		D3D12_HEAP_FLAG_NONE,
-		&resdesc,
-		D3D12_RESOURCE_STATE_GENERIC_READ,
-		nullptr,
-		IID_PPV_ARGS(&idxBuff)
-	);
-	
-	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "problem creating committed index : ", logFile)) return 1;
-
-	unsigned short* idxMap = nullptr;
-	hResult = idxBuff->Map(0, nullptr, (void**)&idxMap);
-
-	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "problem mapping buffer : ", logFile)) return 1;
-
-	std::copy(std::begin(indices), std::end(indices), idxMap);
-	idxBuff->Unmap(0, nullptr);
-
-	D3D12_INDEX_BUFFER_VIEW ibView = {};
-	ibView.BufferLocation = idxBuff->GetGPUVirtualAddress();
-	ibView.Format = DXGI_FORMAT_R16_UINT;
-	ibView.SizeInBytes = sizeof(indices);
-
-	ID3DBlob* vsBlob = nullptr;
-	ID3DBlob* psBlob = nullptr;
-	ID3DBlob* errorBlob = nullptr;
-
-	hResult = D3DCompileFromFile(
-		L"BasicVertTransformation.hlsl",
-		nullptr,
-		D3D_COMPILE_STANDARD_FILE_INCLUDE,
-		"BasicVS", 
-		"vs_5_0",
-		D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION,
-		0,
-		&vsBlob,
-		&errorBlob
-	);
-
-	if(hResult != S_OK && !OutputErrorFromHResult(hResult, "couldn't compile vert shader basic ", logFile)) return 1;
-
-	hResult = D3DCompileFromFile(
-		L"BasicColorPixelShader.hlsl",
-		nullptr,
-		D3D_COMPILE_STANDARD_FILE_INCLUDE,
-		"BasicPS",
-		"ps_5_0",
-		D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION,
-		0,
-		&psBlob,
-		&errorBlob
-	);
-	
-	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "couldn't compile pixel shader basic ", logFile)) return 1;
-
-	D3D12_ROOT_SIGNATURE_DESC rootSigDesc = {};
-	rootSigDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
-
-	ID3DBlob* rootSigBlob = nullptr;
-
-	hResult = D3D12SerializeRootSignature(
-		&rootSigDesc,
-		D3D_ROOT_SIGNATURE_VERSION_1_0,
-		&rootSigBlob,
-		nullptr
-	);
-
-	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "couldn't serialize root sig ", logFile)) return 1;
-
-	ID3D12RootSignature* rootSig = nullptr;
-	hResult = device->CreateRootSignature(0, rootSigBlob->GetBufferPointer(), rootSigBlob->GetBufferSize(), IID_PPV_ARGS(&rootSig));
-	rootSigBlob->Release();
-	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "couldn't serialize root sig ", logFile)) return 1;
-
-	D3D12_GRAPHICS_PIPELINE_STATE_DESC gPipeline = {};
-
-	gPipeline.pRootSignature = rootSig;
-
-	gPipeline.VS.pShaderBytecode = vsBlob->GetBufferPointer();
-	gPipeline.VS.BytecodeLength  = vsBlob->GetBufferSize();
-	gPipeline.PS.pShaderBytecode = psBlob->GetBufferPointer();
-	gPipeline.PS.BytecodeLength  = psBlob->GetBufferSize();
-
-	gPipeline.SampleMask = D3D12_DEFAULT_SAMPLE_MASK;
-	gPipeline.RasterizerState.MultisampleEnable = false;
-
-	gPipeline.RasterizerState.CullMode = D3D12_CULL_MODE_BACK;
-	gPipeline.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
-	gPipeline.RasterizerState.DepthClipEnable = true;
-
-	gPipeline.BlendState.AlphaToCoverageEnable = false;
-	gPipeline.BlendState.IndependentBlendEnable = false;
-
-	D3D12_RENDER_TARGET_BLEND_DESC renderTargetBlendDesc = {};
-	renderTargetBlendDesc.BlendEnable = false;
-	renderTargetBlendDesc.LogicOpEnable = false;
-	renderTargetBlendDesc.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
-
-	gPipeline.BlendState.RenderTarget[0] = renderTargetBlendDesc;
-
-
-	D3D12_INPUT_ELEMENT_DESC elemLayout[] = { {"POSITION", 
-												0, 
-												DXGI_FORMAT_R32G32B32_FLOAT, 
-												0, 
-												D3D12_APPEND_ALIGNED_ELEMENT, 
-												D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 
-												0} };
-
-	gPipeline.InputLayout.pInputElementDescs = elemLayout;
-	gPipeline.InputLayout.NumElements = 1;
-	gPipeline.IBStripCutValue = D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED;
-
-	gPipeline.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-	gPipeline.NumRenderTargets = 1;
-	gPipeline.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
-	gPipeline.SampleDesc.Count = 1;
-	gPipeline.SampleDesc.Quality = 0;
-
-	ID3D12PipelineState* pipeline = nullptr;
-
-	hResult = device->CreateGraphicsPipelineState(&gPipeline, IID_PPV_ARGS(&pipeline));
-
-	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "couldn't create graphics pipeline ", logFile)) return 1;
-
-	D3D12_VIEWPORT viewport = {};
-	viewport.Height = WINDOW_HEIGHT;
-	viewport.Width = WINDOW_WIDTH;
-	viewport.TopLeftX = viewport.TopLeftY = 0;
-	viewport.MaxDepth = 1.f;
-	viewport.MinDepth = 0.f;
-
-	D3D12_RECT scissor = {};
-
-	scissor.left = scissor.top = 0;
-	scissor.bottom = WINDOW_HEIGHT;
-	scissor.right = WINDOW_WIDTH;
+	ViewportScissor wholeScreenViewPortScissor;
 
 	ShowWindow(hwnd, SW_SHOW);
 
@@ -405,13 +438,13 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 
 		cmdList->OMSetRenderTargets(1, &rtvHeap, true, nullptr);
 		cmdList->ClearRenderTargetView(rtvHeap, clearColor, 0, nullptr);
-		cmdList->SetPipelineState(pipeline);
-		cmdList->SetGraphicsRootSignature(rootSig);
-		cmdList->RSSetViewports(1, &viewport);
-		cmdList->RSSetScissorRects(1, &scissor);
+		cmdList->SetPipelineState(pipeline.pipeLineState);
+		cmdList->SetGraphicsRootSignature(pipeline.rootSig);
+		cmdList->RSSetViewports(1, &wholeScreenViewPortScissor.viewport);
+		cmdList->RSSetScissorRects(1, &wholeScreenViewPortScissor.scissor);
 		cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-		cmdList->IASetVertexBuffers(0, 1, &vbView);
-		cmdList->IASetIndexBuffer(&ibView);
+		cmdList->IASetVertexBuffers(0, 1, &trianglePair.vbView);
+		cmdList->IASetIndexBuffer(&triangleIndexPair.ibView);
 		cmdList->DrawIndexedInstanced(3, 1, 0, 0, 0);
 		cmdList->Close();
 
