@@ -72,7 +72,7 @@ class D3DDeviceManager
 		ID3DBlob* CompileShaderReturnBlob(LPCWSTR ShaderFilePath, LPCSTR entryPoint, LPCSTR profile);
 
 		PipelineAndRootSig CreatePSO(LPCWSTR vertexShader, LPCWSTR pixelShader);
-		TextureBufferDescPair CreateTexture();
+		TextureBufferDescPair CreateTexture(const wchar_t* Filepath);
 
 		UINT GetCurrentSwapChainIndex() { return mSwapChain->GetCurrentBackBufferIndex(); }
 

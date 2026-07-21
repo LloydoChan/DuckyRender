@@ -1,4 +1,5 @@
 #include "D3DDeviceManager.h"
+#include <DirectXTex.h>
 #include <dxgi1_6.h>
 #include <vector>
 #include <winrt/base.h>
@@ -7,6 +8,7 @@
 #pragma comment(lib, "d3d12.lib")
 #pragma comment(lib, "dxgi.lib")
 #pragma comment(lib, "d3dcompiler.lib")
+#pragma comment(lib, "DirectXTex.lib")
 
 struct TexRGBA
 {
@@ -119,13 +121,17 @@ bool D3DDeviceManager::Init(HWND hWnd, UINT WindowWidth, UINT WindowHeight)
 		backBuffers.push_back(ptr);
 		hResult = mSwapChain->GetBuffer(idx, IID_PPV_ARGS(&backBuffers[idx]));
 
-		if (!OutputErrorFromHResult(hResult, "problem getting back buffer: ", logFile)) return false;
+		if (hResult != S_OK && !OutputErrorFromHResult(hResult, "problem getting back buffer: ", logFile)) return false;
 
 		mDevice->CreateRenderTargetView(backBuffers[idx], nullptr, handle);
 		handle.ptr += mDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 	}
 
 	factory->Release();
+
+	// init directxtex file reading
+	hResult = CoInitializeEx(0, COINITBASE_MULTITHREADED);
+	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "problem initializing com: ", logFile)) return false;
 
 	return true;
 }
@@ -346,7 +352,7 @@ PipelineAndRootSig D3DDeviceManager::CreatePSO(LPCWSTR vertexShader, LPCWSTR pix
 	};
 
 	gPipeline.InputLayout.pInputElementDescs = elemLayout;
-	gPipeline.InputLayout.NumElements = 2;
+	gPipeline.InputLayout.NumElements = sizeof(elemLayout) / sizeof(D3D12_INPUT_ELEMENT_DESC);
 	gPipeline.IBStripCutValue = D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED;
 
 	gPipeline.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
@@ -361,9 +367,16 @@ PipelineAndRootSig D3DDeviceManager::CreatePSO(LPCWSTR vertexShader, LPCWSTR pix
 	return newPipeline;
 }
 
-TextureBufferDescPair D3DDeviceManager::CreateTexture()
+TextureBufferDescPair D3DDeviceManager::CreateTexture(const wchar_t* Filepath)
 {
+	TexMetadata metaData = {};
+	ScratchImage imageData = {};
 	TextureBufferDescPair newTexPair;
+
+	HRESULT hResult = LoadFromWICFile(Filepath, WIC_FLAGS_NONE, &metaData, imageData);
+	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "couldn't load Texture ", logFile)) return newTexPair;
+
+	auto img = imageData.GetImage(0, 0, 0);
 
 	D3D12_HEAP_PROPERTIES heapprop = {};
 	heapprop.Type = D3D12_HEAP_TYPE_CUSTOM;
@@ -374,19 +387,19 @@ TextureBufferDescPair D3DDeviceManager::CreateTexture()
 
 	D3D12_RESOURCE_DESC resDesc = {};
 
-	resDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-	resDesc.Width = 256;
-	resDesc.Height = 256;
-	resDesc.DepthOrArraySize = 1;
+	resDesc.Format = metaData.format;
+	resDesc.Width = metaData.width;
+	resDesc.Height = metaData.height;
+	resDesc.DepthOrArraySize = metaData.arraySize;
 	resDesc.SampleDesc.Count = 1;
 	resDesc.SampleDesc.Quality = 0;
-	resDesc.MipLevels = 1;
-	resDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+	resDesc.MipLevels = metaData.mipLevels;
+	resDesc.Dimension = static_cast<D3D12_RESOURCE_DIMENSION>(metaData.dimension);
 	resDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
 	resDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
 
 
-	HRESULT hResult = mDevice->CreateCommittedResource(&heapprop,
+	hResult = mDevice->CreateCommittedResource(&heapprop,
 		D3D12_HEAP_FLAG_NONE,
 		&resDesc,
 		D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
@@ -397,9 +410,9 @@ TextureBufferDescPair D3DDeviceManager::CreateTexture()
 
 	hResult = newTexPair.textureBuffer->WriteToSubresource(0,
 		nullptr,
-		textureData.data(),
-		sizeof(TexRGBA) * 256,
-		sizeof(TexRGBA) * textureData.size());
+		img->pixels,
+		img->rowPitch,
+		img->slicePitch);
 
 	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "couldn't write to subresource ", logFile)) return newTexPair;
 
@@ -417,7 +430,7 @@ TextureBufferDescPair D3DDeviceManager::CreateTexture()
 
 	// create the resource view
 	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-	srvDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+	srvDesc.Format = metaData.format;
 	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
 	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
 	srvDesc.Texture2D.MipLevels = 1;

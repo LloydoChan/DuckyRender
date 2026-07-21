@@ -89,7 +89,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 
 	if(!devManager.MapAndCreateIndexView(&triangleIndexPair, indices, 3)) return 1;
 
-	TextureBufferDescPair texturePair = devManager.CreateTexture();
+	TextureBufferDescPair texturePair = devManager.CreateTexture(L"untitled.png");
 	if (texturePair.texDescHeap == nullptr || texturePair.textureBuffer == nullptr) return 1;
 
 	PipelineAndRootSig pipeline = devManager.CreatePSO(L"BasicVertTransformation.hlsl", L"BasicColorPixelShader.hlsl");
