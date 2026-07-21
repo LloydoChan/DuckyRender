@@ -10,6 +10,8 @@
 
 #include <fstream>
 
+#include <cmath>
+
 #include <vector>
 
 #pragma comment(lib, "d3d12.lib")
@@ -34,7 +36,7 @@ struct Vertex
 {
 	{{-0.5f, -0.7f, 0.f},{0.f ,0.f}},
 	{{ 0.f,   0.7f, 1.f},{0.5f,1.f}},
-	{{ 0.5f, -0.7f, 0.f},{0.f ,0.f}},
+	{{ 0.5f, -0.7f, 0.f},{1.f ,0.f}},
 };
 
 struct TexRGBA
@@ -129,6 +131,8 @@ bool MapAndCreateVertexView(VBPair* newVertexBufferPair, Vertex* vertData, unsig
 	newVertexBufferPair->vbView.BufferLocation = newVertexBufferPair->vertBuffPointer->GetGPUVirtualAddress();
 	newVertexBufferPair->vbView.SizeInBytes = sizeof(Vertex) * numElems;
 	newVertexBufferPair->vbView.StrideInBytes = sizeof(Vertex);
+
+	return true;
 }
 
 bool MapAndCreateIndexView(IBPair* newIndexBufferPair, unsigned short* indexData, unsigned int numElems)
@@ -169,7 +173,7 @@ ID3DBlob* CompileShaderReturnBlob(LPCWSTR ShaderFilePath, LPCSTR entryPoint, LPC
 	return blob;
 }
 
-ID3D12Resource* CreateBuffer(ID3D12Device* device, void** sourceBuffer)
+ID3D12Resource* CreateBuffer(ID3D12Device* device, void** sourceBuffer, size_t bufferSize)
 {
 	// new for creating triangle data
 	D3D12_HEAP_PROPERTIES heapprop = {};
@@ -181,7 +185,7 @@ ID3D12Resource* CreateBuffer(ID3D12Device* device, void** sourceBuffer)
 	D3D12_RESOURCE_DESC resdesc = {};
 
 	resdesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-	resdesc.Width = sizeof(*sourceBuffer);
+	resdesc.Width = bufferSize;
 	resdesc.Height = 1;
 	resdesc.DepthOrArraySize = 1;
 	resdesc.MipLevels = 1;
@@ -455,17 +459,13 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 	IDXGIAdapter* chosenAdapter = adapters[0];
 
 	// create lists and queues
-	ID3D12CommandAllocator* cmdAllocator[2] = { nullptr, nullptr };
-	ID3D12GraphicsCommandList* cmdList[2] = { nullptr, nullptr };
+	ID3D12CommandAllocator* cmdAllocator =  nullptr;
+	ID3D12GraphicsCommandList* cmdList = nullptr;
 
-	hResult = device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&cmdAllocator[0]));
+	hResult = device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&cmdAllocator));
 	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "problem creating command allocator: ", logFile)) return 1;
-	hResult = device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&cmdAllocator[1]));
-	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "problem creating command allocator: ", logFile)) return 1;
-
-	hResult = device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, cmdAllocator[0], nullptr, IID_PPV_ARGS(&cmdList[0]));
-	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "problem creating command list: ", logFile)) return 1;
-	hResult = device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, cmdAllocator[1], nullptr, IID_PPV_ARGS(&cmdList[1]));
+	
+	hResult = device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, cmdAllocator, nullptr, IID_PPV_ARGS(&cmdList));
 	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "problem creating command list: ", logFile)) return 1;
 
 	ID3D12CommandQueue* commandQueue = nullptr;
@@ -479,7 +479,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 
 	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "problem creating command queue: ", logFile)) return 1;
 
-	IDXGISwapChain1* swapChain = nullptr;
+	IDXGISwapChain3* swapChain = nullptr;
 
 	DXGI_SWAP_CHAIN_DESC1 swapChainDesc = {};
 
@@ -529,28 +529,23 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 	}
 
 	VBPair trianglePair;
-	trianglePair.vertBuffPointer = CreateBuffer(device, (void**)&vertices);
+	trianglePair.vertBuffPointer = CreateBuffer(device, (void**)&vertices, sizeof(Vertex) * 3);
 	if (trianglePair.vertBuffPointer == nullptr) return 1;
 	if (!MapAndCreateVertexView(&trianglePair, vertices, 3)) return 1;
 
 	IBPair triangleIndexPair;
-	triangleIndexPair.idxBuffPointer = CreateBuffer(device, (void**)&indices);
+	triangleIndexPair.idxBuffPointer = CreateBuffer(device, (void**)&indices, sizeof(unsigned short) * 3);
 	if (triangleIndexPair.idxBuffPointer == nullptr) return 1;
 
 	if(!MapAndCreateIndexView(&triangleIndexPair, indices, 3)) return 1;
 
-	float incValue = 1.f / 256.f;
-
 	//create texture data
-	for (auto elem : textureData)
+	for (auto& elem : textureData)
 	{
-		static int i = 0;
-		elem.r = 1.f;//0.f + float(i) * incValue);
-		elem.g = 1.f;//1.f - float(i) * incValue);
-		elem.b = 1.f;//0.5f;
-		elem.a = 1.f;//1.f;
-					 //
-		i++;
+		elem.r = rand() % 255;
+		elem.g = rand() % 255;
+		elem.b = rand() % 255;
+		elem.a = 255;		 
 	}
 
 	TextureBufferDescPair texturePair = CreateTexture(device);
@@ -567,6 +562,12 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 	
 	if (texturePair.texDescHeap == nullptr || texturePair.textureBuffer == nullptr) return 1;
 
+	ID3D12Fence* fence = nullptr;
+	UINT64 fenceVal = 0;
+
+	hResult = device->CreateFence(fenceVal, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&fence));
+	if (!OutputErrorFromHResult(hResult, "problem creating fence: ", logFile)) return 1;
+
 	while (true)
 	{
 		if (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE))
@@ -580,38 +581,63 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 			break;
 		}
 
-		static int bufferIndex = 0;
+		auto bbIdx = swapChain->GetCurrentBackBufferIndex();
 
-		// d3d12 code
-		auto rtvHeap = rtvHeaps->GetCPUDescriptorHandleForHeapStart();
-		rtvHeap.ptr += bufferIndex * device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+		
 
 		float clearColor[] = {0.f, 0.f, 0.f, 1.f};
 
-		cmdList[bufferIndex]->OMSetRenderTargets(1, &rtvHeap, true, nullptr);
-		cmdList[bufferIndex]->ClearRenderTargetView(rtvHeap, clearColor, 0, nullptr);
-		cmdList[bufferIndex]->SetPipelineState(pipeline.pipeLineState);
-		cmdList[bufferIndex]->SetGraphicsRootSignature(pipeline.rootSig);
-		cmdList[bufferIndex]->RSSetViewports(1, &wholeScreenViewPortScissor.viewport);
-		cmdList[bufferIndex]->RSSetScissorRects(1, &wholeScreenViewPortScissor.scissor);
-		cmdList[bufferIndex]->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-		cmdList[bufferIndex]->IASetVertexBuffers(0, 1, &trianglePair.vbView);
-		cmdList[bufferIndex]->IASetIndexBuffer(&triangleIndexPair.ibView);
-		cmdList[bufferIndex]->SetDescriptorHeaps(1, &texturePair.texDescHeap);
-		cmdList[bufferIndex]->SetGraphicsRootDescriptorTable(0, texturePair.texDescHeap->GetGPUDescriptorHandleForHeapStart());
-		cmdList[bufferIndex]->DrawIndexedInstanced(3, 1, 0, 0, 0);
-		cmdList[bufferIndex]->Close();
+		D3D12_RESOURCE_BARRIER BarrierDesc = {};
 
-		ID3D12CommandList* cmdLists[] = { cmdList[bufferIndex]};
+		BarrierDesc.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+		BarrierDesc.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+		BarrierDesc.Transition.pResource = backBuffers[bbIdx];
+		BarrierDesc.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+		BarrierDesc.Transition.StateBefore = D3D12_RESOURCE_STATE_PRESENT; 
+		BarrierDesc.Transition.StateAfter =  D3D12_RESOURCE_STATE_RENDER_TARGET;
+
+		cmdList->ResourceBarrier(1, &BarrierDesc);
+		cmdList->SetPipelineState(pipeline.pipeLineState);
+
+		// d3d12 code
+		auto rtvHeap = rtvHeaps->GetCPUDescriptorHandleForHeapStart();
+		rtvHeap.ptr += bbIdx * device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+		cmdList->OMSetRenderTargets(1, &rtvHeap, true, nullptr);
+		cmdList->ClearRenderTargetView(rtvHeap, clearColor, 0, nullptr);
+
+		cmdList->RSSetViewports(1, &wholeScreenViewPortScissor.viewport);
+		cmdList->RSSetScissorRects(1, &wholeScreenViewPortScissor.scissor);
+
+		cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+		cmdList->IASetVertexBuffers(0, 1, &trianglePair.vbView);
+		cmdList->IASetIndexBuffer(&triangleIndexPair.ibView);
+
+		cmdList->SetGraphicsRootSignature(pipeline.rootSig);
+		cmdList->SetDescriptorHeaps(1, &texturePair.texDescHeap);
+		cmdList->SetGraphicsRootDescriptorTable(0, texturePair.texDescHeap->GetGPUDescriptorHandleForHeapStart());
+		cmdList->DrawIndexedInstanced(3, 1, 0, 0, 0);
+
+		BarrierDesc.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+		BarrierDesc.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
+		cmdList->ResourceBarrier(1, &BarrierDesc);
+		cmdList->Close();
+
+		ID3D12CommandList* cmdLists[] = { cmdList};
 		commandQueue->ExecuteCommandLists(1, cmdLists);
+		commandQueue->Signal(fence, ++fenceVal);
 
-		cmdList[bufferIndex]->Reset(cmdAllocator[bufferIndex], nullptr);
+		if (fence->GetCompletedValue() != fenceVal)
+		{
+			auto event = CreateEvent(nullptr, false, false, nullptr);
+			fence->SetEventOnCompletion(fenceVal, event);
+			WaitForSingleObject(event, INFINITE);
+			CloseHandle(event);
+		}
+
+		cmdAllocator->Reset();
+		cmdList->Reset(cmdAllocator, nullptr);
+
 		swapChain->Present(1, 0);
-
-		bufferIndex++;
-		bufferIndex %= 2;
-
-		cmdAllocator[bufferIndex]->Reset();
 	}
 
 	UnregisterClass(w.lpszClassName, w.hInstance);
