@@ -22,12 +22,19 @@ const int WINDOW_HEIGHT = 1080;
 
 using namespace DirectX;
 
-//temp for first tri
-XMFLOAT3 vertices[] = 
+struct Vertex
 {
-	{-0.5f, -0.7f, 0.f},
-	{ 0.f,   0.7f, 1.f},
-	{ 0.5f, -0.7f, 0.f},
+	XMFLOAT3 pos;
+	XMFLOAT2 uv;
+};
+
+//temp for first tri
+struct Vertex
+	vertices[] =
+{
+	{{-0.5f, -0.7f, 0.f},{0.f ,0.f}},
+	{{ 0.f,   0.7f, 1.f},{0.5f,1.f}},
+	{{ 0.5f, -0.7f, 0.f},{0.f ,0.f}},
 };
 
 std::wofstream logFile("log.txt");
@@ -96,9 +103,9 @@ LRESULT WindowProcedure(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 	return DefWindowProc(hwnd, msg, wparam, lparam);
 }
 
-bool MapAndCreateVertexView(VBPair* newVertexBufferPair, XMFLOAT3* vertData, unsigned int numElems)
+bool MapAndCreateVertexView(VBPair* newVertexBufferPair, Vertex* vertData, unsigned int numElems)
 {
-	XMFLOAT3* vertMap = nullptr;
+	Vertex* vertMap = nullptr;
 	HRESULT hResult = newVertexBufferPair->vertBuffPointer->Map(0, nullptr, (void**)&vertMap);
 
 	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "problem mapping buffer : ", logFile)) return false;
@@ -107,8 +114,8 @@ bool MapAndCreateVertexView(VBPair* newVertexBufferPair, XMFLOAT3* vertData, uns
 	newVertexBufferPair->vertBuffPointer->Unmap(0, nullptr);
 
 	newVertexBufferPair->vbView.BufferLocation = newVertexBufferPair->vertBuffPointer->GetGPUVirtualAddress();
-	newVertexBufferPair->vbView.SizeInBytes = sizeof(XMFLOAT3) * numElems;
-	newVertexBufferPair->vbView.StrideInBytes = sizeof(XMFLOAT3);
+	newVertexBufferPair->vbView.SizeInBytes = sizeof(Vertex) * numElems;
+	newVertexBufferPair->vbView.StrideInBytes = sizeof(Vertex);
 }
 
 bool MapAndCreateIndexView(IBPair* newIndexBufferPair, unsigned short* indexData, unsigned int numElems)
@@ -116,7 +123,7 @@ bool MapAndCreateIndexView(IBPair* newIndexBufferPair, unsigned short* indexData
 	unsigned short* idxMap = nullptr;
 	HRESULT hResult = newIndexBufferPair->idxBuffPointer->Map(0, nullptr, (void**)&idxMap);
 
-	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "problem mapping buffer : ", logFile)) return 1;
+	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "problem mapping buffer : ", logFile)) return false;
 
 	std::copy(indexData, indexData + numElems, idxMap);
 	newIndexBufferPair->idxBuffPointer->Unmap(0, nullptr);
@@ -124,6 +131,8 @@ bool MapAndCreateIndexView(IBPair* newIndexBufferPair, unsigned short* indexData
 	newIndexBufferPair->ibView.BufferLocation = newIndexBufferPair->idxBuffPointer->GetGPUVirtualAddress();
 	newIndexBufferPair->ibView.Format = DXGI_FORMAT_R16_UINT;
 	newIndexBufferPair->ibView.SizeInBytes = sizeof(unsigned short) * numElems;
+
+	return true;
 }
 
 ID3DBlob* CompileShaderReturnBlob(LPCWSTR ShaderFilePath, LPCSTR entryPoint, LPCSTR profile)
@@ -245,10 +254,18 @@ PipelineAndRootSig CreatePSO(ID3D12Device* device, LPCWSTR vertexShader, LPCWSTR
 												0,
 												D3D12_APPEND_ALIGNED_ELEMENT,
 												D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
-												0} };
+												0},
+											   {"TEXCOORD",
+												0,
+												DXGI_FORMAT_R32G32_FLOAT,
+												0,
+												D3D12_APPEND_ALIGNED_ELEMENT,
+												D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+												0}
+	};
 
 	gPipeline.InputLayout.pInputElementDescs = elemLayout;
-	gPipeline.InputLayout.NumElements = 1;
+	gPipeline.InputLayout.NumElements = 2;
 	gPipeline.IBStripCutValue = D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED;
 
 	gPipeline.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
