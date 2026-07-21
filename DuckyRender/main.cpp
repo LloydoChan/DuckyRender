@@ -37,6 +37,13 @@ struct Vertex
 	{{ 0.5f, -0.7f, 0.f},{0.f ,0.f}},
 };
 
+struct TexRGBA
+{
+	unsigned char r, g, b, a;
+};
+
+std::vector<TexRGBA> textureData(256 * 256);
+
 std::wofstream logFile("log.txt");
 
 unsigned short indices[] = { 0,1,2 };
@@ -57,6 +64,12 @@ struct PipelineAndRootSig
 {
 	ID3D12RootSignature* rootSig = nullptr;
 	ID3D12PipelineState* pipeLineState = nullptr;
+};
+
+struct TextureBufferDescPair
+{
+	ID3D12Resource* textureBuffer = nullptr;
+	ID3D12DescriptorHeap* texDescHeap = nullptr;
 };
 
 struct ViewportScissor
@@ -203,8 +216,37 @@ PipelineAndRootSig CreatePSO(ID3D12Device* device, LPCWSTR vertexShader, LPCWSTR
 
 	if (vsBlob == nullptr || psBlob == nullptr) return newPipeline;
 
+	D3D12_DESCRIPTOR_RANGE descTblRange = {};
+	descTblRange.NumDescriptors = 1;
+	descTblRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+	descTblRange.BaseShaderRegister = 0;
+	descTblRange.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+
+	D3D12_ROOT_PARAMETER rootParam = {};
+	rootParam.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+	rootParam.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+	rootParam.DescriptorTable.pDescriptorRanges = &descTblRange;
+	rootParam.DescriptorTable.NumDescriptorRanges = 1;
+
 	D3D12_ROOT_SIGNATURE_DESC rootSigDesc = {};
 	rootSigDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
+	rootSigDesc.pParameters = &rootParam;
+	rootSigDesc.NumParameters = 1;
+
+	D3D12_STATIC_SAMPLER_DESC samplerDesc = {};
+
+	samplerDesc.AddressU	= D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+	samplerDesc.AddressV	= D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+	samplerDesc.AddressW	= D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+	samplerDesc.BorderColor = D3D12_STATIC_BORDER_COLOR_TRANSPARENT_BLACK;
+	samplerDesc.Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
+	samplerDesc.MaxLOD = D3D12_FLOAT32_MAX;
+	samplerDesc.MinLOD = 0.f;
+	samplerDesc.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+	samplerDesc.ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
+
+	rootSigDesc.pStaticSamplers = &samplerDesc;
+	rootSigDesc.NumStaticSamplers = 1;
 
 	ID3DBlob* rootSigBlob = nullptr;
 
@@ -219,7 +261,7 @@ PipelineAndRootSig CreatePSO(ID3D12Device* device, LPCWSTR vertexShader, LPCWSTR
 
 	hResult = device->CreateRootSignature(0, rootSigBlob->GetBufferPointer(), rootSigBlob->GetBufferSize(), IID_PPV_ARGS(&newPipeline.rootSig));
 	rootSigBlob->Release();
-	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "couldn't create root sig ", logFile)) return newPipeline;;
+	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "couldn't create root sig ", logFile)) return newPipeline;
 
 	D3D12_GRAPHICS_PIPELINE_STATE_DESC gPipeline = {};
 
@@ -280,8 +322,80 @@ PipelineAndRootSig CreatePSO(ID3D12Device* device, LPCWSTR vertexShader, LPCWSTR
 	return newPipeline;
 }
 
+TextureBufferDescPair CreateTexture(ID3D12Device* device)
+{
+	TextureBufferDescPair newTexPair;
+
+	D3D12_HEAP_PROPERTIES heapprop = {};
+	heapprop.Type = D3D12_HEAP_TYPE_CUSTOM;
+	heapprop.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_WRITE_BACK;
+	heapprop.MemoryPoolPreference = D3D12_MEMORY_POOL_L0;
+	heapprop.CreationNodeMask = 0;
+	heapprop.VisibleNodeMask = 0;
+
+	D3D12_RESOURCE_DESC resDesc = {};
+
+	resDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+	resDesc.Width = 256;
+	resDesc.Height = 256;
+	resDesc.DepthOrArraySize = 1;
+	resDesc.SampleDesc.Count = 1;
+	resDesc.SampleDesc.Quality = 0;
+	resDesc.MipLevels = 1;
+	resDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+	resDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+	resDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
+
+
+	HRESULT hResult = device->CreateCommittedResource(&heapprop,
+														D3D12_HEAP_FLAG_NONE,
+														&resDesc,
+														D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
+														nullptr,
+														IID_PPV_ARGS(&newTexPair.textureBuffer));
+
+	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "couldn't create texture ", logFile)) return newTexPair;
+
+	hResult = newTexPair.textureBuffer->WriteToSubresource(0,
+										  nullptr,
+										  textureData.data(),
+										  sizeof(TexRGBA) * 256,
+										  sizeof(TexRGBA) * textureData.size());
+
+	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "couldn't write to subresource ", logFile)) return newTexPair;
+
+	ID3D12DescriptorHeap* texDescHeap = nullptr;
+	D3D12_DESCRIPTOR_HEAP_DESC texDescHeapDesc = {};
+
+	texDescHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+	texDescHeapDesc.NodeMask = 0;
+	texDescHeapDesc.NumDescriptors = 1;
+	texDescHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+
+	hResult = device->CreateDescriptorHeap(&texDescHeapDesc, IID_PPV_ARGS(&newTexPair.texDescHeap));
+
+	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "couldn't create texture desc heap ", logFile)) return newTexPair;
+
+	// create the resource view
+	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+	srvDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+	srvDesc.Texture2D.MipLevels = 1;
+
+	device->CreateShaderResourceView(newTexPair.textureBuffer, &srvDesc, newTexPair.texDescHeap->GetCPUDescriptorHandleForHeapStart());
+
+	return newTexPair;
+}
+
+
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 {
+	ID3D12Debug* debugLayer = nullptr;
+	D3D12GetDebugInterface(IID_PPV_ARGS(&debugLayer));
+	debugLayer->EnableDebugLayer();
+	debugLayer->Release();
+
 	RECT wrc = { 0, 0, WINDOW_WIDTH, WINDOW_HEIGHT };
 	AdjustWindowRect(&wrc, WS_OVERLAPPEDWINDOW, false);
 
@@ -341,15 +455,17 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 	IDXGIAdapter* chosenAdapter = adapters[0];
 
 	// create lists and queues
-	ID3D12CommandAllocator* cmdAllocator = nullptr;
-	ID3D12GraphicsCommandList* cmdList = nullptr;
+	ID3D12CommandAllocator* cmdAllocator[2] = { nullptr, nullptr };
+	ID3D12GraphicsCommandList* cmdList[2] = { nullptr, nullptr };
 
-	hResult = device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&cmdAllocator));
-
+	hResult = device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&cmdAllocator[0]));
+	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "problem creating command allocator: ", logFile)) return 1;
+	hResult = device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&cmdAllocator[1]));
 	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "problem creating command allocator: ", logFile)) return 1;
 
-	hResult = device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, cmdAllocator, nullptr, IID_PPV_ARGS(&cmdList));
-
+	hResult = device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, cmdAllocator[0], nullptr, IID_PPV_ARGS(&cmdList[0]));
+	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "problem creating command list: ", logFile)) return 1;
+	hResult = device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, cmdAllocator[1], nullptr, IID_PPV_ARGS(&cmdList[1]));
 	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "problem creating command list: ", logFile)) return 1;
 
 	ID3D12CommandQueue* commandQueue = nullptr;
@@ -423,6 +539,22 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 
 	if(!MapAndCreateIndexView(&triangleIndexPair, indices, 3)) return 1;
 
+	float incValue = 1.f / 256.f;
+
+	//create texture data
+	for (auto elem : textureData)
+	{
+		static int i = 0;
+		elem.r = 1.f;//0.f + float(i) * incValue);
+		elem.g = 1.f;//1.f - float(i) * incValue);
+		elem.b = 1.f;//0.5f;
+		elem.a = 1.f;//1.f;
+					 //
+		i++;
+	}
+
+	TextureBufferDescPair texturePair = CreateTexture(device);
+
 	PipelineAndRootSig pipeline = CreatePSO(device, L"BasicVertTransformation.hlsl", L"BasicColorPixelShader.hlsl");
 	if (pipeline.rootSig == nullptr || pipeline.pipeLineState == nullptr) return 1;
 
@@ -431,6 +563,9 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 	ShowWindow(hwnd, SW_SHOW);
 
 	MSG msg = {};
+
+	
+	if (texturePair.texDescHeap == nullptr || texturePair.textureBuffer == nullptr) return 1;
 
 	while (true)
 	{
@@ -453,28 +588,30 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 
 		float clearColor[] = {0.f, 0.f, 0.f, 1.f};
 
-		cmdList->OMSetRenderTargets(1, &rtvHeap, true, nullptr);
-		cmdList->ClearRenderTargetView(rtvHeap, clearColor, 0, nullptr);
-		cmdList->SetPipelineState(pipeline.pipeLineState);
-		cmdList->SetGraphicsRootSignature(pipeline.rootSig);
-		cmdList->RSSetViewports(1, &wholeScreenViewPortScissor.viewport);
-		cmdList->RSSetScissorRects(1, &wholeScreenViewPortScissor.scissor);
-		cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-		cmdList->IASetVertexBuffers(0, 1, &trianglePair.vbView);
-		cmdList->IASetIndexBuffer(&triangleIndexPair.ibView);
-		cmdList->DrawIndexedInstanced(3, 1, 0, 0, 0);
-		cmdList->Close();
+		cmdList[bufferIndex]->OMSetRenderTargets(1, &rtvHeap, true, nullptr);
+		cmdList[bufferIndex]->ClearRenderTargetView(rtvHeap, clearColor, 0, nullptr);
+		cmdList[bufferIndex]->SetPipelineState(pipeline.pipeLineState);
+		cmdList[bufferIndex]->SetGraphicsRootSignature(pipeline.rootSig);
+		cmdList[bufferIndex]->RSSetViewports(1, &wholeScreenViewPortScissor.viewport);
+		cmdList[bufferIndex]->RSSetScissorRects(1, &wholeScreenViewPortScissor.scissor);
+		cmdList[bufferIndex]->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+		cmdList[bufferIndex]->IASetVertexBuffers(0, 1, &trianglePair.vbView);
+		cmdList[bufferIndex]->IASetIndexBuffer(&triangleIndexPair.ibView);
+		cmdList[bufferIndex]->SetDescriptorHeaps(1, &texturePair.texDescHeap);
+		cmdList[bufferIndex]->SetGraphicsRootDescriptorTable(0, texturePair.texDescHeap->GetGPUDescriptorHandleForHeapStart());
+		cmdList[bufferIndex]->DrawIndexedInstanced(3, 1, 0, 0, 0);
+		cmdList[bufferIndex]->Close();
 
-		ID3D12CommandList* cmdLists[] = { cmdList };
+		ID3D12CommandList* cmdLists[] = { cmdList[bufferIndex]};
 		commandQueue->ExecuteCommandLists(1, cmdLists);
 
-		cmdAllocator->Reset();
-		cmdList->Reset(cmdAllocator, nullptr);
-
+		cmdList[bufferIndex]->Reset(cmdAllocator[bufferIndex], nullptr);
 		swapChain->Present(1, 0);
 
 		bufferIndex++;
 		bufferIndex %= 2;
+
+		cmdAllocator[bufferIndex]->Reset();
 	}
 
 	UnregisterClass(w.lpszClassName, w.hInstance);
