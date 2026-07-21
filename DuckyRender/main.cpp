@@ -395,10 +395,18 @@ TextureBufferDescPair CreateTexture(ID3D12Device* device)
 
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 {
-	ID3D12Debug* debugLayer = nullptr;
-	D3D12GetDebugInterface(IID_PPV_ARGS(&debugLayer));
-	debugLayer->EnableDebugLayer();
-	debugLayer->Release();
+	int argc;
+	LPWSTR* argv = CommandLineToArgvW(GetCommandLineW(), &argc);
+	for (int i = 0; i < argc; i++)
+	{
+		if (wcscmp(argv[i],L"-debug")) {
+			ID3D12Debug* debugLayer = nullptr;
+			D3D12GetDebugInterface(IID_PPV_ARGS(&debugLayer));
+			debugLayer->EnableDebugLayer();
+			debugLayer->Release();
+		}
+	}
+	LocalFree(argv);
 
 	RECT wrc = { 0, 0, WINDOW_WIDTH, WINDOW_HEIGHT };
 	AdjustWindowRect(&wrc, WS_OVERLAPPEDWINDOW, false);
