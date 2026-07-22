@@ -3,11 +3,13 @@
 #include <dxgi1_6.h>
 #include <vector>
 #include <winrt/base.h>
-#include <d3dcompiler.h>
+// deprecated #include <d3dcompiler.h>
+#include <d3d12shader.h>
 
 #pragma comment(lib, "d3d12.lib")
 #pragma comment(lib, "dxgi.lib")
-#pragma comment(lib, "d3dcompiler.lib")
+// deprecated #pragma comment(lib, "d3dcompiler.lib")
+#pragma comment(lib, "dxcompiler.lib")
 #pragma comment(lib, "DirectXTex.lib")
 
 struct TexRGBA
@@ -65,6 +67,16 @@ bool D3DDeviceManager::Init(HWND hWnd, UINT WindowWidth, UINT WindowHeight)
 
 	// enumerated by high perf so take first adapter in list
 	IDXGIAdapter* chosenAdapter = adapters[0];
+
+	// create compilers
+	hResult = DxcCreateInstance(CLSID_DxcUtils, IID_PPV_ARGS(mUtils.ReleaseAndGetAddressOf()));
+	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "problem creating utils: ", logFile)) return 1;
+
+	hResult = mUtils->CreateDefaultIncludeHandler(mIncludeHandler.ReleaseAndGetAddressOf());
+	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "problem creating include handler: ", logFile)) return 1;
+
+	hResult = DxcCreateInstance(CLSID_DxcCompiler, IID_PPV_ARGS(&mCompiler));
+	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "problem creating compiler: ", logFile)) return 1;
 
 	hResult = mDevice->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&mCmdAllocator));
 	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "problem creating command allocator: ", logFile)) return 1;
@@ -158,6 +170,54 @@ D3D12_CPU_DESCRIPTOR_HANDLE D3DDeviceManager::IncrementAndReturnRTVHeaps()
 	return rtvHeap;
 }
 
+std::vector<D3D12_INPUT_ELEMENT_DESC> D3DDeviceManager::CreateInputLayout(ShaderCompilationOutput& shaderCompData)
+{
+	std::vector<D3D12_INPUT_ELEMENT_DESC> Elems;
+
+	ComPtr<ID3D12ShaderReflection> vertReflectionData;
+
+	DxcBuffer reflectionData = { shaderCompData.reflectionBlob->GetBufferPointer(),
+								 shaderCompData.reflectionBlob->GetBufferSize(),
+								 0U};
+
+	HRESULT hResult = mUtils->CreateReflection(&reflectionData, IID_PPV_ARGS(&vertReflectionData));
+
+	D3D12_SHADER_DESC shaderDesc;
+	vertReflectionData->GetDesc(&shaderDesc);
+
+	auto format = [](BYTE mask) {
+
+		switch (mask)
+		{
+			case 0xF:
+				return DXGI_FORMAT_R32G32B32_FLOAT;
+			case 0x3:
+				return DXGI_FORMAT_R32G32_FLOAT;
+			default:
+				return DXGI_FORMAT_A8_UNORM;
+		}
+	};
+
+	for (int i = 0; i < shaderDesc.InputParameters; i++)
+	{
+		D3D12_SIGNATURE_PARAMETER_DESC paramDesc;
+		vertReflectionData->GetInputParameterDesc(i, &paramDesc);
+		
+		D3D12_INPUT_ELEMENT_DESC currentDesc = {};
+		currentDesc.SemanticName = paramDesc.SemanticName;
+		currentDesc.SemanticIndex = 0;
+		currentDesc.Format = format(paramDesc.Mask);
+		currentDesc.InputSlot = 0;
+		currentDesc.AlignedByteOffset = D3D12_APPEND_ALIGNED_ELEMENT;
+		currentDesc.InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA;
+		currentDesc.InstanceDataStepRate = 0;
+
+		Elems.push_back(currentDesc);
+	}
+
+	return Elems;
+}
+
 
 bool D3DDeviceManager::MapAndCreateVertexView(VBPair* newVertexBufferPair, Vertex* vertData, unsigned int numElems)
 {
@@ -193,25 +253,46 @@ bool D3DDeviceManager::MapAndCreateIndexView(IBPair* newIndexBufferPair, unsigne
 	return true;
 }
 
-ID3DBlob* D3DDeviceManager::CompileShaderReturnBlob(LPCWSTR ShaderFilePath, LPCSTR entryPoint, LPCSTR profile)
+ShaderCompilationOutput D3DDeviceManager::CompileShaderDXC(LPCWSTR ShaderFilePath, LPCWSTR entryPoint, LPCWSTR profile)
 {
-	ID3DBlob* blob = nullptr;
+	std::ifstream file(ShaderFilePath, std::ios::binary | std::ios::ate);
+	std::streamsize size = file.tellg();
+	file.seekg(0, std::ios::beg);
+	std::vector<char> buffer(size);
+	file.read(buffer.data(), size);
 
-	HRESULT hResult = D3DCompileFromFile(
-		ShaderFilePath,
-		nullptr,
-		D3D_COMPILE_STANDARD_FILE_INCLUDE,
-		entryPoint,
-		profile,
-		D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION,
-		0,
-		&blob,
-		nullptr
-	);
+	Microsoft::WRL::ComPtr<IDxcBlobEncoding> pBlobEncoding;
+	mUtils->CreateBlob(buffer.data(), static_cast<uint32_t>(buffer.size()), CP_UTF8, pBlobEncoding.GetAddressOf());
 
-	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "problem creating vs shader : ", logFile)) return nullptr;
+	// 4. Populate DxcBuffer
+	DxcBuffer dxcBuffer;
+	dxcBuffer.Ptr = pBlobEncoding->GetBufferPointer();
+	dxcBuffer.Size = pBlobEncoding->GetBufferSize();
+	dxcBuffer.Encoding = DXC_CP_UTF8; 
 
-	return blob;
+	std::vector<LPCWSTR> arguments;
+	//entrypoint
+	arguments.push_back(L"-E");
+	arguments.push_back(entryPoint);
+
+	//profile
+	arguments.push_back(L"-T");
+	arguments.push_back(profile);
+
+	ComPtr<IDxcResult> result;
+
+	HRESULT hResult = mCompiler->Compile(&dxcBuffer, arguments.data(), (UINT32)arguments.size(), mIncludeHandler.Get(), IID_PPV_ARGS(&result));
+	if (hResult != S_OK && OutputErrorFromHResult(hResult, "couldn't compile shader", logFile));
+
+	ShaderCompilationOutput newOutput;
+
+	ComPtr<IDxcBlob> reflectionBlob;
+	hResult = result->GetOutput(DXC_OUT_REFLECTION, IID_PPV_ARGS(&newOutput.reflectionBlob), nullptr);
+
+	ComPtr<IDxcBlob> shaderBlob;
+	hResult = result->GetOutput(DXC_OUT_OBJECT, IID_PPV_ARGS(&newOutput.shaderBlob), nullptr);
+
+	return newOutput;
 }
 
 ID3D12Resource* D3DDeviceManager::CreateBuffer(size_t bufferSize)
@@ -256,10 +337,11 @@ ID3D12Resource* D3DDeviceManager::CreateBuffer(size_t bufferSize)
 PipelineAndRootSig D3DDeviceManager::CreatePSO(LPCWSTR vertexShader, LPCWSTR pixelShader)
 {
 	PipelineAndRootSig newPipeline;
-	ID3DBlob* vsBlob = CompileShaderReturnBlob(vertexShader, "BasicVS", "vs_5_0");
-	ID3DBlob* psBlob = CompileShaderReturnBlob(pixelShader, "BasicPS", "ps_5_0");
+	
+	ShaderCompilationOutput vertexShaderOutput = CompileShaderDXC(vertexShader, L"BasicVS", L"vs_6_0");// = CompileShaderReturnBlob(vertexShader, "BasicVS", "vs_5_0");
+	ShaderCompilationOutput pixelShaderOutput = CompileShaderDXC(pixelShader, L"BasicPS", L"ps_6_0");// = CompileShaderReturnBlob(pixelShader, "BasicPS", "ps_5_0");
 
-	if (vsBlob == nullptr || psBlob == nullptr) return newPipeline;
+	if (vertexShaderOutput.shaderBlob == nullptr || pixelShaderOutput.shaderBlob == nullptr) return newPipeline;
 
 	D3D12_DESCRIPTOR_RANGE descTblRange = {};
 	descTblRange.NumDescriptors = 1;
@@ -312,10 +394,10 @@ PipelineAndRootSig D3DDeviceManager::CreatePSO(LPCWSTR vertexShader, LPCWSTR pix
 
 	gPipeline.pRootSignature = newPipeline.rootSig;
 
-	gPipeline.VS.pShaderBytecode = vsBlob->GetBufferPointer();
-	gPipeline.VS.BytecodeLength = vsBlob->GetBufferSize();
-	gPipeline.PS.pShaderBytecode = psBlob->GetBufferPointer();
-	gPipeline.PS.BytecodeLength = psBlob->GetBufferSize();
+	gPipeline.VS.pShaderBytecode = vertexShaderOutput.shaderBlob.Get()->GetBufferPointer();
+	gPipeline.VS.BytecodeLength = vertexShaderOutput.shaderBlob.Get()->GetBufferSize();
+	gPipeline.PS.pShaderBytecode = pixelShaderOutput.shaderBlob.Get()->GetBufferPointer();
+	gPipeline.PS.BytecodeLength = pixelShaderOutput.shaderBlob.Get()->GetBufferSize();
 
 	gPipeline.SampleMask = D3D12_DEFAULT_SAMPLE_MASK;
 	gPipeline.RasterizerState.MultisampleEnable = false;
@@ -334,25 +416,10 @@ PipelineAndRootSig D3DDeviceManager::CreatePSO(LPCWSTR vertexShader, LPCWSTR pix
 
 	gPipeline.BlendState.RenderTarget[0] = renderTargetBlendDesc;
 
-
-	D3D12_INPUT_ELEMENT_DESC elemLayout[] = { {"POSITION",
-												0,
-												DXGI_FORMAT_R32G32B32_FLOAT,
-												0,
-												D3D12_APPEND_ALIGNED_ELEMENT,
-												D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
-												0},
-											   {"TEXCOORD",
-												0,
-												DXGI_FORMAT_R32G32_FLOAT,
-												0,
-												D3D12_APPEND_ALIGNED_ELEMENT,
-												D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
-												0}
-	};
-
-	gPipeline.InputLayout.pInputElementDescs = elemLayout;
-	gPipeline.InputLayout.NumElements = sizeof(elemLayout) / sizeof(D3D12_INPUT_ELEMENT_DESC);
+	std::vector<D3D12_INPUT_ELEMENT_DESC> elems = CreateInputLayout(vertexShaderOutput);
+	
+	gPipeline.InputLayout.pInputElementDescs = elems.data();
+	gPipeline.InputLayout.NumElements = elems.size();
 	gPipeline.IBStripCutValue = D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED;
 
 	gPipeline.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;

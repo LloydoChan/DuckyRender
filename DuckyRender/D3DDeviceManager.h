@@ -5,7 +5,10 @@
 #include <fstream>
 #include <dxgi1_6.h>
 #include <vector>
+#include <dxcapi.h>
+#include <wrl/client.h>
 
+using Microsoft::WRL::ComPtr;
 using namespace DirectX;
 
 struct VBPair
@@ -30,6 +33,12 @@ struct TextureBufferDescPair
 {
 	ID3D12Resource* textureBuffer = nullptr;
 	ID3D12DescriptorHeap* texDescHeap = nullptr;
+};
+
+struct ShaderCompilationOutput
+{
+	ComPtr<IDxcBlob> reflectionBlob;
+	ComPtr<IDxcBlob> shaderBlob;
 };
 
 struct ViewportScissor
@@ -69,7 +78,7 @@ class D3DDeviceManager
 		ID3D12Fence* CreateFence(UINT64 FenceVal);
 
 		ID3D12Resource* CreateBuffer(size_t bufferSize);
-		ID3DBlob* CompileShaderReturnBlob(LPCWSTR ShaderFilePath, LPCSTR entryPoint, LPCSTR profile);
+		ShaderCompilationOutput CompileShaderDXC(LPCWSTR ShaderFilePath, LPCWSTR entryPoint, LPCWSTR profile);
 
 		PipelineAndRootSig CreatePSO(LPCWSTR vertexShader, LPCWSTR pixelShader);
 		TextureBufferDescPair CreateTexture(const wchar_t* Filepath);
@@ -98,6 +107,9 @@ class D3DDeviceManager
 
 		D3D12_CPU_DESCRIPTOR_HANDLE IncrementAndReturnRTVHeaps();
 
+		std::vector<D3D12_INPUT_ELEMENT_DESC> CreateInputLayout(ShaderCompilationOutput& shaderCompData);
+
+
 	private:
 		ID3D12Device* mDevice = nullptr;
 		IDXGISwapChain3* mSwapChain = nullptr;
@@ -108,4 +120,9 @@ class D3DDeviceManager
 		std::wofstream logFile;
 
 		std::vector<ID3D12Resource*> backBuffers;
+
+		// compiler
+		ComPtr<IDxcUtils> mUtils;
+		ComPtr<IDxcIncludeHandler> mIncludeHandler;
+		ComPtr<IDxcCompiler3> mCompiler;
 };
