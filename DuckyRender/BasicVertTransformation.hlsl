@@ -4,10 +4,15 @@ struct Output
     float2 uv : TEXCOORD;
 };
 
+cbuffer cbuff0 : register(b0)
+{
+    matrix mat;
+};
+
 Output main( float4 pos : POSITION, float2 uv : TEXCOORD) 
 {
     Output result;
-    result.svpos = pos;
+    result.svpos = mul(pos, mat);
     result.uv = uv;
 	return result;
 }

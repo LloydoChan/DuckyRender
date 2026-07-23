@@ -79,6 +79,7 @@ class D3DDeviceManager
 		ID3D12Fence* CreateFence(UINT64 FenceVal);
 
 		ID3D12Resource* CreateBuffer(size_t bufferSize);
+		ID3D12Resource* CreateConstantBuffer(size_t bufferSize);
 		bool CompileShaderDXC(LPCWSTR ShaderFilePath, LPCWSTR entryPoint, LPCWSTR profile, ShaderCompilationOutput& newOutput);
 
 		PipelineAndRootSig CreatePSO(LPCWSTR vertexShader, LPCWSTR vertexEntry, LPCWSTR pixelShader, LPCWSTR pixelEntry);
@@ -104,12 +105,15 @@ class D3DDeviceManager
 			return BarrierDesc;
 		}
 
+		UINT GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE type) { return mDevice->GetDescriptorHandleIncrementSize(type); }
+
 		void Present();
 
 		D3D12_CPU_DESCRIPTOR_HANDLE IncrementAndReturnRTVHeaps();
 
 		std::vector<D3D12_INPUT_ELEMENT_DESC> CreateInputLayout(ShaderCompilationOutput& shaderCompData);
 
+		ID3D12Resource* mConstBuffer = nullptr;
 
 	private:
 		ID3D12Device* mDevice = nullptr;
@@ -126,4 +130,6 @@ class D3DDeviceManager
 		ComPtr<IDxcUtils> mUtils;
 		ComPtr<IDxcIncludeHandler> mIncludeHandler;
 		ComPtr<IDxcCompiler3> mCompiler;
+
+		XMMATRIX matIdent;
 };

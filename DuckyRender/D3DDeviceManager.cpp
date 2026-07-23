@@ -4,6 +4,7 @@
 #include <vector>
 #include <winrt/base.h>
 #include <d3d12shader.h>
+#include <D3dx12.h>
 
 #pragma comment(lib, "d3d12.lib")
 #pragma comment(lib, "dxgi.lib")
@@ -31,6 +32,8 @@ bool OutputErrorFromHResult(HRESULT hResult, const char* message, std::wofstream
 
 bool D3DDeviceManager::Init(HWND hWnd, UINT WindowWidth, UINT WindowHeight)
 {
+	matIdent = XMMatrixIdentity();
+
 	logFile.open("log.txt");
 
 	HRESULT hResult = D3D12CreateDevice(nullptr, D3D_FEATURE_LEVEL_12_1, IID_PPV_ARGS(&mDevice));
@@ -320,6 +323,26 @@ ID3D12Resource* D3DDeviceManager::CreateBuffer(size_t bufferSize)
 	return newBuff;
 }
 
+ID3D12Resource* D3DDeviceManager::CreateConstantBuffer(size_t bufferSize)
+{
+	ID3D12Resource* constBuff = nullptr;
+
+	CD3DX12_HEAP_PROPERTIES prop(D3D12_HEAP_TYPE_UPLOAD);
+	auto buff = CD3DX12_RESOURCE_DESC::Buffer((bufferSize + 0xFF) & ~0xFF);
+
+	HRESULT hResult = mDevice->CreateCommittedResource(
+		&prop,
+		D3D12_HEAP_FLAG_NONE,
+		&buff,
+		D3D12_RESOURCE_STATE_GENERIC_READ,
+		nullptr,
+		IID_PPV_ARGS(&constBuff));
+
+	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "couldn't create const buffer ", logFile)) return nullptr;
+
+	return constBuff;
+}
+
 PipelineAndRootSig D3DDeviceManager::CreatePSO(LPCWSTR vertexShader, LPCWSTR vertexEntry, LPCWSTR pixelShader, LPCWSTR pixelEntry)
 {
 	PipelineAndRootSig newPipeline;
@@ -329,22 +352,34 @@ PipelineAndRootSig D3DDeviceManager::CreatePSO(LPCWSTR vertexShader, LPCWSTR ver
 	ShaderCompilationOutput pixelShaderOutput;
 	if (!CompileShaderDXC(pixelShader, pixelEntry, L"ps_6_0", pixelShaderOutput)) return newPipeline;
 
-	D3D12_DESCRIPTOR_RANGE descTblRange = {};
-	descTblRange.NumDescriptors = 1;
-	descTblRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-	descTblRange.BaseShaderRegister = 0;
-	descTblRange.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+	D3D12_DESCRIPTOR_RANGE descTblRange[2] = {};
+	descTblRange[0].NumDescriptors = 1;
+	descTblRange[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_CBV;
+	descTblRange[0].BaseShaderRegister = 0;
+	descTblRange[0].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
 
-	D3D12_ROOT_PARAMETER rootParam = {};
-	rootParam.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-	rootParam.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-	rootParam.DescriptorTable.pDescriptorRanges = &descTblRange;
-	rootParam.DescriptorTable.NumDescriptorRanges = 1;
+	descTblRange[1].NumDescriptors = 1;
+	descTblRange[1].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+	descTblRange[1].BaseShaderRegister = 0;
+	descTblRange[1].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+
+
+	D3D12_ROOT_PARAMETER rootParam[2] = {};
+	rootParam[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+	rootParam[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
+	rootParam[0].DescriptorTable.pDescriptorRanges = &descTblRange[0];
+	rootParam[0].DescriptorTable.NumDescriptorRanges = 1;
+
+	rootParam[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+	rootParam[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+	rootParam[1].DescriptorTable.pDescriptorRanges = &descTblRange[1];
+	rootParam[1].DescriptorTable.NumDescriptorRanges = 1;
+
 
 	D3D12_ROOT_SIGNATURE_DESC rootSigDesc = {};
 	rootSigDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
-	rootSigDesc.pParameters = &rootParam;
-	rootSigDesc.NumParameters = 1;
+	rootSigDesc.pParameters = rootParam;
+	rootSigDesc.NumParameters = 2;
 
 	D3D12_STATIC_SAMPLER_DESC samplerDesc = {};
 
@@ -388,7 +423,7 @@ PipelineAndRootSig D3DDeviceManager::CreatePSO(LPCWSTR vertexShader, LPCWSTR ver
 	gPipeline.SampleMask = D3D12_DEFAULT_SAMPLE_MASK;
 	gPipeline.RasterizerState.MultisampleEnable = false;
 
-	gPipeline.RasterizerState.CullMode = D3D12_CULL_MODE_BACK;
+	gPipeline.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
 	gPipeline.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
 	gPipeline.RasterizerState.DepthClipEnable = true;
 
@@ -476,12 +511,23 @@ TextureBufferDescPair D3DDeviceManager::CreateTexture(const wchar_t* Filepath)
 
 	texDescHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
 	texDescHeapDesc.NodeMask = 0;
-	texDescHeapDesc.NumDescriptors = 1;
+	texDescHeapDesc.NumDescriptors = 2;
 	texDescHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
 
 	hResult = mDevice->CreateDescriptorHeap(&texDescHeapDesc, IID_PPV_ARGS(&newTexPair.texDescHeap));
 
 	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "couldn't create texture desc heap ", logFile)) return newTexPair;
+
+	mConstBuffer = CreateConstantBuffer(sizeof(XMMATRIX));
+	if (mConstBuffer == nullptr && !OutputErrorFromHResult(hResult, "couldn't create const buffer ", logFile));
+
+	D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {};
+	cbvDesc.BufferLocation = mConstBuffer->GetGPUVirtualAddress();
+	cbvDesc.SizeInBytes = mConstBuffer->GetDesc().Width;
+
+	D3D12_CPU_DESCRIPTOR_HANDLE handle = newTexPair.texDescHeap->GetCPUDescriptorHandleForHeapStart();
+
+	mDevice->CreateConstantBufferView(&cbvDesc, handle);
 
 	// create the resource view
 	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
@@ -490,7 +536,8 @@ TextureBufferDescPair D3DDeviceManager::CreateTexture(const wchar_t* Filepath)
 	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
 	srvDesc.Texture2D.MipLevels = 1;
 
-	mDevice->CreateShaderResourceView(newTexPair.textureBuffer, &srvDesc, newTexPair.texDescHeap->GetCPUDescriptorHandleForHeapStart());
+	handle.ptr += mDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+	mDevice->CreateShaderResourceView(newTexPair.textureBuffer, &srvDesc, handle);
 
 	return newTexPair;
 }

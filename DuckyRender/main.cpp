@@ -17,9 +17,9 @@ const int WINDOW_HEIGHT = 1080;
 struct Vertex
 	vertices[] =
 {
-	{{-1.0f, -1.0f, 0.f},{0.f ,0.f}},
-	{{ 0.f,   1.0f, 0.f},{0.5f,1.f}},
-	{{ 1.0f, -1.0f, 0.f},{1.f ,0.f}},
+	{{-0.5f, -0.5f, 0.f},{0.f ,0.f}},
+	{{ 0.f,   0.5f, 0.f},{0.5f,1.f}},
+	{{ 0.5f, -0.5f, 0.f},{1.f ,0.f}},
 };
 
 unsigned short indices[] = { 0,1,2 };
@@ -111,6 +111,28 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 	ID3D12CommandAllocator* allocator = devManager.GetCommandAllocator();
 	ID3D12CommandQueue* queue = devManager.GetCommandQueue();
 
+	XMVECTOR eye = XMVectorSet(0.0f, 0.0f, -3.0f, 1.0f); 
+	XMVECTOR at  = XMVectorSet(0.0f, 0.0f, 0.0f, 1.0f);  
+	XMVECTOR up  = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);  
+
+	XMMATRIX view = XMMatrixLookAtLH(eye, at, up);
+
+	float fov = XMConvertToRadians(60.0f);
+	float aspect = WINDOW_WIDTH / static_cast<float>(WINDOW_HEIGHT);
+
+	XMMATRIX projection =
+		XMMatrixPerspectiveFovLH(
+			fov,
+			aspect,
+			0.1f,
+			1000.0f);
+
+	float angle = 0.f;
+
+	void* mappedData = nullptr;
+	devManager.mConstBuffer->Map(0, nullptr, (void**)&mappedData);
+	
+
 	while (true)
 	{
 		if (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE))
@@ -123,6 +145,14 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 		{
 			break;
 		}
+
+		XMMATRIX world = XMMatrixRotationY(angle);
+		XMMATRIX wvp = XMMatrixTranspose(world * view * projection);
+		angle += 0.01f;
+
+		if (angle > 2.f * 3.141f) angle = 0.f;
+
+		memcpy(mappedData, &wvp, sizeof(XMFLOAT4X4));
 
 		float clearColor[] = {0.f, 0.f, 0.f, 1.f};
 		D3D12_RESOURCE_BARRIER barrier =  devManager.GetBarrier();
@@ -144,6 +174,9 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 		cmdList->SetGraphicsRootSignature(pipeline.rootSig);
 		cmdList->SetDescriptorHeaps(1, &texturePair.texDescHeap);
 		cmdList->SetGraphicsRootDescriptorTable(0, texturePair.texDescHeap->GetGPUDescriptorHandleForHeapStart());
+		auto heapHandle = texturePair.texDescHeap->GetGPUDescriptorHandleForHeapStart();
+		heapHandle.ptr += devManager.GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+		cmdList->SetGraphicsRootDescriptorTable(1, heapHandle);
 		cmdList->DrawIndexedInstanced(3, 1, 0, 0, 0);
 
 		barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
