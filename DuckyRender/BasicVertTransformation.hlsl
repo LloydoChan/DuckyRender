@@ -4,7 +4,7 @@ struct Output
     float2 uv : TEXCOORD;
 };
 
-Output BasicVS( float4 pos : POSITION, float2 uv : TEXCOORD) 
+Output main( float4 pos : POSITION, float2 uv : TEXCOORD) 
 {
     Output result;
     result.svpos = pos;

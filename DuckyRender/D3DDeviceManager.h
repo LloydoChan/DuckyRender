@@ -39,6 +39,7 @@ struct ShaderCompilationOutput
 {
 	ComPtr<IDxcBlob> reflectionBlob;
 	ComPtr<IDxcBlob> shaderBlob;
+	ComPtr<IDxcResult> result;
 };
 
 struct ViewportScissor
@@ -78,9 +79,9 @@ class D3DDeviceManager
 		ID3D12Fence* CreateFence(UINT64 FenceVal);
 
 		ID3D12Resource* CreateBuffer(size_t bufferSize);
-		ShaderCompilationOutput CompileShaderDXC(LPCWSTR ShaderFilePath, LPCWSTR entryPoint, LPCWSTR profile);
+		bool CompileShaderDXC(LPCWSTR ShaderFilePath, LPCWSTR entryPoint, LPCWSTR profile, ShaderCompilationOutput& newOutput);
 
-		PipelineAndRootSig CreatePSO(LPCWSTR vertexShader, LPCWSTR pixelShader);
+		PipelineAndRootSig CreatePSO(LPCWSTR vertexShader, LPCWSTR vertexEntry, LPCWSTR pixelShader, LPCWSTR pixelEntry);
 		TextureBufferDescPair CreateTexture(const wchar_t* Filepath);
 
 		UINT GetCurrentSwapChainIndex() { return mSwapChain->GetCurrentBackBufferIndex(); }

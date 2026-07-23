@@ -92,7 +92,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 	TextureBufferDescPair texturePair = devManager.CreateTexture(L"untitled.png");
 	if (texturePair.texDescHeap == nullptr || texturePair.textureBuffer == nullptr) return 1;
 
-	PipelineAndRootSig pipeline = devManager.CreatePSO(L"BasicVertTransformation.hlsl", L"BasicColorPixelShader.hlsl");
+	PipelineAndRootSig pipeline = devManager.CreatePSO(L"BasicVertTransformation.hlsl", L"main", L"BasicColorPixelShader.hlsl", L"main");
 	if (pipeline.rootSig == nullptr || pipeline.pipeLineState == nullptr) return 1;
 
 	ViewportScissor wholeScreenViewPortScissor(WINDOW_WIDTH, WINDOW_HEIGHT);

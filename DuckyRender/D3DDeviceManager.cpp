@@ -3,12 +3,10 @@
 #include <dxgi1_6.h>
 #include <vector>
 #include <winrt/base.h>
-// deprecated #include <d3dcompiler.h>
 #include <d3d12shader.h>
 
 #pragma comment(lib, "d3d12.lib")
 #pragma comment(lib, "dxgi.lib")
-// deprecated #pragma comment(lib, "d3dcompiler.lib")
 #pragma comment(lib, "dxcompiler.lib")
 #pragma comment(lib, "DirectXTex.lib")
 
@@ -185,32 +183,27 @@ std::vector<D3D12_INPUT_ELEMENT_DESC> D3DDeviceManager::CreateInputLayout(Shader
 	D3D12_SHADER_DESC shaderDesc;
 	vertReflectionData->GetDesc(&shaderDesc);
 
-	auto format = [](BYTE mask) {
-
-		switch (mask)
-		{
-			case 0xF:
-				return DXGI_FORMAT_R32G32B32_FLOAT;
-			case 0x3:
-				return DXGI_FORMAT_R32G32_FLOAT;
-			default:
-				return DXGI_FORMAT_A8_UNORM;
-		}
-	};
-
 	for (int i = 0; i < shaderDesc.InputParameters; i++)
 	{
 		D3D12_SIGNATURE_PARAMETER_DESC paramDesc;
 		vertReflectionData->GetInputParameterDesc(i, &paramDesc);
 		
-		D3D12_INPUT_ELEMENT_DESC currentDesc = {};
-		currentDesc.SemanticName = paramDesc.SemanticName;
-		currentDesc.SemanticIndex = 0;
-		currentDesc.Format = format(paramDesc.Mask);
-		currentDesc.InputSlot = 0;
-		currentDesc.AlignedByteOffset = D3D12_APPEND_ALIGNED_ELEMENT;
-		currentDesc.InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA;
-		currentDesc.InstanceDataStepRate = 0;
+		// assume is a position and just change where needed
+		D3D12_INPUT_ELEMENT_DESC currentDesc = {
+				"POSITION",
+				 0,
+				 DXGI_FORMAT_R32G32B32_FLOAT,
+				 0,
+				 D3D12_APPEND_ALIGNED_ELEMENT,
+				 D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+				 0
+		};
+		
+		if (std::strcmp(paramDesc.SemanticName, "TEXCOORD") == 0)
+		{
+			currentDesc.SemanticName = "TEXCOORD";
+			currentDesc.Format = DXGI_FORMAT_R32G32_FLOAT;
+		}
 
 		Elems.push_back(currentDesc);
 	}
@@ -253,7 +246,7 @@ bool D3DDeviceManager::MapAndCreateIndexView(IBPair* newIndexBufferPair, unsigne
 	return true;
 }
 
-ShaderCompilationOutput D3DDeviceManager::CompileShaderDXC(LPCWSTR ShaderFilePath, LPCWSTR entryPoint, LPCWSTR profile)
+bool D3DDeviceManager::CompileShaderDXC(LPCWSTR ShaderFilePath, LPCWSTR entryPoint, LPCWSTR profile, ShaderCompilationOutput& newOutput)
 {
 	std::ifstream file(ShaderFilePath, std::ios::binary | std::ios::ate);
 	std::streamsize size = file.tellg();
@@ -261,13 +254,10 @@ ShaderCompilationOutput D3DDeviceManager::CompileShaderDXC(LPCWSTR ShaderFilePat
 	std::vector<char> buffer(size);
 	file.read(buffer.data(), size);
 
-	Microsoft::WRL::ComPtr<IDxcBlobEncoding> pBlobEncoding;
-	mUtils->CreateBlob(buffer.data(), static_cast<uint32_t>(buffer.size()), CP_UTF8, pBlobEncoding.GetAddressOf());
-
 	// 4. Populate DxcBuffer
 	DxcBuffer dxcBuffer;
-	dxcBuffer.Ptr = pBlobEncoding->GetBufferPointer();
-	dxcBuffer.Size = pBlobEncoding->GetBufferSize();
+	dxcBuffer.Ptr = buffer.data();
+	dxcBuffer.Size = buffer.size();
 	dxcBuffer.Encoding = DXC_CP_UTF8; 
 
 	std::vector<LPCWSTR> arguments;
@@ -279,20 +269,16 @@ ShaderCompilationOutput D3DDeviceManager::CompileShaderDXC(LPCWSTR ShaderFilePat
 	arguments.push_back(L"-T");
 	arguments.push_back(profile);
 
-	ComPtr<IDxcResult> result;
+	HRESULT hResult = mCompiler->Compile(&dxcBuffer, arguments.data(), (UINT32)arguments.size(), mIncludeHandler.Get(), IID_PPV_ARGS(&newOutput.result));
+	if (hResult != S_OK && OutputErrorFromHResult(hResult, "couldn't compile shader", logFile)) return false;
 
-	HRESULT hResult = mCompiler->Compile(&dxcBuffer, arguments.data(), (UINT32)arguments.size(), mIncludeHandler.Get(), IID_PPV_ARGS(&result));
-	if (hResult != S_OK && OutputErrorFromHResult(hResult, "couldn't compile shader", logFile));
+	hResult = newOutput.result->GetOutput(DXC_OUT_REFLECTION, IID_PPV_ARGS(&newOutput.reflectionBlob), nullptr);
+	if (hResult != S_OK && OutputErrorFromHResult(hResult, "couldn't get reflection from result", logFile)) return false;
 
-	ShaderCompilationOutput newOutput;
+	hResult = newOutput.result->GetOutput(DXC_OUT_OBJECT, IID_PPV_ARGS(&newOutput.shaderBlob), nullptr);
+	if (hResult != S_OK && OutputErrorFromHResult(hResult, "couldn't get shader info from result", logFile)) return false;
 
-	ComPtr<IDxcBlob> reflectionBlob;
-	hResult = result->GetOutput(DXC_OUT_REFLECTION, IID_PPV_ARGS(&newOutput.reflectionBlob), nullptr);
-
-	ComPtr<IDxcBlob> shaderBlob;
-	hResult = result->GetOutput(DXC_OUT_OBJECT, IID_PPV_ARGS(&newOutput.shaderBlob), nullptr);
-
-	return newOutput;
+	return true;
 }
 
 ID3D12Resource* D3DDeviceManager::CreateBuffer(size_t bufferSize)
@@ -334,14 +320,14 @@ ID3D12Resource* D3DDeviceManager::CreateBuffer(size_t bufferSize)
 	return newBuff;
 }
 
-PipelineAndRootSig D3DDeviceManager::CreatePSO(LPCWSTR vertexShader, LPCWSTR pixelShader)
+PipelineAndRootSig D3DDeviceManager::CreatePSO(LPCWSTR vertexShader, LPCWSTR vertexEntry, LPCWSTR pixelShader, LPCWSTR pixelEntry)
 {
 	PipelineAndRootSig newPipeline;
 	
-	ShaderCompilationOutput vertexShaderOutput = CompileShaderDXC(vertexShader, L"BasicVS", L"vs_6_0");// = CompileShaderReturnBlob(vertexShader, "BasicVS", "vs_5_0");
-	ShaderCompilationOutput pixelShaderOutput = CompileShaderDXC(pixelShader, L"BasicPS", L"ps_6_0");// = CompileShaderReturnBlob(pixelShader, "BasicPS", "ps_5_0");
-
-	if (vertexShaderOutput.shaderBlob == nullptr || pixelShaderOutput.shaderBlob == nullptr) return newPipeline;
+	ShaderCompilationOutput vertexShaderOutput;
+	if(!CompileShaderDXC(vertexShader, vertexEntry, L"vs_6_0", vertexShaderOutput)) return newPipeline;
+	ShaderCompilationOutput pixelShaderOutput;
+	if (!CompileShaderDXC(pixelShader, pixelEntry, L"ps_6_0", pixelShaderOutput)) return newPipeline;
 
 	D3D12_DESCRIPTOR_RANGE descTblRange = {};
 	descTblRange.NumDescriptors = 1;
@@ -429,7 +415,9 @@ PipelineAndRootSig D3DDeviceManager::CreatePSO(LPCWSTR vertexShader, LPCWSTR pix
 	gPipeline.SampleDesc.Quality = 0;
 
 	hResult = mDevice->CreateGraphicsPipelineState(&gPipeline, IID_PPV_ARGS(&newPipeline.pipeLineState));
-	if (hResult != S_OK) OutputErrorFromHResult(hResult, "couldn't create graphics pipeline ", logFile);
+
+	if (hResult != S_OK) 
+		OutputErrorFromHResult(hResult, "couldn't create graphics pipeline ", logFile);
 
 	return newPipeline;
 }
