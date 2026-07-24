@@ -7,11 +7,17 @@
 #include <cmath>
 #include <vector>
 
+#include <chrono>
+using Clock = std::chrono::steady_clock;
 
 #pragma comment(lib, "WindowsApp.lib")
 
 const int WINDOW_WIDTH = 1920;
 const int WINDOW_HEIGHT = 1080;
+
+const float MOVEMENT_SPEED = 5.0f;
+const float ROTATIONAL_SPEED_YAW = 2.0f * 3.141f;
+const float ROTATIONAL_SPEED_PITCH = 3.141f;
 
 //temp for first tri
 struct Vertex
@@ -24,11 +30,80 @@ struct Vertex
 
 unsigned short indices[] = { 0,1,2 };
 
+bool keys[256];
+
+LONG mouseDeltaX = 0;
+LONG mouseDeltaY = 0;
+
+
+void HandleInput(UINT msg, WPARAM wParam, LPARAM lParam)
+{
+	UINT keyValue = static_cast<UINT>(wParam);
+	if (keyValue >= 256) return;
+
+	if (msg == WM_KEYDOWN || msg == WM_SYSKEYDOWN)
+	{
+		keys[keyValue] = true;
+	}
+
+	if (msg == WM_KEYUP || msg == WM_SYSKEYUP)
+	{
+		keys[keyValue] = false;
+	}
+
+	if (msg == WM_INPUT)
+	{
+		UINT dataSize = 0;
+
+		GetRawInputData(
+			reinterpret_cast<HRAWINPUT>(lParam),
+			RID_INPUT,
+			nullptr,
+			&dataSize,
+			sizeof(RAWINPUTHEADER));
+
+		std::vector<std::byte> data(dataSize);
+
+		if (GetRawInputData(
+			reinterpret_cast<HRAWINPUT>(lParam),
+			RID_INPUT,
+			data.data(),
+			&dataSize,
+			sizeof(RAWINPUTHEADER)) != dataSize)
+		{
+			return;
+		}
+
+		const RAWINPUT* rawInput =
+			reinterpret_cast<const RAWINPUT*>(data.data());
+
+		if (rawInput->header.dwType == RIM_TYPEMOUSE)
+		{
+			mouseDeltaX += rawInput->data.mouse.lLastX;
+			mouseDeltaY += rawInput->data.mouse.lLastY;
+		}
+	}
+}
+
+void UpdateCameraTransform()
+{
+
+}
+
 LRESULT WindowProcedure(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 {
-	if (msg == WM_DESTROY)
+	switch (msg)
 	{
+	case WM_DESTROY:
 		PostQuitMessage(0);
+		return 0;
+
+	case WM_KEYDOWN:
+	case WM_KEYUP:
+	case WM_SYSKEYDOWN:
+	case WM_SYSKEYUP:
+	case WM_INPUT:
+		HandleInput(msg, wparam, lparam);
 		return 0;
 	}
 
@@ -74,6 +149,21 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 		w.hInstance,
 		nullptr);
 
+	RAWINPUTDEVICE rawInputDevice{};
+
+	rawInputDevice.usUsagePage = 0x01; // Generic desktop controls
+	rawInputDevice.usUsage = 0x02;     // Mouse
+	rawInputDevice.dwFlags = 0;
+	rawInputDevice.hwndTarget = hwnd;
+
+	if (!RegisterRawInputDevices(
+		&rawInputDevice,
+		1,
+		sizeof(rawInputDevice)))
+	{
+		throw std::runtime_error("Failed to register raw mouse input.");
+	}
+
 	D3DDeviceManager devManager;
 	if (!devManager.Init(hwnd, WINDOW_WIDTH, WINDOW_HEIGHT)) return 0;
 	
@@ -117,12 +207,6 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 	ID3D12CommandAllocator* allocator = devManager.GetCommandAllocator();
 	ID3D12CommandQueue* queue = devManager.GetCommandQueue();
 
-	XMVECTOR eye = XMVectorSet(0.0f, 0.0f, -3.0f, 1.0f); 
-	XMVECTOR at  = XMVectorSet(0.0f, 0.0f, 0.0f, 1.0f);  
-	XMVECTOR up  = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);  
-
-	XMMATRIX view = XMMatrixLookAtLH(eye, at, up);
-
 	float fov = XMConvertToRadians(60.0f);
 	float aspect = WINDOW_WIDTH / static_cast<float>(WINDOW_HEIGHT);
 
@@ -138,23 +222,108 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 	void* mappedData = nullptr;
 	constantBuffer.buffer->Map(0, nullptr, (void**)&mappedData);
 	
+	XMVECTOR eye = XMVectorSet(0.f, 0.f, -3.f, 1.f);
+	XMVECTOR at  = XMVectorSet(0.f, 0.f, -2.f, 1.f);
+	XMVECTOR up  = XMVectorSet(0.f, 1.f,  0.f, 0.f);
+
+	auto previousTime = Clock::now();
 
 	while (true)
 	{
 		if (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE))
 		{
+			if (msg.message == WM_QUIT)
+			{
+				break;
+			}
+
 			TranslateMessage(&msg);
 			DispatchMessage(&msg);
 		}
 
-		if (msg.message == WM_QUIT)
+		auto currentTime = Clock::now();
+
+		float deltaTime = std::chrono::duration<float>(
+			currentTime - previousTime).count();
+
+		previousTime = currentTime;
+
+		XMVECTOR movement    = XMVectorZero();
+		XMVECTOR viewVector  = XMVectorSubtract(at, eye);
+		XMVECTOR rightVector = XMVector3Cross(viewVector, up);
+
+		LONG localMouseDeltaXCopy = mouseDeltaX;
+		LONG localMouseDeltaYCopy = mouseDeltaY;
+
+		if (localMouseDeltaXCopy != 0)
 		{
-			break;
+			float angle = XMConvertToRadians(static_cast<float>(mouseDeltaX) * ROTATIONAL_SPEED_YAW * deltaTime);
+			XMVECTOR quat = XMQuaternionRotationAxis(up, angle);
+			viewVector = XMVector3Rotate(viewVector, quat);
+			viewVector = XMVector3Normalize(viewVector);
 		}
+
+		XMVECTOR localDeltaYCopy = XMVector3Normalize(XMVector3Cross(up, viewVector));
+
+		if (mouseDeltaY != 0)
+		{
+			float angle = XMConvertToRadians(static_cast<float>(mouseDeltaY) * ROTATIONAL_SPEED_PITCH * deltaTime);
+			XMVECTOR quat = XMQuaternionRotationAxis(rightVector, angle);
+			XMVECTOR possibleViewVector = XMVector3Rotate(viewVector, quat);
+			possibleViewVector = XMVector3Normalize(possibleViewVector);
+
+			const float verticalAlignment = XMVectorGetX(XMVector3Dot(possibleViewVector, up));
+
+			constexpr float pitchLimit = 0.99f;
+
+			if (std::abs(verticalAlignment) < pitchLimit)
+			{
+				viewVector = possibleViewVector;
+			}
+		}
+
+		rightVector = XMVector3Normalize(XMVector3Cross(up, viewVector));
+
+		if (keys['W'])
+		{
+			movement = XMVectorAdd(movement,viewVector);
+		}
+
+		if (keys['S'])
+		{
+			movement = XMVectorSubtract(movement, viewVector);
+		}
+
+		if (keys['A'])
+		{
+			movement = XMVectorAdd(movement, rightVector);
+		}
+
+		if (keys['D'])
+		{
+			movement = XMVectorSubtract(movement, rightVector);
+		}
+
+		if (!XMVector3Equal(movement, XMVectorZero()))
+		{
+			movement = XMVector3Normalize(movement);
+
+			const XMVECTOR scaledMovement = XMVectorScale(
+				movement,
+				MOVEMENT_SPEED * deltaTime);
+
+			eye = XMVectorAdd(eye, scaledMovement);
+		}
+
+		at = XMVectorAdd(eye, viewVector);
+
+		XMMATRIX view = XMMatrixLookAtLH(eye, at, up);
 
 		XMMATRIX world = XMMatrixRotationY(angle);
 		XMMATRIX wvp = XMMatrixTranspose(world * view * projection);
 		angle += 0.01f;
+
+		mouseDeltaX = mouseDeltaY = 0;
 
 		if (angle > 2.f * 3.141f) angle = 0.f;
 
