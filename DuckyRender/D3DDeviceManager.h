@@ -1,15 +1,15 @@
 #pragma once
 
 #include <d3d12.h>
-#include <DirectXMath.h>
 #include <fstream>
 #include <dxgi1_6.h>
 #include <vector>
 #include <dxcapi.h>
 #include <wrl/client.h>
+#include <DirectXMath.h>
 
-using Microsoft::WRL::ComPtr;
 using namespace DirectX;
+using Microsoft::WRL::ComPtr;
 
 struct VBPair
 {

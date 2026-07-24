@@ -144,7 +144,9 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="D3DDeviceManager.cpp" />
+    <ClCompile Include="DuckyApp.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="SimplestApp.cpp" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="BasicColorPixelShader.hlsl">
@@ -166,6 +168,8 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="D3DDeviceManager.h" />
+    <ClInclude Include="DuckyApp.h" />
+    <ClInclude Include="SimplestApp.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
