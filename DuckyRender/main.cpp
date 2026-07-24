@@ -91,11 +91,11 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 
 	ID3D12DescriptorHeap* descHeap = devManager.CreateDescriptorHeap(D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
-	ID3D12Resource* constantBuffer = devManager.CreateConstantBuffer(sizeof(XMMATRIX), descHeap);
-	if (constantBuffer == nullptr) return 1;
+	DescriptorHeapResource constantBuffer = devManager.CreateConstantBuffer(sizeof(XMMATRIX), descHeap);
+	if (constantBuffer.buffer == nullptr) return 1;
 
-	ID3D12Resource* textureBuffer = devManager.CreateTexture(L"untitled.png", descHeap);
-	if (textureBuffer == nullptr) return 1;
+	DescriptorHeapResource textureBuffer = devManager.CreateTexture(L"untitled.png", descHeap);
+	if (textureBuffer.buffer == nullptr) return 1;
 
 
 	PipelineAndRootSig pipeline = devManager.CreatePSO(L"BasicVertTransformation.hlsl", L"main", L"BasicColorPixelShader.hlsl", L"main", 1, 1);
@@ -136,7 +136,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 	float angle = 0.f;
 
 	void* mappedData = nullptr;
-	constantBuffer->Map(0, nullptr, (void**)&mappedData);
+	constantBuffer.buffer->Map(0, nullptr, (void**)&mappedData);
 	
 
 	while (true)
@@ -181,9 +181,9 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 
 		cmdList->SetDescriptorHeaps(1, &descHeap);
 		D3D12_GPU_DESCRIPTOR_HANDLE descHandle = descHeap->GetGPUDescriptorHandleForHeapStart();
-		cmdList->SetGraphicsRootDescriptorTable(0, descHandle);
+		cmdList->SetGraphicsRootDescriptorTable(constantBuffer.heapOffset, descHandle);
 		descHandle.ptr += devManager.GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-		cmdList->SetGraphicsRootDescriptorTable(1, descHandle);
+		cmdList->SetGraphicsRootDescriptorTable(textureBuffer.heapOffset, descHandle);
 		cmdList->DrawIndexedInstanced(3, 1, 0, 0, 0);
 
 		barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;

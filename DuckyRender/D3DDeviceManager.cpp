@@ -323,9 +323,9 @@ ID3D12Resource* D3DDeviceManager::CreateBuffer(size_t bufferSize)
 	return newBuff;
 }
 
-ID3D12Resource* D3DDeviceManager::CreateConstantBuffer(size_t bufferSize, ID3D12DescriptorHeap* descHeap)
+DescriptorHeapResource D3DDeviceManager::CreateConstantBuffer(size_t bufferSize, ID3D12DescriptorHeap* descHeap)
 {
-	ID3D12Resource* constantBuffer = nullptr;
+	DescriptorHeapResource constantBuffer;
 
 	CD3DX12_HEAP_PROPERTIES prop(D3D12_HEAP_TYPE_UPLOAD);
 	auto buff = CD3DX12_RESOURCE_DESC::Buffer((bufferSize + 0xFF) & ~0xFF);
@@ -336,18 +336,18 @@ ID3D12Resource* D3DDeviceManager::CreateConstantBuffer(size_t bufferSize, ID3D12
 		&buff,
 		D3D12_RESOURCE_STATE_GENERIC_READ,
 		nullptr,
-		IID_PPV_ARGS(&constantBuffer));
+		IID_PPV_ARGS(&constantBuffer.buffer));
 
-	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "couldn't create const buffer ", logFile)) return nullptr;
+	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "couldn't create const buffer ", logFile)) return constantBuffer;
 
 	D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {};
-	cbvDesc.BufferLocation = constantBuffer->GetGPUVirtualAddress();
-	cbvDesc.SizeInBytes = constantBuffer->GetDesc().Width;
+	cbvDesc.BufferLocation = constantBuffer.buffer->GetGPUVirtualAddress();
+	cbvDesc.SizeInBytes = constantBuffer.buffer->GetDesc().Width;
 
 	D3D12_CPU_DESCRIPTOR_HANDLE handle = descHeap->GetCPUDescriptorHandleForHeapStart();
 	handle.ptr += mDescriptorHandleIndex * mDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 	mDevice->CreateConstantBufferView(&cbvDesc, handle);
-	mDescriptorHandleIndex++;
+	constantBuffer.heapOffset = mDescriptorHandleIndex++;
 	return constantBuffer;
 }
 
@@ -461,15 +461,15 @@ PipelineAndRootSig D3DDeviceManager::CreatePSO(LPCWSTR vertexShader, LPCWSTR ver
 	return newPipeline;
 }
 
-ID3D12Resource* D3DDeviceManager::CreateTexture(const wchar_t* Filepath, ID3D12DescriptorHeap* descHeap)
+DescriptorHeapResource D3DDeviceManager::CreateTexture(const wchar_t* Filepath, ID3D12DescriptorHeap* descHeap)
 {
 	TexMetadata metaData = {};
 	ScratchImage imageData = {};
 
-	ID3D12Resource* newTexture;
+	DescriptorHeapResource newTexture;
 
 	HRESULT hResult = LoadFromWICFile(Filepath, WIC_FLAGS_NONE, &metaData, imageData);
-	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "couldn't load Texture ", logFile)) return nullptr;
+	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "couldn't load Texture ", logFile)) return newTexture;
 
 	auto img = imageData.GetImage(0, 0, 0);
 	
@@ -499,17 +499,17 @@ ID3D12Resource* D3DDeviceManager::CreateTexture(const wchar_t* Filepath, ID3D12D
 		&resDesc,
 		D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
 		nullptr,
-		IID_PPV_ARGS(&newTexture));
+		IID_PPV_ARGS(&newTexture.buffer));
 
-	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "couldn't create texture ", logFile)) return nullptr;
+	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "couldn't create texture ", logFile)) return newTexture;
 
-	hResult = newTexture->WriteToSubresource(0,
+	hResult = newTexture.buffer->WriteToSubresource(0,
 		nullptr,
 		img->pixels,
 		img->rowPitch,
 		img->slicePitch);
 
-	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "couldn't write to subresource ", logFile)) return nullptr;
+	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "couldn't write to subresource ", logFile)) return newTexture;
 
 	// create the resource view
 	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
@@ -520,8 +520,8 @@ ID3D12Resource* D3DDeviceManager::CreateTexture(const wchar_t* Filepath, ID3D12D
 
 	D3D12_CPU_DESCRIPTOR_HANDLE handle = descHeap->GetCPUDescriptorHandleForHeapStart();
 	handle.ptr += mDescriptorHandleIndex * mDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-	mDevice->CreateShaderResourceView(newTexture, &srvDesc, handle);
-	mDescriptorHandleIndex++;
+	mDevice->CreateShaderResourceView(newTexture.buffer, &srvDesc, handle);
+	newTexture.heapOffset = mDescriptorHandleIndex++;
 	return newTexture;
 }
 

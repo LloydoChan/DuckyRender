@@ -36,6 +36,12 @@ struct ShaderCompilationOutput
 	ComPtr<IDxcResult> result;
 };
 
+struct DescriptorHeapResource
+{
+	ID3D12Resource* buffer = nullptr;
+	UINT heapOffset = 0;
+};
+
 struct ViewportScissor
 {
 	// default - wholescreen
@@ -76,8 +82,8 @@ class D3DDeviceManager
 
 		ID3D12DescriptorHeap* CreateDescriptorHeap(D3D12_DESCRIPTOR_HEAP_FLAGS flags, D3D12_DESCRIPTOR_HEAP_TYPE type, UINT numDescriptors = MAX_NUM_DESCRIPTORS_PER_HEAP);
 		ID3D12Resource* CreateBuffer(size_t bufferSize);
-		ID3D12Resource* CreateConstantBuffer(size_t bufferSize, ID3D12DescriptorHeap* descHeap);
-		ID3D12Resource* CreateTexture(const wchar_t* Filepath, ID3D12DescriptorHeap* descHeap);
+		DescriptorHeapResource CreateConstantBuffer(size_t bufferSize, ID3D12DescriptorHeap* descHeap);
+		DescriptorHeapResource CreateTexture(const wchar_t* Filepath, ID3D12DescriptorHeap* descHeap);
 		ID3D12GraphicsCommandList* CreateAndReturnCommandList();
 		PipelineAndRootSig CreatePSO(LPCWSTR vertexShader, LPCWSTR vertexEntry, LPCWSTR pixelShader, LPCWSTR pixelEntry, UINT numConstantBuffers, UINT numShaderResources);
 
