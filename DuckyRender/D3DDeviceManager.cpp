@@ -323,9 +323,9 @@ ID3D12Resource* D3DDeviceManager::CreateBuffer(size_t bufferSize)
 	return newBuff;
 }
 
-ID3D12Resource* D3DDeviceManager::CreateConstantBuffer(size_t bufferSize)
+ID3D12Resource* D3DDeviceManager::CreateConstantBuffer(size_t bufferSize, ID3D12DescriptorHeap* descHeap)
 {
-	ID3D12Resource* constBuff = nullptr;
+	ID3D12Resource* constantBuffer = nullptr;
 
 	CD3DX12_HEAP_PROPERTIES prop(D3D12_HEAP_TYPE_UPLOAD);
 	auto buff = CD3DX12_RESOURCE_DESC::Buffer((bufferSize + 0xFF) & ~0xFF);
@@ -336,14 +336,22 @@ ID3D12Resource* D3DDeviceManager::CreateConstantBuffer(size_t bufferSize)
 		&buff,
 		D3D12_RESOURCE_STATE_GENERIC_READ,
 		nullptr,
-		IID_PPV_ARGS(&constBuff));
+		IID_PPV_ARGS(&constantBuffer));
 
 	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "couldn't create const buffer ", logFile)) return nullptr;
 
-	return constBuff;
+	D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {};
+	cbvDesc.BufferLocation = constantBuffer->GetGPUVirtualAddress();
+	cbvDesc.SizeInBytes = constantBuffer->GetDesc().Width;
+
+	D3D12_CPU_DESCRIPTOR_HANDLE handle = descHeap->GetCPUDescriptorHandleForHeapStart();
+	handle.ptr += mDescriptorHandleIndex * mDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+	mDevice->CreateConstantBufferView(&cbvDesc, handle);
+	mDescriptorHandleIndex++;
+	return constantBuffer;
 }
 
-PipelineAndRootSig D3DDeviceManager::CreatePSO(LPCWSTR vertexShader, LPCWSTR vertexEntry, LPCWSTR pixelShader, LPCWSTR pixelEntry)
+PipelineAndRootSig D3DDeviceManager::CreatePSO(LPCWSTR vertexShader, LPCWSTR vertexEntry, LPCWSTR pixelShader, LPCWSTR pixelEntry, UINT numConstantBuffers, UINT numShaderResources)
 {
 	PipelineAndRootSig newPipeline;
 	
@@ -352,34 +360,30 @@ PipelineAndRootSig D3DDeviceManager::CreatePSO(LPCWSTR vertexShader, LPCWSTR ver
 	ShaderCompilationOutput pixelShaderOutput;
 	if (!CompileShaderDXC(pixelShader, pixelEntry, L"ps_6_0", pixelShaderOutput)) return newPipeline;
 
-	D3D12_DESCRIPTOR_RANGE descTblRange[2] = {};
-	descTblRange[0].NumDescriptors = 1;
-	descTblRange[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_CBV;
-	descTblRange[0].BaseShaderRegister = 0;
-	descTblRange[0].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+	UINT total = numConstantBuffers + numShaderResources;
 
-	descTblRange[1].NumDescriptors = 1;
-	descTblRange[1].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-	descTblRange[1].BaseShaderRegister = 0;
-	descTblRange[1].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+	std::vector<D3D12_DESCRIPTOR_RANGE> descTables(total);
+	std::vector<D3D12_ROOT_PARAMETER> rootParams(total);
+	
+	for (UINT inputCounter = 0; inputCounter < total; inputCounter++)
+	{
+		descTables[inputCounter].NumDescriptors = 1;
+		if(inputCounter < numConstantBuffers) descTables[inputCounter].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_CBV;
+		else descTables[inputCounter].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+		descTables[inputCounter].BaseShaderRegister = 0;
+		descTables[inputCounter].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
 
-
-	D3D12_ROOT_PARAMETER rootParam[2] = {};
-	rootParam[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-	rootParam[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
-	rootParam[0].DescriptorTable.pDescriptorRanges = &descTblRange[0];
-	rootParam[0].DescriptorTable.NumDescriptorRanges = 1;
-
-	rootParam[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-	rootParam[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-	rootParam[1].DescriptorTable.pDescriptorRanges = &descTblRange[1];
-	rootParam[1].DescriptorTable.NumDescriptorRanges = 1;
-
+		rootParams[inputCounter].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+		if (inputCounter < numConstantBuffers) rootParams[inputCounter].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
+		else rootParams[inputCounter].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+		rootParams[inputCounter].DescriptorTable.pDescriptorRanges = &descTables[inputCounter];
+		rootParams[inputCounter].DescriptorTable.NumDescriptorRanges = 1;
+	}
 
 	D3D12_ROOT_SIGNATURE_DESC rootSigDesc = {};
 	rootSigDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
-	rootSigDesc.pParameters = rootParam;
-	rootSigDesc.NumParameters = 2;
+	rootSigDesc.pParameters = rootParams.data();
+	rootSigDesc.NumParameters = numConstantBuffers + numShaderResources;
 
 	D3D12_STATIC_SAMPLER_DESC samplerDesc = {};
 
@@ -457,17 +461,18 @@ PipelineAndRootSig D3DDeviceManager::CreatePSO(LPCWSTR vertexShader, LPCWSTR ver
 	return newPipeline;
 }
 
-TextureBufferDescPair D3DDeviceManager::CreateTexture(const wchar_t* Filepath)
+ID3D12Resource* D3DDeviceManager::CreateTexture(const wchar_t* Filepath, ID3D12DescriptorHeap* descHeap)
 {
 	TexMetadata metaData = {};
 	ScratchImage imageData = {};
-	TextureBufferDescPair newTexPair;
+
+	ID3D12Resource* newTexture;
 
 	HRESULT hResult = LoadFromWICFile(Filepath, WIC_FLAGS_NONE, &metaData, imageData);
-	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "couldn't load Texture ", logFile)) return newTexPair;
+	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "couldn't load Texture ", logFile)) return nullptr;
 
 	auto img = imageData.GetImage(0, 0, 0);
-
+	
 	D3D12_HEAP_PROPERTIES heapprop = {};
 	heapprop.Type = D3D12_HEAP_TYPE_CUSTOM;
 	heapprop.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_WRITE_BACK;
@@ -494,40 +499,17 @@ TextureBufferDescPair D3DDeviceManager::CreateTexture(const wchar_t* Filepath)
 		&resDesc,
 		D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
 		nullptr,
-		IID_PPV_ARGS(&newTexPair.textureBuffer));
+		IID_PPV_ARGS(&newTexture));
 
-	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "couldn't create texture ", logFile)) return newTexPair;
+	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "couldn't create texture ", logFile)) return nullptr;
 
-	hResult = newTexPair.textureBuffer->WriteToSubresource(0,
+	hResult = newTexture->WriteToSubresource(0,
 		nullptr,
 		img->pixels,
 		img->rowPitch,
 		img->slicePitch);
 
-	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "couldn't write to subresource ", logFile)) return newTexPair;
-
-	ID3D12DescriptorHeap* texDescHeap = nullptr;
-	D3D12_DESCRIPTOR_HEAP_DESC texDescHeapDesc = {};
-
-	texDescHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-	texDescHeapDesc.NodeMask = 0;
-	texDescHeapDesc.NumDescriptors = 2;
-	texDescHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-
-	hResult = mDevice->CreateDescriptorHeap(&texDescHeapDesc, IID_PPV_ARGS(&newTexPair.texDescHeap));
-
-	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "couldn't create texture desc heap ", logFile)) return newTexPair;
-
-	mConstBuffer = CreateConstantBuffer(sizeof(XMMATRIX));
-	if (mConstBuffer == nullptr && !OutputErrorFromHResult(hResult, "couldn't create const buffer ", logFile));
-
-	D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {};
-	cbvDesc.BufferLocation = mConstBuffer->GetGPUVirtualAddress();
-	cbvDesc.SizeInBytes = mConstBuffer->GetDesc().Width;
-
-	D3D12_CPU_DESCRIPTOR_HANDLE handle = newTexPair.texDescHeap->GetCPUDescriptorHandleForHeapStart();
-
-	mDevice->CreateConstantBufferView(&cbvDesc, handle);
+	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "couldn't write to subresource ", logFile)) return nullptr;
 
 	// create the resource view
 	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
@@ -536,10 +518,11 @@ TextureBufferDescPair D3DDeviceManager::CreateTexture(const wchar_t* Filepath)
 	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
 	srvDesc.Texture2D.MipLevels = 1;
 
-	handle.ptr += mDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-	mDevice->CreateShaderResourceView(newTexPair.textureBuffer, &srvDesc, handle);
-
-	return newTexPair;
+	D3D12_CPU_DESCRIPTOR_HANDLE handle = descHeap->GetCPUDescriptorHandleForHeapStart();
+	handle.ptr += mDescriptorHandleIndex * mDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+	mDevice->CreateShaderResourceView(newTexture, &srvDesc, handle);
+	mDescriptorHandleIndex++;
+	return newTexture;
 }
 
 ID3D12Fence* D3DDeviceManager::CreateFence(UINT64 FenceVal)
@@ -548,4 +531,22 @@ ID3D12Fence* D3DDeviceManager::CreateFence(UINT64 FenceVal)
 	HRESULT hResult = mDevice->CreateFence(FenceVal, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&fence));
 	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "couldn't create fence ", logFile)) return nullptr;
 	return fence;
+}
+
+ID3D12DescriptorHeap* D3DDeviceManager::CreateDescriptorHeap(D3D12_DESCRIPTOR_HEAP_FLAGS flags, D3D12_DESCRIPTOR_HEAP_TYPE type, UINT numDescriptors)
+{
+	ID3D12DescriptorHeap* descHeap = nullptr;
+
+	D3D12_DESCRIPTOR_HEAP_DESC descHeapDesc = {};
+
+	descHeapDesc.Flags = flags;
+	descHeapDesc.NodeMask = 0;
+	descHeapDesc.NumDescriptors = numDescriptors;
+	descHeapDesc.Type = type;
+
+	HRESULT hResult = mDevice->CreateDescriptorHeap(&descHeapDesc, IID_PPV_ARGS(&descHeap));
+
+	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "couldn't create desc heap ", logFile)) return nullptr;
+
+	return descHeap;
 }

@@ -89,10 +89,16 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 
 	if(!devManager.MapAndCreateIndexView(&triangleIndexPair, indices, 3)) return 1;
 
-	TextureBufferDescPair texturePair = devManager.CreateTexture(L"untitled.png");
-	if (texturePair.texDescHeap == nullptr || texturePair.textureBuffer == nullptr) return 1;
+	ID3D12DescriptorHeap* descHeap = devManager.CreateDescriptorHeap(D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
-	PipelineAndRootSig pipeline = devManager.CreatePSO(L"BasicVertTransformation.hlsl", L"main", L"BasicColorPixelShader.hlsl", L"main");
+	ID3D12Resource* constantBuffer = devManager.CreateConstantBuffer(sizeof(XMMATRIX), descHeap);
+	if (constantBuffer == nullptr) return 1;
+
+	ID3D12Resource* textureBuffer = devManager.CreateTexture(L"untitled.png", descHeap);
+	if (textureBuffer == nullptr) return 1;
+
+
+	PipelineAndRootSig pipeline = devManager.CreatePSO(L"BasicVertTransformation.hlsl", L"main", L"BasicColorPixelShader.hlsl", L"main", 1, 1);
 	if (pipeline.rootSig == nullptr || pipeline.pipeLineState == nullptr) return 1;
 
 	ViewportScissor wholeScreenViewPortScissor(WINDOW_WIDTH, WINDOW_HEIGHT);
@@ -130,7 +136,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 	float angle = 0.f;
 
 	void* mappedData = nullptr;
-	devManager.mConstBuffer->Map(0, nullptr, (void**)&mappedData);
+	constantBuffer->Map(0, nullptr, (void**)&mappedData);
 	
 
 	while (true)
@@ -172,11 +178,12 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 		cmdList->IASetIndexBuffer(&triangleIndexPair.ibView);
 
 		cmdList->SetGraphicsRootSignature(pipeline.rootSig);
-		cmdList->SetDescriptorHeaps(1, &texturePair.texDescHeap);
-		cmdList->SetGraphicsRootDescriptorTable(0, texturePair.texDescHeap->GetGPUDescriptorHandleForHeapStart());
-		auto heapHandle = texturePair.texDescHeap->GetGPUDescriptorHandleForHeapStart();
-		heapHandle.ptr += devManager.GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-		cmdList->SetGraphicsRootDescriptorTable(1, heapHandle);
+
+		cmdList->SetDescriptorHeaps(1, &descHeap);
+		D3D12_GPU_DESCRIPTOR_HANDLE descHandle = descHeap->GetGPUDescriptorHandleForHeapStart();
+		cmdList->SetGraphicsRootDescriptorTable(0, descHandle);
+		descHandle.ptr += devManager.GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+		cmdList->SetGraphicsRootDescriptorTable(1, descHandle);
 		cmdList->DrawIndexedInstanced(3, 1, 0, 0, 0);
 
 		barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;

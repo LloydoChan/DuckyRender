@@ -29,12 +29,6 @@ struct PipelineAndRootSig
 	ID3D12PipelineState* pipeLineState = nullptr;
 };
 
-struct TextureBufferDescPair
-{
-	ID3D12Resource* textureBuffer = nullptr;
-	ID3D12DescriptorHeap* texDescHeap = nullptr;
-};
-
 struct ShaderCompilationOutput
 {
 	ComPtr<IDxcBlob> reflectionBlob;
@@ -69,6 +63,8 @@ struct Vertex
 	XMFLOAT2 uv;
 };
 
+const UINT MAX_NUM_DESCRIPTORS_PER_HEAP = 100;
+
 class D3DDeviceManager
 {
 	public:
@@ -78,16 +74,17 @@ class D3DDeviceManager
 
 		ID3D12Fence* CreateFence(UINT64 FenceVal);
 
+		ID3D12DescriptorHeap* CreateDescriptorHeap(D3D12_DESCRIPTOR_HEAP_FLAGS flags, D3D12_DESCRIPTOR_HEAP_TYPE type, UINT numDescriptors = MAX_NUM_DESCRIPTORS_PER_HEAP);
 		ID3D12Resource* CreateBuffer(size_t bufferSize);
-		ID3D12Resource* CreateConstantBuffer(size_t bufferSize);
+		ID3D12Resource* CreateConstantBuffer(size_t bufferSize, ID3D12DescriptorHeap* descHeap);
+		ID3D12Resource* CreateTexture(const wchar_t* Filepath, ID3D12DescriptorHeap* descHeap);
+		ID3D12GraphicsCommandList* CreateAndReturnCommandList();
+		PipelineAndRootSig CreatePSO(LPCWSTR vertexShader, LPCWSTR vertexEntry, LPCWSTR pixelShader, LPCWSTR pixelEntry, UINT numConstantBuffers, UINT numShaderResources);
+
 		bool CompileShaderDXC(LPCWSTR ShaderFilePath, LPCWSTR entryPoint, LPCWSTR profile, ShaderCompilationOutput& newOutput);
 
-		PipelineAndRootSig CreatePSO(LPCWSTR vertexShader, LPCWSTR vertexEntry, LPCWSTR pixelShader, LPCWSTR pixelEntry);
-		TextureBufferDescPair CreateTexture(const wchar_t* Filepath);
 
 		UINT GetCurrentSwapChainIndex() { return mSwapChain->GetCurrentBackBufferIndex(); }
-
-		ID3D12GraphicsCommandList* CreateAndReturnCommandList();
 		ID3D12CommandQueue* GetCommandQueue() { return mCommandQueue; }
 		ID3D12CommandAllocator* GetCommandAllocator() { return mCmdAllocator; }
 
@@ -113,8 +110,6 @@ class D3DDeviceManager
 
 		std::vector<D3D12_INPUT_ELEMENT_DESC> CreateInputLayout(ShaderCompilationOutput& shaderCompData);
 
-		ID3D12Resource* mConstBuffer = nullptr;
-
 	private:
 		ID3D12Device* mDevice = nullptr;
 		IDXGISwapChain3* mSwapChain = nullptr;
@@ -132,4 +127,6 @@ class D3DDeviceManager
 		ComPtr<IDxcCompiler3> mCompiler;
 
 		XMMATRIX matIdent;
+
+		UINT mDescriptorHandleIndex = 0;
 };
