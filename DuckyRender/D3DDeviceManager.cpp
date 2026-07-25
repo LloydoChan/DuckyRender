@@ -30,20 +30,20 @@ bool OutputErrorFromHResult(HRESULT hResult, const char* message, std::wofstream
 	return true;
 }
 
-bool D3DDeviceManager::Init(HWND hWnd, UINT WindowWidth, UINT WindowHeight)
+bool D3DDeviceManager::Init(HWND hWnd, UINT WindowWidth, UINT WindowHeight, std::wofstream* LogFile)
 {
-	matIdent = XMMatrixIdentity();
+	mLogFilePtr = LogFile;
 
-	logFile.open("log.txt");
+	matIdent = XMMatrixIdentity();
 
 	HRESULT hResult = D3D12CreateDevice(nullptr, D3D_FEATURE_LEVEL_12_1, IID_PPV_ARGS(&mDevice));
 
-	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "problem creating device: ", logFile)) return 1;
+	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "problem creating device: ", *mLogFilePtr)) return 1;
 
 	IDXGIFactory6* factory = nullptr;
 	hResult = CreateDXGIFactory1(IID_PPV_ARGS(&factory));
 
-	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "problem creating factory: ", logFile)) return 1;
+	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "problem creating factory: ", *mLogFilePtr)) return 1;
 
 	std::vector<IDXGIAdapter*> adapters;
 	IDXGIAdapter* tmpAdapter = nullptr;
@@ -57,12 +57,12 @@ bool D3DDeviceManager::Init(HWND hWnd, UINT WindowWidth, UINT WindowHeight)
 		adapters.push_back(tmpAdapter);
 		DXGI_ADAPTER_DESC desc;
 		tmpAdapter->GetDesc(&desc);
-		logFile << "found adapter " << desc.Description << std::endl;
+		*mLogFilePtr << "found adapter " << desc.Description << std::endl;
 	}
 
 	if (adapters.size() == 0)
 	{
-		logFile << "no adapters found " << std::endl;
+		*mLogFilePtr << "no adapters found " << std::endl;
 		return 1;
 	}
 
@@ -71,16 +71,16 @@ bool D3DDeviceManager::Init(HWND hWnd, UINT WindowWidth, UINT WindowHeight)
 
 	// create compilers
 	hResult = DxcCreateInstance(CLSID_DxcUtils, IID_PPV_ARGS(mUtils.ReleaseAndGetAddressOf()));
-	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "problem creating utils: ", logFile)) return 1;
+	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "problem creating utils: ", *mLogFilePtr)) return 1;
 
 	hResult = mUtils->CreateDefaultIncludeHandler(mIncludeHandler.ReleaseAndGetAddressOf());
-	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "problem creating include handler: ", logFile)) return 1;
+	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "problem creating include handler: ", *mLogFilePtr)) return 1;
 
 	hResult = DxcCreateInstance(CLSID_DxcCompiler, IID_PPV_ARGS(&mCompiler));
-	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "problem creating compiler: ", logFile)) return 1;
+	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "problem creating compiler: ", *mLogFilePtr)) return 1;
 
 	hResult = mDevice->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&mCmdAllocator));
-	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "problem creating command allocator: ", logFile)) return 1;
+	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "problem creating command allocator: ", *mLogFilePtr)) return 1;
 
 	D3D12_COMMAND_QUEUE_DESC cmdQueueDesc = {};
 	cmdQueueDesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
@@ -90,7 +90,7 @@ bool D3DDeviceManager::Init(HWND hWnd, UINT WindowWidth, UINT WindowHeight)
 
 	hResult = mDevice->CreateCommandQueue(&cmdQueueDesc, IID_PPV_ARGS(&mCommandQueue));
 
-	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "problem creating command queue: ", logFile)) return 1;
+	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "problem creating command queue: ", *mLogFilePtr)) return 1;
 
 	DXGI_SWAP_CHAIN_DESC1 swapChainDesc = {};
 
@@ -110,7 +110,7 @@ bool D3DDeviceManager::Init(HWND hWnd, UINT WindowWidth, UINT WindowHeight)
 
 	hResult = factory->CreateSwapChainForHwnd(mCommandQueue, hWnd, &swapChainDesc, nullptr, nullptr, (IDXGISwapChain1**)&mSwapChain);
 
-	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "problem creating swapchain: ", logFile)) return false;
+	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "problem creating swapchain: ", *mLogFilePtr)) return false;
 
 	D3D12_DESCRIPTOR_HEAP_DESC heapDesc = {};
 
@@ -123,7 +123,7 @@ bool D3DDeviceManager::Init(HWND hWnd, UINT WindowWidth, UINT WindowHeight)
 
 	hResult = mDevice->CreateDescriptorHeap(&heapDesc, IID_PPV_ARGS(&rtvHeaps));
 
-	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "problem creating desc heap: ", logFile)) return false;
+	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "problem creating desc heap: ", *mLogFilePtr)) return false;
 
 	
 	D3D12_CPU_DESCRIPTOR_HANDLE handle = rtvHeaps->GetCPUDescriptorHandleForHeapStart();
@@ -134,7 +134,7 @@ bool D3DDeviceManager::Init(HWND hWnd, UINT WindowWidth, UINT WindowHeight)
 		backBuffers.push_back(ptr);
 		hResult = mSwapChain->GetBuffer(idx, IID_PPV_ARGS(&backBuffers[idx]));
 
-		if (hResult != S_OK && !OutputErrorFromHResult(hResult, "problem getting back buffer: ", logFile)) return false;
+		if (hResult != S_OK && !OutputErrorFromHResult(hResult, "problem getting back buffer: ", *mLogFilePtr)) return false;
 
 		mDevice->CreateRenderTargetView(backBuffers[idx], nullptr, handle);
 		handle.ptr += mDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
@@ -144,7 +144,7 @@ bool D3DDeviceManager::Init(HWND hWnd, UINT WindowWidth, UINT WindowHeight)
 
 	// init directxtex file reading
 	hResult = CoInitializeEx(0, COINITBASE_MULTITHREADED);
-	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "problem initializing com: ", logFile)) return false;
+	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "problem initializing com: ", *mLogFilePtr)) return false;
 
 	return true;
 }
@@ -153,7 +153,7 @@ ID3D12GraphicsCommandList* D3DDeviceManager::CreateAndReturnCommandList()
 {
 	ID3D12GraphicsCommandList* cmdList = nullptr;
 	HRESULT hResult = mDevice->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, mCmdAllocator, nullptr, IID_PPV_ARGS(&cmdList));
-	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "problem creating command list: ", logFile)) return nullptr;
+	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "problem creating command list: ", *mLogFilePtr)) return nullptr;
 	return cmdList;
 }
 
@@ -186,7 +186,7 @@ std::vector<D3D12_INPUT_ELEMENT_DESC> D3DDeviceManager::CreateInputLayout(Shader
 	D3D12_SHADER_DESC shaderDesc;
 	vertReflectionData->GetDesc(&shaderDesc);
 
-	for (int i = 0; i < shaderDesc.InputParameters; i++)
+	for (UINT i = 0; i < shaderDesc.InputParameters; i++)
 	{
 		D3D12_SIGNATURE_PARAMETER_DESC paramDesc;
 		vertReflectionData->GetInputParameterDesc(i, &paramDesc);
@@ -214,41 +214,6 @@ std::vector<D3D12_INPUT_ELEMENT_DESC> D3DDeviceManager::CreateInputLayout(Shader
 	return Elems;
 }
 
-
-bool D3DDeviceManager::MapAndCreateVertexView(VBPair* newVertexBufferPair, Vertex* vertData, unsigned int numElems)
-{
-	Vertex* vertMap = nullptr;
-	HRESULT hResult = newVertexBufferPair->vertBuffPointer->Map(0, nullptr, (void**)&vertMap);
-
-	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "problem mapping buffer : ", logFile)) return false;
-
-	std::copy(vertData, vertData + numElems, vertMap);
-	newVertexBufferPair->vertBuffPointer->Unmap(0, nullptr);
-
-	newVertexBufferPair->vbView.BufferLocation = newVertexBufferPair->vertBuffPointer->GetGPUVirtualAddress();
-	newVertexBufferPair->vbView.SizeInBytes = sizeof(Vertex) * numElems;
-	newVertexBufferPair->vbView.StrideInBytes = sizeof(Vertex);
-
-	return true;
-}
-
-bool D3DDeviceManager::MapAndCreateIndexView(IBPair* newIndexBufferPair, unsigned short* indexData, unsigned int numElems)
-{
-	unsigned short* idxMap = nullptr;
-	HRESULT hResult = newIndexBufferPair->idxBuffPointer->Map(0, nullptr, (void**)&idxMap);
-
-	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "problem mapping buffer : ", logFile)) return false;
-
-	std::copy(indexData, indexData + numElems, idxMap);
-	newIndexBufferPair->idxBuffPointer->Unmap(0, nullptr);
-
-	newIndexBufferPair->ibView.BufferLocation = newIndexBufferPair->idxBuffPointer->GetGPUVirtualAddress();
-	newIndexBufferPair->ibView.Format = DXGI_FORMAT_R16_UINT;
-	newIndexBufferPair->ibView.SizeInBytes = sizeof(unsigned short) * numElems;
-
-	return true;
-}
-
 bool D3DDeviceManager::CompileShaderDXC(LPCWSTR ShaderFilePath, LPCWSTR entryPoint, LPCWSTR profile, ShaderCompilationOutput& newOutput)
 {
 	std::ifstream file(ShaderFilePath, std::ios::binary | std::ios::ate);
@@ -273,13 +238,13 @@ bool D3DDeviceManager::CompileShaderDXC(LPCWSTR ShaderFilePath, LPCWSTR entryPoi
 	arguments.push_back(profile);
 
 	HRESULT hResult = mCompiler->Compile(&dxcBuffer, arguments.data(), (UINT32)arguments.size(), mIncludeHandler.Get(), IID_PPV_ARGS(&newOutput.result));
-	if (hResult != S_OK && OutputErrorFromHResult(hResult, "couldn't compile shader", logFile)) return false;
+	if (hResult != S_OK && OutputErrorFromHResult(hResult, "couldn't compile shader", *mLogFilePtr)) return false;
 
 	hResult = newOutput.result->GetOutput(DXC_OUT_REFLECTION, IID_PPV_ARGS(&newOutput.reflectionBlob), nullptr);
-	if (hResult != S_OK && OutputErrorFromHResult(hResult, "couldn't get reflection from result", logFile)) return false;
+	if (hResult != S_OK && OutputErrorFromHResult(hResult, "couldn't get reflection from result", *mLogFilePtr)) return false;
 
 	hResult = newOutput.result->GetOutput(DXC_OUT_OBJECT, IID_PPV_ARGS(&newOutput.shaderBlob), nullptr);
-	if (hResult != S_OK && OutputErrorFromHResult(hResult, "couldn't get shader info from result", logFile)) return false;
+	if (hResult != S_OK && OutputErrorFromHResult(hResult, "couldn't get shader info from result", *mLogFilePtr)) return false;
 
 	return true;
 }
@@ -318,7 +283,7 @@ ID3D12Resource* D3DDeviceManager::CreateBuffer(size_t bufferSize)
 		IID_PPV_ARGS(&newBuff)
 	);
 
-	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "problem creating committed resource : ", logFile)) return nullptr;
+	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "problem creating committed resource : ", *mLogFilePtr)) return nullptr;
 
 	return newBuff;
 }
@@ -338,7 +303,7 @@ DescriptorHeapResource D3DDeviceManager::CreateConstantBuffer(size_t bufferSize,
 		nullptr,
 		IID_PPV_ARGS(&constantBuffer.buffer));
 
-	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "couldn't create const buffer ", logFile)) return constantBuffer;
+	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "couldn't create const buffer ", *mLogFilePtr)) return constantBuffer;
 
 	D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {};
 	cbvDesc.BufferLocation = constantBuffer.buffer->GetGPUVirtualAddress();
@@ -409,11 +374,11 @@ PipelineAndRootSig D3DDeviceManager::CreatePSO(LPCWSTR vertexShader, LPCWSTR ver
 		nullptr
 	);
 
-	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "couldn't serialize root sig ", logFile)) return newPipeline;
+	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "couldn't serialize root sig ", *mLogFilePtr)) return newPipeline;
 
 	hResult = mDevice->CreateRootSignature(0, rootSigBlob->GetBufferPointer(), rootSigBlob->GetBufferSize(), IID_PPV_ARGS(&newPipeline.rootSig));
 	rootSigBlob->Release();
-	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "couldn't create root sig ", logFile)) return newPipeline;
+	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "couldn't create root sig ", *mLogFilePtr)) return newPipeline;
 
 	D3D12_GRAPHICS_PIPELINE_STATE_DESC gPipeline = {};
 
@@ -456,7 +421,7 @@ PipelineAndRootSig D3DDeviceManager::CreatePSO(LPCWSTR vertexShader, LPCWSTR ver
 	hResult = mDevice->CreateGraphicsPipelineState(&gPipeline, IID_PPV_ARGS(&newPipeline.pipeLineState));
 
 	if (hResult != S_OK) 
-		OutputErrorFromHResult(hResult, "couldn't create graphics pipeline ", logFile);
+		OutputErrorFromHResult(hResult, "couldn't create graphics pipeline ", *mLogFilePtr);
 
 	return newPipeline;
 }
@@ -469,7 +434,7 @@ DescriptorHeapResource D3DDeviceManager::CreateTexture(const wchar_t* Filepath, 
 	DescriptorHeapResource newTexture;
 
 	HRESULT hResult = LoadFromWICFile(Filepath, WIC_FLAGS_NONE, &metaData, imageData);
-	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "couldn't load Texture ", logFile)) return newTexture;
+	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "couldn't load Texture ", *mLogFilePtr)) return newTexture;
 
 	auto img = imageData.GetImage(0, 0, 0);
 	
@@ -501,7 +466,7 @@ DescriptorHeapResource D3DDeviceManager::CreateTexture(const wchar_t* Filepath, 
 		nullptr,
 		IID_PPV_ARGS(&newTexture.buffer));
 
-	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "couldn't create texture ", logFile)) return newTexture;
+	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "couldn't create texture ", *mLogFilePtr)) return newTexture;
 
 	hResult = newTexture.buffer->WriteToSubresource(0,
 		nullptr,
@@ -509,7 +474,7 @@ DescriptorHeapResource D3DDeviceManager::CreateTexture(const wchar_t* Filepath, 
 		img->rowPitch,
 		img->slicePitch);
 
-	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "couldn't write to subresource ", logFile)) return newTexture;
+	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "couldn't write to subresource ", *mLogFilePtr)) return newTexture;
 
 	// create the resource view
 	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
@@ -529,7 +494,7 @@ ID3D12Fence* D3DDeviceManager::CreateFence(UINT64 FenceVal)
 {
 	ID3D12Fence* fence = nullptr;
 	HRESULT hResult = mDevice->CreateFence(FenceVal, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&fence));
-	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "couldn't create fence ", logFile)) return nullptr;
+	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "couldn't create fence ", *mLogFilePtr)) return nullptr;
 	return fence;
 }
 
@@ -546,7 +511,7 @@ ID3D12DescriptorHeap* D3DDeviceManager::CreateDescriptorHeap(D3D12_DESCRIPTOR_HE
 
 	HRESULT hResult = mDevice->CreateDescriptorHeap(&descHeapDesc, IID_PPV_ARGS(&descHeap));
 
-	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "couldn't create desc heap ", logFile)) return nullptr;
+	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "couldn't create desc heap ", *mLogFilePtr)) return nullptr;
 
 	return descHeap;
 }

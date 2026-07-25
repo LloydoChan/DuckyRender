@@ -71,7 +71,7 @@
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <IncludePath>C:\DirectX-Headers-main\include\directx;C:\Users\Lloyd\.nuget\packages\directxtex_desktop_win10\2021.1.10.2\include;$(IncludePath)</IncludePath>
+    <IncludePath>C:\DirectX-Headers-main\include\directx;C:\Users\Lloyd\.nuget\packages\directxtex_desktop_win10\2021.1.10.2\include</IncludePath>
     <LibraryPath>C:\Users\Lloyd\.nuget\packages\directxtex_desktop_win10\2021.1.10.2\native\lib\x64\Debug;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
@@ -145,6 +145,7 @@
   <ItemGroup>
     <ClCompile Include="D3DDeviceManager.cpp" />
     <ClCompile Include="DuckyApp.cpp" />
+    <ClCompile Include="DuckyMesh.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="SimplestApp.cpp" />
   </ItemGroup>
@@ -169,6 +170,7 @@
   <ItemGroup>
     <ClInclude Include="D3DDeviceManager.h" />
     <ClInclude Include="DuckyApp.h" />
+    <ClInclude Include="DuckyMesh.h" />
     <ClInclude Include="SimplestApp.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

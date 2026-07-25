@@ -11,18 +11,6 @@
 using namespace DirectX;
 using Microsoft::WRL::ComPtr;
 
-struct VBPair
-{
-	ID3D12Resource* vertBuffPointer = nullptr;
-	D3D12_VERTEX_BUFFER_VIEW vbView = {};
-};
-
-struct IBPair
-{
-	ID3D12Resource* idxBuffPointer = nullptr;
-	D3D12_INDEX_BUFFER_VIEW ibView = {};
-};
-
 struct PipelineAndRootSig
 {
 	ID3D12RootSignature* rootSig = nullptr;
@@ -74,9 +62,7 @@ const UINT MAX_NUM_DESCRIPTORS_PER_HEAP = 100;
 class D3DDeviceManager
 {
 	public:
-		bool Init(HWND hWnd, UINT WindowWidth, UINT WindowHeight);
-		bool MapAndCreateVertexView(VBPair* newVertexBufferPair, Vertex* vertData, unsigned int numElems);
-		bool MapAndCreateIndexView(IBPair* newIndexBufferPair, unsigned short* indexData, unsigned int numElems);
+		bool Init(HWND hWnd, UINT WindowWidth, UINT WindowHeight, std::wofstream* LogFile);
 
 		ID3D12Fence* CreateFence(UINT64 FenceVal);
 
@@ -123,8 +109,6 @@ class D3DDeviceManager
 		ID3D12CommandQueue* mCommandQueue = nullptr;
 		ID3D12DescriptorHeap* rtvHeaps = nullptr;
 
-		std::wofstream logFile;
-
 		std::vector<ID3D12Resource*> backBuffers;
 
 		// compiler
@@ -135,4 +119,6 @@ class D3DDeviceManager
 		XMMATRIX matIdent;
 
 		UINT mDescriptorHandleIndex = 0;
+
+		std::wofstream* mLogFilePtr = nullptr;
 };

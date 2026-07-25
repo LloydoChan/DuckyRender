@@ -1,7 +1,7 @@
 #pragma once
 #include "DuckyApp.h"
 #include "D3DDeviceManager.h"
-
+#include "DuckyMesh.h"
 
 class SimplestApp : public DuckyApp
 {
@@ -12,6 +12,7 @@ public:
 	virtual void HandleInput(UINT msg, WPARAM wParam, LPARAM lParam);
 	void UpdateMovementAndRotation(XMVECTOR& ViewVector, XMVECTOR& ScaledMovement, float DeltaTime);
 	virtual void AppMainLoop();
+
 private:
 	bool mKeys[256];
 	LONG mMouseDeltaX = 0;
@@ -19,6 +20,8 @@ private:
 
 	VBPair mTrianglePair;
 	IBPair mTriangleIndexPair;
+
+	DuckyMesh mTriangleMesh;
 
 	ID3D12DescriptorHeap* mDescHeap = nullptr;
 
@@ -35,4 +38,6 @@ private:
 	DescriptorHeapResource mConstantBuffer;
 	DescriptorHeapResource mTextureBuffer;
 	PipelineAndRootSig mPipeline;
+
+	DuckyMesh newMesh;
 };

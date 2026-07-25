@@ -1,6 +1,7 @@
 #pragma once
 #include <Windows.h>
 #include <DirectXMath.h>
+#include <fstream>
 
 class D3DDeviceManager;
 
@@ -18,4 +19,6 @@ protected:
 
 	HINSTANCE mHInstance = nullptr;
 	LPCWSTR mLpszClassName = nullptr;
+
+	std::wofstream mLogFile;
 };

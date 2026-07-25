@@ -9,9 +9,9 @@ using Clock = std::chrono::steady_clock;
 struct Vertex
 	vertices[] =
 {
-	{{-0.5f, -0.5f, 0.f},{0.f ,0.f}},
-	{{ 0.f,   0.5f, 0.f},{0.5f,1.f}},
-	{{ 0.5f, -0.5f, 0.f},{1.f ,0.f}},
+	{{-0.5f, -0.5f, 0.f},{0.f , 0.f}},
+	{{ 0.f,   0.5f, 0.f},{0.5f, 1.f}},
+	{{ 0.5f, -0.5f, 0.f},{1.f , 0.f}},
 };
 
 unsigned short indices[] = { 0,1,2 };
@@ -24,14 +24,23 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 {
 	DuckyApp::Init(WindowWidth, WindowHeight, WindowName);
 
-	mTrianglePair.vertBuffPointer = mDeviceManager->CreateBuffer(sizeof(Vertex) * 3);
-	if (mTrianglePair.vertBuffPointer == nullptr) return false;
-	if (!mDeviceManager->MapAndCreateVertexView(&mTrianglePair, vertices, 3)) return false;
+	BufferInfo vertBuffer;
+	vertBuffer.Data = &vertices[0];
+	vertBuffer.BufferSize = sizeof(vertices);
+	vertBuffer.Stride = sizeof(Vertex);
 
-	mTriangleIndexPair.idxBuffPointer = mDeviceManager->CreateBuffer(sizeof(unsigned short) * 3);
-	if (mTriangleIndexPair.idxBuffPointer == nullptr) return false;
+	BufferInfo indexBuffer;
+	indexBuffer.Data = &indices[0];
+	indexBuffer.BufferSize = sizeof(indices);
+	indexBuffer.Stride = sizeof(unsigned short);
 
-	if (!mDeviceManager->MapAndCreateIndexView(&mTriangleIndexPair, indices, 3)) return false;
+	std::vector<BufferInfo> vertexInfos;
+	vertexInfos.emplace_back(vertBuffer);
+
+	std::vector<BufferInfo> indexInfos;
+	indexInfos.emplace_back(indexBuffer);
+
+	newMesh.Init(mDeviceManager, vertexInfos, indexInfos);
 
 	mDescHeap = mDeviceManager->CreateDescriptorHeap(D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
@@ -40,7 +49,6 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 
 	mTextureBuffer = mDeviceManager->CreateTexture(L"untitled.png", mDescHeap);
 	if (mTextureBuffer.buffer == nullptr) return false;
-
 
 	mPipeline = mDeviceManager->CreatePSO(L"BasicVertTransformation.hlsl", L"main", L"BasicColorPixelShader.hlsl", L"main", 1, 1);
 	if (mPipeline.rootSig == nullptr || mPipeline.pipeLineState == nullptr) return 1;
@@ -67,6 +75,12 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 
 LRESULT SimplestApp::WindowProcedure(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 {
+	if (msg == WM_DESTROY)
+	{
+		PostQuitMessage(0);
+		return 0;
+	}
+
 	HandleInput(msg, wparam, lparam);
 
 	return DefWindowProc(hwnd, msg, wparam, lparam);
@@ -228,7 +242,7 @@ void SimplestApp::AppMainLoop()
 
 		XMVECTOR movement = XMVectorZero();
 		XMVECTOR viewVector = XMVectorSubtract(at, eye);
-		
+
 		UpdateMovementAndRotation(viewVector, movement, deltaTime);
 
 		eye = XMVectorAdd(eye, movement);
@@ -259,18 +273,14 @@ void SimplestApp::AppMainLoop()
 		mCmdList->RSSetViewports(1, &mWholeScreenViewPortScissor.viewport);
 		mCmdList->RSSetScissorRects(1, &mWholeScreenViewPortScissor.scissor);
 
-		mCmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-		mCmdList->IASetVertexBuffers(0, 1, &mTrianglePair.vbView);
-		mCmdList->IASetIndexBuffer(&mTriangleIndexPair.ibView);
-
 		mCmdList->SetGraphicsRootSignature(mPipeline.rootSig);
-
 		mCmdList->SetDescriptorHeaps(1, &mDescHeap);
 		D3D12_GPU_DESCRIPTOR_HANDLE descHandle = mDescHeap->GetGPUDescriptorHandleForHeapStart();
 		mCmdList->SetGraphicsRootDescriptorTable(mConstantBuffer.heapOffset, descHandle);
 		descHandle.ptr += mDeviceManager->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 		mCmdList->SetGraphicsRootDescriptorTable(mTextureBuffer.heapOffset, descHandle);
-		mCmdList->DrawIndexedInstanced(3, 1, 0, 0, 0);
+
+		newMesh.DrawMesh(mCmdList);
 
 		barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
 		barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;

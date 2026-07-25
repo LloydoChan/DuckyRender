@@ -5,9 +5,10 @@
 #pragma comment(lib, "WindowsApp.lib")
 
 
-
 bool DuckyApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* WindowName)
 {
+	mLogFile.open("log.txt");
+
 	int argc;
 	LPWSTR* argv = CommandLineToArgvW(GetCommandLineW(), &argc);
 	for (int i = 0; i < argc; i++)
@@ -61,7 +62,7 @@ bool DuckyApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* WindowNa
 	}
 
 	mDeviceManager = new D3DDeviceManager();
-	if (!mDeviceManager->Init(hwnd, WindowWidth, WindowHeight)) return false;
+	if (!mDeviceManager->Init(hwnd, WindowWidth, WindowHeight, &mLogFile)) return false;
 
 	ShowWindow(hwnd, SW_SHOW);
 	return true;
