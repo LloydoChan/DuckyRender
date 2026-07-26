@@ -5,7 +5,8 @@
 
 bool DuckyMesh::DuckyPrimitive::InitPrimitive(D3DDeviceManager* DeviceManager,
 								   BufferInfo& VertexBufferInfo,
-								   BufferInfo& IndexBufferInfo)
+								   BufferInfo& IndexBufferInfo,
+								  size_t TextureHash)
 {
 	InitBuffer(DeviceManager, VertexBufferInfo, &mVertices.vertBuffPointer);
 	mVertices.vbView.BufferLocation = mVertices.vertBuffPointer->GetGPUVirtualAddress();
@@ -24,6 +25,8 @@ bool DuckyMesh::DuckyPrimitive::InitPrimitive(D3DDeviceManager* DeviceManager,
 	mNumVertices = VertexBufferInfo.BufferSize / VertexBufferInfo.Stride;
 	mNumIndices = IndexBufferInfo.BufferSize / IndexBufferInfo.Stride;
 
+	mHashedTextureName = TextureHash;
+
 	return true;
 }
 
@@ -39,7 +42,7 @@ bool DuckyMesh::DuckyPrimitive::InitBuffer(D3DDeviceManager* DeviceManager, Buff
 }
 
 
-bool DuckyMesh::Init(D3DDeviceManager* DeviceManager, std::vector<BufferInfo>& VertexInfos, std::vector<BufferInfo>& IndexInfos, XMMATRIX& transform)
+bool DuckyMesh::Init(D3DDeviceManager* DeviceManager, std::vector<BufferInfo>& VertexInfos, std::vector<BufferInfo>& IndexInfos, XMMATRIX& transform, std::vector<size_t>& TextureHashes)
 {
 	mTransform = transform;
 
@@ -48,13 +51,13 @@ bool DuckyMesh::Init(D3DDeviceManager* DeviceManager, std::vector<BufferInfo>& V
 	for (int i = 0; i < VertexInfos.size(); i++)
 	{
 		DuckyPrimitive newPrim;
-		newPrim.InitPrimitive(DeviceManager, VertexInfos[i], IndexInfos[i]);
+		newPrim.InitPrimitive(DeviceManager, VertexInfos[i], IndexInfos[i], TextureHashes[i]);
 		// need move or new Prim will go out of scope if reference, and we don't want to copy!
 		AddPrimitive(std::move(newPrim));
 	}
 }
 
-bool DuckyMesh::Init(D3DDeviceManager* DeviceManager, std::ifstream& InFile)
+bool DuckyMesh::Init(D3DDeviceManager* DeviceManager, std::ifstream& InFile, UINT DescriptorHeapHandle)
 {
 	size_t numPrimitives = 0;
 	InFile.read((char*)&numPrimitives, sizeof(size_t));
@@ -64,11 +67,22 @@ bool DuckyMesh::Init(D3DDeviceManager* DeviceManager, std::ifstream& InFile)
 
 	std::vector<BufferInfo> vertices;
 	std::vector<BufferInfo> indices;
+	std::vector<size_t> textureHashes;
 
 	for (size_t i = 0; i < numPrimitives; i++)
 	{
+		size_t albedoNameLength = 0;
+		InFile.read((char*)&albedoNameLength, sizeof(size_t));
+		std::string albedoName(albedoNameLength, ' ');
+		InFile.read((char*)&albedoName[0], albedoNameLength);
+		std::wstring wideVersion(albedoName.begin(), albedoName.end());
+
+		// read texture file
+		size_t hashIndex = DeviceManager->InitTexture(wideVersion.c_str(), DescriptorHeapHandle);
+		textureHashes.push_back(hashIndex);
+
 		BufferInfo vertBufferInfo;
-		vertBufferInfo.Stride = 12;
+		vertBufferInfo.Stride = 20;
 		InFile.read((char*)&vertBufferInfo.BufferSize, sizeof(size_t));
 		vertBufferInfo.Data = new unsigned char[vertBufferInfo.BufferSize];
 		InFile.read((char*)vertBufferInfo.Data, vertBufferInfo.BufferSize);
@@ -83,13 +97,15 @@ bool DuckyMesh::Init(D3DDeviceManager* DeviceManager, std::ifstream& InFile)
 		indices.emplace_back(std::move(indexBufferInfo));
 	}
 
-	return Init(DeviceManager, vertices, indices, transform);
+	return Init(DeviceManager, vertices, indices, transform, textureHashes);
 }
 
-void DuckyMesh::DrawMesh(ID3D12GraphicsCommandList* mCmdList)
+void DuckyMesh::DrawMesh(ID3D12GraphicsCommandList* mCmdList, D3DDeviceManager* DeviceManager)
 {
 	for (const DuckyPrimitive& prim : mPrimitives)
 	{
+		DescriptorHeapResource texture = DeviceManager->GetTexture(prim.mHashedTextureName);
+		mCmdList->SetGraphicsRootDescriptorTable(1, texture.descHandle);
 		mCmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 		mCmdList->IASetVertexBuffers(0, 1, &prim.mVertices.vbView);
 		mCmdList->IASetIndexBuffer(&prim.mIndices.ibView);

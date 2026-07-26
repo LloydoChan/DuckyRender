@@ -11,12 +11,6 @@
 #pragma comment(lib, "dxcompiler.lib")
 #pragma comment(lib, "DirectXTex.lib")
 
-struct TexRGBA
-{
-	unsigned char r, g, b, a;
-};
-
-std::vector<TexRGBA> textureData(256 * 256);
 
 bool OutputErrorFromHResult(HRESULT hResult, const char* message, std::wofstream& logFile)
 {
@@ -249,6 +243,23 @@ bool D3DDeviceManager::CompileShaderDXC(LPCWSTR ShaderFilePath, LPCWSTR entryPoi
 	return true;
 }
 
+size_t D3DDeviceManager::InitTexture(const wchar_t* Filepath, UINT DescriptorHeapIndex)
+{
+	// Alternative: Inline instantiation and call
+	std::size_t quickHash = std::hash<std::wstring>{}(Filepath);
+	ID3D12DescriptorHeap* dscHeap = mDescriptorHeaps[DescriptorHeapIndex];
+
+	if(!mTextures.contains(quickHash))
+	{ 
+		DescriptorHeapResource newResource = CreateTexture(Filepath, dscHeap);
+		if (newResource.buffer == nullptr) return -1;
+		mTextures[quickHash] = newResource;
+		return quickHash;
+	}
+	
+	return quickHash;
+}
+
 ID3D12Resource* D3DDeviceManager::CreateBuffer(size_t bufferSize)
 {
 	// new for creating triangle data
@@ -288,7 +299,7 @@ ID3D12Resource* D3DDeviceManager::CreateBuffer(size_t bufferSize)
 	return newBuff;
 }
 
-DescriptorHeapResource D3DDeviceManager::CreateConstantBuffer(size_t bufferSize, ID3D12DescriptorHeap* descHeap)
+DescriptorHeapResource D3DDeviceManager::CreateConstantBuffer(size_t bufferSize, int DescriptorHeapHandle)
 {
 	DescriptorHeapResource constantBuffer;
 
@@ -309,9 +320,16 @@ DescriptorHeapResource D3DDeviceManager::CreateConstantBuffer(size_t bufferSize,
 	cbvDesc.BufferLocation = constantBuffer.buffer->GetGPUVirtualAddress();
 	cbvDesc.SizeInBytes = constantBuffer.buffer->GetDesc().Width;
 
-	D3D12_CPU_DESCRIPTOR_HANDLE handle = descHeap->GetCPUDescriptorHandleForHeapStart();
-	handle.ptr += mDescriptorHandleIndex * mDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-	mDevice->CreateConstantBufferView(&cbvDesc, handle);
+	ID3D12DescriptorHeap* heap = mDescriptorHeaps[DescriptorHeapHandle];
+	UINT offset = mDescriptorHandleIndex * mDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+	D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle = heap->GetCPUDescriptorHandleForHeapStart();
+	cpuHandle.ptr += offset;
+	mDevice->CreateConstantBufferView(&cbvDesc, cpuHandle);
+
+	D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle = heap->GetGPUDescriptorHandleForHeapStart();
+	gpuHandle.ptr += offset;
+	constantBuffer.descHandle = gpuHandle;
+
 	constantBuffer.heapOffset = mDescriptorHandleIndex++;
 	return constantBuffer;
 }
@@ -483,10 +501,15 @@ DescriptorHeapResource D3DDeviceManager::CreateTexture(const wchar_t* Filepath, 
 	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
 	srvDesc.Texture2D.MipLevels = 1;
 
-	D3D12_CPU_DESCRIPTOR_HANDLE handle = descHeap->GetCPUDescriptorHandleForHeapStart();
-	handle.ptr += mDescriptorHandleIndex * mDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-	mDevice->CreateShaderResourceView(newTexture.buffer, &srvDesc, handle);
+	UINT IncrementOffset = mDescriptorHandleIndex * mDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+	D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle = descHeap->GetCPUDescriptorHandleForHeapStart();
+	cpuHandle.ptr += IncrementOffset;
+	mDevice->CreateShaderResourceView(newTexture.buffer, &srvDesc, cpuHandle);
+
+	D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle = descHeap->GetGPUDescriptorHandleForHeapStart();
+	gpuHandle.ptr += IncrementOffset;
 	newTexture.heapOffset = mDescriptorHandleIndex++;
+	newTexture.descHandle = gpuHandle;
 	return newTexture;
 }
 
@@ -498,7 +521,7 @@ ID3D12Fence* D3DDeviceManager::CreateFence(UINT64 FenceVal)
 	return fence;
 }
 
-ID3D12DescriptorHeap* D3DDeviceManager::CreateDescriptorHeap(D3D12_DESCRIPTOR_HEAP_FLAGS flags, D3D12_DESCRIPTOR_HEAP_TYPE type, UINT numDescriptors)
+int D3DDeviceManager::CreateDescriptorHeap(D3D12_DESCRIPTOR_HEAP_FLAGS flags, D3D12_DESCRIPTOR_HEAP_TYPE type, UINT numDescriptors)
 {
 	ID3D12DescriptorHeap* descHeap = nullptr;
 
@@ -511,7 +534,10 @@ ID3D12DescriptorHeap* D3DDeviceManager::CreateDescriptorHeap(D3D12_DESCRIPTOR_HE
 
 	HRESULT hResult = mDevice->CreateDescriptorHeap(&descHeapDesc, IID_PPV_ARGS(&descHeap));
 
-	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "couldn't create desc heap ", *mLogFilePtr)) return nullptr;
+	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "couldn't create desc heap ", *mLogFilePtr)) return -1;
 
-	return descHeap;
+	mDescriptorHeaps.emplace_back(descHeap);
+
+	// return index to look up heap later
+	return mDescriptorHeaps.size() - 1;
 }

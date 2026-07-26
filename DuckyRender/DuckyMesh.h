@@ -34,9 +34,9 @@ class DuckyMesh
 {
 	public:
 		DuckyMesh() {};
-		bool Init(D3DDeviceManager* DeviceManager, std::vector<BufferInfo>& VertexInfos, std::vector<BufferInfo>& IndexInfos, XMMATRIX& matrices);
-		bool Init(D3DDeviceManager* DeviceManager, std::ifstream& InFile);
-		void DrawMesh(ID3D12GraphicsCommandList* mCmdList);
+		bool Init(D3DDeviceManager* DeviceManager, std::vector<BufferInfo>& VertexInfos, std::vector<BufferInfo>& IndexInfos, XMMATRIX& matrices, std::vector<size_t>& TextureHashes);
+		bool Init(D3DDeviceManager* DeviceManager, std::ifstream& InFile, UINT DescriptorHeapHandle);
+		void DrawMesh(ID3D12GraphicsCommandList* CmdList, D3DDeviceManager* DeviceManager);
 
 		XMMATRIX mTransform = XMMatrixIdentity();
 
@@ -48,7 +48,8 @@ class DuckyMesh
 				DuckyPrimitive() {};
 				bool InitPrimitive(D3DDeviceManager* DeviceManager,
 									BufferInfo& VertexBufferInfo,
-									BufferInfo& IndexBufferInfo);
+									BufferInfo& IndexBufferInfo,
+									size_t TextureHash);
 			private:
 				VBPair mVertices;
 				IBPair mIndices;

@@ -20,24 +20,32 @@ struct PrimitiveOutput
 
 size_t totalMeshes = 0;
 
-void FindPrimitiveData(const tinygltf::Primitive& Primitive, const tinygltf::Model& Model, stringstream& DataToFlushOut, const char* Attribute)
+void FindPrimitiveDataPositionUVs(const tinygltf::Primitive& Primitive, const tinygltf::Model& Model, stringstream& DataToFlushOut)
 {
-	if (Primitive.attributes.find(Attribute) != Primitive.attributes.end())
+	const tinygltf::Accessor& vertexAccessor = Model.accessors[Primitive.attributes.find("POSITION")->second];
+	const tinygltf::BufferView& vertexBufferView = Model.bufferViews[vertexAccessor.bufferView];
+	const tinygltf::Buffer& vertexBuffer = Model.buffers[vertexBufferView.buffer];
+
+	const tinygltf::Accessor& uvAccessor = Model.accessors[Primitive.attributes.find("TEXCOORD_0")->second];
+	const tinygltf::BufferView& uvBufferView = Model.bufferViews[uvAccessor.bufferView];
+	const tinygltf::Buffer& uvBuffer = Model.buffers[uvBufferView.buffer];
+
+	const unsigned char* vertexStart = &vertexBuffer.data[vertexAccessor.byteOffset + vertexBufferView.byteOffset];
+	const unsigned char* uvStart     = &uvBuffer.data[uvAccessor.byteOffset + uvBufferView.byteOffset];
+
+	size_t size = vertexAccessor.count * sizeof(float) * 5;
+	DataToFlushOut.write((char*)&size, sizeof(size_t));
+	size_t vertSize = sizeof(float) * 3;
+	size_t uvSize = sizeof(float) * 2;
+	for (int elem = 0; elem < vertexAccessor.count; elem++)
 	{
-		const tinygltf::Accessor& accessor = Model.accessors[Primitive.attributes.find(Attribute)->second];
-		const tinygltf::BufferView& bufferView = Model.bufferViews[accessor.bufferView];
-		const tinygltf::Buffer& buffer = Model.buffers[bufferView.buffer];
-
-		const unsigned char* start = &buffer.data[accessor.byteOffset + bufferView.byteOffset];
-		const unsigned char* end = start + accessor.count * (sizeof(float) * 3);
-
-		size_t size = end - start;
-
-		std::cout << "found " << Attribute << " " << accessor.count << " vertices " << std::endl;
-		DataToFlushOut.write((char*)&size, sizeof(size_t));
-		DataToFlushOut.write(reinterpret_cast<const char*>(start), size);
-		size_t pos = DataToFlushOut.tellp();
+		DataToFlushOut.write(reinterpret_cast<const char*>(vertexStart), vertSize);
+		vertexStart += vertSize;
+		DataToFlushOut.write(reinterpret_cast<const char*>(uvStart), uvSize);
+		uvStart += uvSize;
 	}
+	
+	size_t pos = DataToFlushOut.tellp();
 }
 
 void WriteOutSceneData(const tinygltf::Node& Node, const tinygltf::Model& Model, stringstream& DataToFlushOut, string NewString, XMMATRIX transform)
@@ -59,9 +67,18 @@ void WriteOutSceneData(const tinygltf::Node& Node, const tinygltf::Model& Model,
 
 		for (const auto& primitive : nextMesh.primitives)
 		{
-			size_t pos_t = DataToFlushOut.tellp();
-			FindPrimitiveData(primitive, Model, DataToFlushOut, "POSITION");
+			// get texture info for this primitive
+			const tinygltf::Material primMaterial = Model.materials[primitive.material];
+			int primTextureIndex = primMaterial.pbrMetallicRoughness.baseColorTexture.index;
+			const tinygltf::Image img = Model.images[primTextureIndex];
+			std::string albedoName = img.uri;
+			size_t albedoNameLength = albedoName.length();
+			DataToFlushOut.write((char*)&albedoNameLength, sizeof(size_t));
+			DataToFlushOut.write((char*)&albedoName[0], albedoNameLength);
 
+			size_t pos_t = DataToFlushOut.tellp();
+			FindPrimitiveDataPositionUVs(primitive, Model, DataToFlushOut);
+		
 			pos_t = DataToFlushOut.tellp();
 			if (primitive.indices >= 0)
 			{

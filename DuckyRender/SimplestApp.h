@@ -23,8 +23,6 @@ private:
 
 	DuckyMesh mTriangleMesh;
 
-	ID3D12DescriptorHeap* mDescHeap = nullptr;
-
 	ID3D12GraphicsCommandList* mCmdList = nullptr;
 	ID3D12CommandAllocator* mAllocator = nullptr;
 	ID3D12CommandQueue* mQueue = nullptr;
@@ -35,9 +33,11 @@ private:
 
 	ID3D12Fence* mFence = nullptr;
 
-	DescriptorHeapResource mConstantBuffer;
+	DescriptorHeapResource mMatrixBuffer;
 	DescriptorHeapResource mTextureBuffer;
 	PipelineAndRootSig mPipeline;
 
 	std::vector<DuckyMesh> mMeshes;
+
+	int mCbvSrvUavHandle = -1;
 };

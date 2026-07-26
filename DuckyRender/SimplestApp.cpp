@@ -24,6 +24,7 @@ const float ROTATIONAL_SPEED_PITCH = 2.f * 3.141f;
 bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* WindowName)
 {
 	DuckyApp::Init(WindowWidth, WindowHeight, WindowName);
+	mCbvSrvUavHandle = mDeviceManager->CreateDescriptorHeap(D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
 	std::ifstream DuckyFile;
 	DuckyFile.open("CookedData.Ducky", std::ios::binary);
@@ -40,20 +41,15 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 	for (int i = 0; i < numMeshes; i++)
 	{
 		DuckyMesh nextMesh;
-		nextMesh.Init(mDeviceManager, DuckyFile);
+		nextMesh.Init(mDeviceManager, DuckyFile, mCbvSrvUavHandle);
 		mMeshes.emplace_back(std::move(nextMesh));
 	}
 
-	mDescHeap = mDeviceManager->CreateDescriptorHeap(D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-
-	mConstantBuffer = mDeviceManager->CreateConstantBuffer(sizeof(XMMATRIX), mDescHeap);
-	if (mConstantBuffer.buffer == nullptr) return false;
-
-	mTextureBuffer = mDeviceManager->CreateTexture(L"untitled.png", mDescHeap);
-	if (mTextureBuffer.buffer == nullptr) return false;
+	mMatrixBuffer = mDeviceManager->CreateConstantBuffer(sizeof(XMMATRIX), mCbvSrvUavHandle);
+	if (mMatrixBuffer.buffer == nullptr) return false;
 
 	mPipeline = mDeviceManager->CreatePSO(L"BasicVertTransformation.hlsl", L"main", L"BasicColorPixelShader.hlsl", L"main", 1, 1);
-	if (mPipeline.rootSig == nullptr || mPipeline.pipeLineState == nullptr) return 1;
+	if (mPipeline.rootSig == nullptr || mPipeline.pipeLineState == nullptr) return false;
 
 	mWholeScreenViewPortScissor.scissor.left = 0;
 	mWholeScreenViewPortScissor.scissor.right = WindowWidth;
@@ -70,7 +66,7 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 	mAllocator = mDeviceManager->GetCommandAllocator();
 	mQueue = mDeviceManager->GetCommandQueue();
 
-	mConstantBuffer.buffer->Map(0, nullptr, (void**)&mMappedMatrixData);
+	mMatrixBuffer.buffer->Map(0, nullptr, (void**)&mMappedMatrixData);
 
 	return true;
 }
@@ -222,6 +218,8 @@ void SimplestApp::AppMainLoop()
 	MSG msg = {};
 	UINT64 fenceVal = 0;
 
+	ID3D12DescriptorHeap* heapPtr = mDeviceManager->GetDescriptorHeapHandle(mCbvSrvUavHandle);
+
 	while (true)
 	{
 		if (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE))
@@ -268,19 +266,18 @@ void SimplestApp::AppMainLoop()
 		mCmdList->RSSetScissorRects(1, &mWholeScreenViewPortScissor.scissor);
 
 		mCmdList->SetGraphicsRootSignature(mPipeline.rootSig);
-		mCmdList->SetDescriptorHeaps(1, &mDescHeap);
-		D3D12_GPU_DESCRIPTOR_HANDLE descHandle = mDescHeap->GetGPUDescriptorHandleForHeapStart();
-		mCmdList->SetGraphicsRootDescriptorTable(mConstantBuffer.heapOffset, descHandle);
-		descHandle.ptr += mDeviceManager->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-		mCmdList->SetGraphicsRootDescriptorTable(mTextureBuffer.heapOffset, descHandle);
+		mCmdList->SetDescriptorHeaps(1, &heapPtr);
 
 		XMMATRIX world = mMeshes[0].mTransform;
 		XMMATRIX wvp = XMMatrixTranspose(world * view * projection);
 		memcpy(mMappedMatrixData, &wvp, sizeof(XMFLOAT4X4));
 
+		mCmdList->SetGraphicsRootDescriptorTable(0, mMatrixBuffer.descHandle);
+
 		for (auto& mesh : mMeshes)
 		{
-			mesh.DrawMesh(mCmdList);
+			
+			mesh.DrawMesh(mCmdList,mDeviceManager);
 		}
 
 		barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;

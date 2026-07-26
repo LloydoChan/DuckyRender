@@ -7,6 +7,7 @@
 #include <dxcapi.h>
 #include <wrl/client.h>
 #include <DirectXMath.h>
+#include <unordered_map>
 
 using namespace DirectX;
 using Microsoft::WRL::ComPtr;
@@ -28,6 +29,7 @@ struct DescriptorHeapResource
 {
 	ID3D12Resource* buffer = nullptr;
 	UINT heapOffset = 0;
+	D3D12_GPU_DESCRIPTOR_HANDLE descHandle;
 };
 
 struct ViewportScissor
@@ -66,19 +68,21 @@ class D3DDeviceManager
 
 		ID3D12Fence* CreateFence(UINT64 FenceVal);
 
-		ID3D12DescriptorHeap* CreateDescriptorHeap(D3D12_DESCRIPTOR_HEAP_FLAGS flags, D3D12_DESCRIPTOR_HEAP_TYPE type, UINT numDescriptors = MAX_NUM_DESCRIPTORS_PER_HEAP);
+		int CreateDescriptorHeap(D3D12_DESCRIPTOR_HEAP_FLAGS flags, D3D12_DESCRIPTOR_HEAP_TYPE type, UINT numDescriptors = MAX_NUM_DESCRIPTORS_PER_HEAP);
 		ID3D12Resource* CreateBuffer(size_t bufferSize);
-		DescriptorHeapResource CreateConstantBuffer(size_t bufferSize, ID3D12DescriptorHeap* descHeap);
-		DescriptorHeapResource CreateTexture(const wchar_t* Filepath, ID3D12DescriptorHeap* descHeap);
+		DescriptorHeapResource CreateConstantBuffer(size_t bufferSize, int DescriptorHeapHandle);
 		ID3D12GraphicsCommandList* CreateAndReturnCommandList();
 		PipelineAndRootSig CreatePSO(LPCWSTR vertexShader, LPCWSTR vertexEntry, LPCWSTR pixelShader, LPCWSTR pixelEntry, UINT numConstantBuffers, UINT numShaderResources);
 
 		bool CompileShaderDXC(LPCWSTR ShaderFilePath, LPCWSTR entryPoint, LPCWSTR profile, ShaderCompilationOutput& newOutput);
 
+		size_t InitTexture(const wchar_t* Filepath, UINT DescriptorHeapIndex);
 
 		UINT GetCurrentSwapChainIndex() { return mSwapChain->GetCurrentBackBufferIndex(); }
 		ID3D12CommandQueue* GetCommandQueue() { return mCommandQueue; }
 		ID3D12CommandAllocator* GetCommandAllocator() { return mCmdAllocator; }
+
+		DescriptorHeapResource GetTexture(UINT HashedInput) { return mTextures[HashedInput]; }
 
 		D3D12_RESOURCE_BARRIER GetBarrier()
 		{
@@ -95,7 +99,7 @@ class D3DDeviceManager
 		}
 
 		UINT GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE type) { return mDevice->GetDescriptorHandleIncrementSize(type); }
-
+		ID3D12DescriptorHeap* GetDescriptorHeapHandle(int Index) { return mDescriptorHeaps[Index]; };
 		void Present();
 
 		D3D12_CPU_DESCRIPTOR_HANDLE IncrementAndReturnRTVHeaps();
@@ -103,11 +107,17 @@ class D3DDeviceManager
 		std::vector<D3D12_INPUT_ELEMENT_DESC> CreateInputLayout(ShaderCompilationOutput& shaderCompData);
 
 	private:
+		// only want to call this from the DeviceManager itself
+		DescriptorHeapResource CreateTexture(const wchar_t* Filepath, ID3D12DescriptorHeap* descHeap);
+		std::unordered_map<UINT,DescriptorHeapResource> mTextures;
+
 		ID3D12Device* mDevice = nullptr;
 		IDXGISwapChain3* mSwapChain = nullptr;
 		ID3D12CommandAllocator* mCmdAllocator = nullptr;
 		ID3D12CommandQueue* mCommandQueue = nullptr;
 		ID3D12DescriptorHeap* rtvHeaps = nullptr;
+
+		std::vector<ID3D12DescriptorHeap*> mDescriptorHeaps;
 
 		std::vector<ID3D12Resource*> backBuffers;
 
@@ -121,4 +131,5 @@ class D3DDeviceManager
 		UINT mDescriptorHandleIndex = 0;
 
 		std::wofstream* mLogFilePtr = nullptr;
+
 };
