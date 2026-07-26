@@ -3,5 +3,6 @@
     <Platform Name="x64" />
     <Platform Name="x86" />
   </Configurations>
+  <Project Path="DuckyDataCooker/DuckyDataCooker.vcxproj" Id="7535dcce-0bd6-4058-98d9-ce23beb7cbf8" />
   <Project Path="DuckyRender/DuckyRender.vcxproj" Id="65e1d890-6279-4860-8921-393578ca303a" />
 </Solution>

@@ -2,6 +2,9 @@
 #include <d3d12.h>
 #include <DirectXMath.h>
 #include <vector>
+#include <fstream>
+
+using namespace DirectX;
 
 class D3DDeviceManager;
 
@@ -19,7 +22,7 @@ struct IBPair
 
 struct BufferInfo
 {
-	UINT BufferSize = 0;
+	size_t BufferSize = 0;
 	UINT Stride = 0;
 	void* Data = nullptr;
 };
@@ -31,8 +34,12 @@ class DuckyMesh
 {
 	public:
 		DuckyMesh() {};
-		bool Init(D3DDeviceManager* DeviceManager, std::vector<BufferInfo>& VertexInfos, std::vector<BufferInfo>& IndexInfos);
+		bool Init(D3DDeviceManager* DeviceManager, std::vector<BufferInfo>& VertexInfos, std::vector<BufferInfo>& IndexInfos, XMMATRIX& matrices);
+		bool Init(D3DDeviceManager* DeviceManager, std::ifstream& InFile);
 		void DrawMesh(ID3D12GraphicsCommandList* mCmdList);
+
+		XMMATRIX mTransform = XMMatrixIdentity();
+
 	protected:
 
 		class DuckyPrimitive
@@ -47,6 +54,8 @@ class DuckyMesh
 				IBPair mIndices;
 				UINT mNumVertices = 0;
 				UINT mNumIndices = 0;
+
+				UINT mHashedTextureName = 0;
 
 				bool InitBuffer(D3DDeviceManager* DeviceManager, BufferInfo& BufferInfo, ID3D12Resource** Data);
 

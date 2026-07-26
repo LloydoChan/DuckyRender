@@ -39,5 +39,5 @@ private:
 	DescriptorHeapResource mTextureBuffer;
 	PipelineAndRootSig mPipeline;
 
-	DuckyMesh newMesh;
+	std::vector<DuckyMesh> mMeshes;
 };

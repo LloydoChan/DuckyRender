@@ -1,6 +1,7 @@
 #include "SimplestApp.h"
 #include "D3DDeviceManager.h"
 #include <vector>
+#include <errno.h>
 
 #include <chrono>
 using Clock = std::chrono::steady_clock;
@@ -16,31 +17,32 @@ struct Vertex
 
 unsigned short indices[] = { 0,1,2 };
 
-const float MOVEMENT_SPEED = 5.0f;
-const float ROTATIONAL_SPEED_YAW = 2.0f * 3.141f;
-const float ROTATIONAL_SPEED_PITCH = 3.141f;
+const float MOVEMENT_SPEED = 15.f;
+const float ROTATIONAL_SPEED_YAW = 4.f * 3.141f;
+const float ROTATIONAL_SPEED_PITCH = 2.f * 3.141f;
 
 bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* WindowName)
 {
 	DuckyApp::Init(WindowWidth, WindowHeight, WindowName);
 
-	BufferInfo vertBuffer;
-	vertBuffer.Data = &vertices[0];
-	vertBuffer.BufferSize = sizeof(vertices);
-	vertBuffer.Stride = sizeof(Vertex);
+	std::ifstream DuckyFile;
+	DuckyFile.open("CookedData.Ducky", std::ios::binary);
+	if (!DuckyFile)
+	{
+		std::error_code ec(errno, std::generic_category());
+		mLogFile << ec.message().c_str() << std::endl;
+		return false;
+	}
 
-	BufferInfo indexBuffer;
-	indexBuffer.Data = &indices[0];
-	indexBuffer.BufferSize = sizeof(indices);
-	indexBuffer.Stride = sizeof(unsigned short);
+	size_t numMeshes = 0;
+	DuckyFile.read((char*)&numMeshes, sizeof(size_t));
 
-	std::vector<BufferInfo> vertexInfos;
-	vertexInfos.emplace_back(vertBuffer);
-
-	std::vector<BufferInfo> indexInfos;
-	indexInfos.emplace_back(indexBuffer);
-
-	newMesh.Init(mDeviceManager, vertexInfos, indexInfos);
+	for (int i = 0; i < numMeshes; i++)
+	{
+		DuckyMesh nextMesh;
+		nextMesh.Init(mDeviceManager, DuckyFile);
+		mMeshes.emplace_back(std::move(nextMesh));
+	}
 
 	mDescHeap = mDeviceManager->CreateDescriptorHeap(D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
@@ -250,15 +252,7 @@ void SimplestApp::AppMainLoop()
 
 		XMMATRIX view = XMMatrixLookAtLH(eye, at, up);
 
-		XMMATRIX world = XMMatrixRotationY(angle);
-		XMMATRIX wvp = XMMatrixTranspose(world * view * projection);
-		angle += 0.01f;
-
 		mMouseDeltaX = mMouseDeltaY = 0;
-
-		if (angle > 2.f * 3.141f) angle = 0.f;
-
-		memcpy(mMappedMatrixData, &wvp, sizeof(XMFLOAT4X4));
 
 		float clearColor[] = { 0.f, 0.f, 0.f, 1.f };
 		D3D12_RESOURCE_BARRIER barrier = mDeviceManager->GetBarrier();
@@ -280,7 +274,14 @@ void SimplestApp::AppMainLoop()
 		descHandle.ptr += mDeviceManager->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 		mCmdList->SetGraphicsRootDescriptorTable(mTextureBuffer.heapOffset, descHandle);
 
-		newMesh.DrawMesh(mCmdList);
+		XMMATRIX world = mMeshes[0].mTransform;
+		XMMATRIX wvp = XMMatrixTranspose(world * view * projection);
+		memcpy(mMappedMatrixData, &wvp, sizeof(XMFLOAT4X4));
+
+		for (auto& mesh : mMeshes)
+		{
+			mesh.DrawMesh(mCmdList);
+		}
 
 		barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
 		barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
