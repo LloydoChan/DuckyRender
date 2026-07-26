@@ -73,9 +73,6 @@ bool D3DDeviceManager::Init(HWND hWnd, UINT WindowWidth, UINT WindowHeight, std:
 	hResult = DxcCreateInstance(CLSID_DxcCompiler, IID_PPV_ARGS(&mCompiler));
 	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "problem creating compiler: ", *mLogFilePtr)) return 1;
 
-	hResult = mDevice->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&mCmdAllocator));
-	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "problem creating command allocator: ", *mLogFilePtr)) return 1;
-
 	D3D12_COMMAND_QUEUE_DESC cmdQueueDesc = {};
 	cmdQueueDesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
 	cmdQueueDesc.NodeMask = 0;
@@ -101,8 +98,8 @@ bool D3DDeviceManager::Init(HWND hWnd, UINT WindowWidth, UINT WindowHeight, std:
 	swapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
 	swapChainDesc.AlphaMode = DXGI_ALPHA_MODE_UNSPECIFIED;
 	swapChainDesc.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
-
-	hResult = factory->CreateSwapChainForHwnd(mCommandQueue, hWnd, &swapChainDesc, nullptr, nullptr, (IDXGISwapChain1**)&mSwapChain);
+	IDXGISwapChain3** swapPtr = &mSwapChain;
+	hResult = factory->CreateSwapChainForHwnd(mCommandQueue.Get(), hWnd, &swapChainDesc, nullptr, nullptr, (IDXGISwapChain1**)swapPtr);
 	factory->Release();
 
 	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "problem creating swapchain: ", *mLogFilePtr)) return false;
@@ -125,13 +122,13 @@ bool D3DDeviceManager::Init(HWND hWnd, UINT WindowWidth, UINT WindowHeight, std:
 
 	for (UINT idx = 0; idx < swapChainDesc.BufferCount; idx++)
 	{
-		ID3D12Resource* ptr;
+		ComPtr<ID3D12Resource> ptr;
 		backBuffers.push_back(ptr);
 		hResult = mSwapChain->GetBuffer(idx, IID_PPV_ARGS(&backBuffers[idx]));
 
 		if (hResult != S_OK && !OutputErrorFromHResult(hResult, "problem getting back buffer: ", *mLogFilePtr)) return false;
 
-		mDevice->CreateRenderTargetView(backBuffers[idx], nullptr, handle);
+		mDevice->CreateRenderTargetView(backBuffers[idx].Get(), nullptr, handle);
 		handle.ptr += mDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 	}
 
@@ -182,7 +179,7 @@ bool D3DDeviceManager::Init(HWND hWnd, UINT WindowWidth, UINT WindowHeight, std:
 			&depthClearValue,
 			IID_PPV_ARGS(&mDepthBuffer));
 
-	mDsvHeaps->SetName(L"Depth Buffer");
+	mDepthBuffer->SetName(L"Depth Buffer");
 	mDsvHeaps->SetName(L"DSV Heap");
 
 	D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc{};
@@ -192,7 +189,7 @@ bool D3DDeviceManager::Init(HWND hWnd, UINT WindowWidth, UINT WindowHeight, std:
 	dsvDesc.Texture2D.MipSlice = 0;
 
 	mDevice->CreateDepthStencilView(
-		mDepthBuffer,
+		mDepthBuffer.Get(),
 		&dsvDesc,
 		mDsvHeaps->GetCPUDescriptorHandleForHeapStart());
 
@@ -203,10 +200,10 @@ bool D3DDeviceManager::Init(HWND hWnd, UINT WindowWidth, UINT WindowHeight, std:
 	return true;
 }
 
-ID3D12GraphicsCommandList* D3DDeviceManager::CreateAndReturnCommandList()
+ID3D12GraphicsCommandList* D3DDeviceManager::CreateAndReturnCommandList(ID3D12CommandAllocator* Allocator)
 {
 	ID3D12GraphicsCommandList* cmdList = nullptr;
-	HRESULT hResult = mDevice->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, mCmdAllocator, nullptr, IID_PPV_ARGS(&cmdList));
+	HRESULT hResult = mDevice->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, Allocator, nullptr, IID_PPV_ARGS(&cmdList));
 	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "problem creating command list: ", *mLogFilePtr)) return nullptr;
 	return cmdList;
 }
@@ -517,6 +514,13 @@ PipelineAndRootSig D3DDeviceManager::CreatePSO(LPCWSTR vertexShader, LPCWSTR ver
 	return newPipeline;
 }
 
+ID3D12CommandAllocator* D3DDeviceManager::CreateCommandAllocator()
+{
+	ID3D12CommandAllocator* newAllocator = nullptr; 
+	mDevice->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&newAllocator)); 
+	return newAllocator;
+}
+
 DescriptorHeapResource D3DDeviceManager::CreateTexture(const wchar_t* Filepath, ID3D12DescriptorHeap* descHeap)
 {
 	TexMetadata metaData = {};
@@ -577,7 +581,7 @@ DescriptorHeapResource D3DDeviceManager::CreateTexture(const wchar_t* Filepath, 
 	UINT IncrementOffset = mDescriptorHandleIndex * mDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 	D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle = descHeap->GetCPUDescriptorHandleForHeapStart();
 	cpuHandle.ptr += IncrementOffset;
-	mDevice->CreateShaderResourceView(newTexture.buffer, &srvDesc, cpuHandle);
+	mDevice->CreateShaderResourceView(newTexture.buffer.Get(), &srvDesc, cpuHandle);
 
 	D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle = descHeap->GetGPUDescriptorHandleForHeapStart();
 	gpuHandle.ptr += IncrementOffset;

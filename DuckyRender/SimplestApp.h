@@ -3,6 +3,14 @@
 #include "D3DDeviceManager.h"
 #include "DuckyMesh.h"
 
+struct FrameContext
+{
+	ID3D12CommandAllocator* alloc;
+	UINT64 fenceValue = 0;
+	DescriptorHeapResource TransformUpdateBuffer;
+	unsigned char* mMappedMatrixData = nullptr;
+};
+
 class SimplestApp : public DuckyApp
 {
 public:
@@ -23,13 +31,10 @@ private:
 
 	DuckyMesh mTriangleMesh;
 
-	ID3D12GraphicsCommandList* mCmdList = nullptr;
-	ID3D12CommandAllocator* mAllocator = nullptr;
-	ID3D12CommandQueue* mQueue = nullptr;
+	
+	ComPtr<ID3D12CommandQueue> mQueue;
 
 	ViewportScissor mWholeScreenViewPortScissor;
-
-	void* mMappedMatrixData = nullptr;
 
 	ID3D12Fence* mFence = nullptr;
 
@@ -40,4 +45,6 @@ private:
 	std::vector<DuckyMesh> mMeshes;
 
 	int mCbvSrvUavHandle = -1;
+
+	FrameContext mFrameInfo[2];
 };

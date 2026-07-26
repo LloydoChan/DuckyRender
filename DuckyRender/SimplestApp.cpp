@@ -45,8 +45,13 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 		mMeshes.emplace_back(std::move(nextMesh));
 	}
 
-	mMatrixBuffer = mDeviceManager->CreateConstantBuffer(sizeof(XMMATRIX), mCbvSrvUavHandle);
-	if (mMatrixBuffer.buffer == nullptr) return false;
+	for (auto& fi : mFrameInfo)
+	{
+		fi.alloc = mDeviceManager->CreateCommandAllocator();
+		fi.TransformUpdateBuffer = mDeviceManager->CreateConstantBuffer(sizeof(XMMATRIX), mCbvSrvUavHandle);
+		fi.TransformUpdateBuffer.buffer->Map(0, nullptr, (void**)&fi.mMappedMatrixData);
+		if (fi.TransformUpdateBuffer.buffer == nullptr) return false;
+	}
 
 	mPipeline = mDeviceManager->CreatePSO(L"BasicVertTransformation.hlsl", L"main", L"BasicColorPixelShader.hlsl", L"main", 1, 1);
 	if (mPipeline.rootSig == nullptr || mPipeline.pipeLineState == nullptr) return false;
@@ -60,13 +65,7 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 	mFence = mDeviceManager->CreateFence(fenceVal);
 	if (mFence == nullptr) return false;
 
-	mCmdList = mDeviceManager->CreateAndReturnCommandList();
-	if (mCmdList == nullptr) return false;
-
-	mAllocator = mDeviceManager->GetCommandAllocator();
 	mQueue = mDeviceManager->GetCommandQueue();
-
-	mMatrixBuffer.buffer->Map(0, nullptr, (void**)&mMappedMatrixData);
 
 	return true;
 }
@@ -184,12 +183,12 @@ void SimplestApp::UpdateMovementAndRotation(XMVECTOR& ViewVector, XMVECTOR& Scal
 
 	if (mKeys['A'])
 	{
-		movement = XMVectorAdd(movement, rightVector);
+		movement = XMVectorSubtract(movement, rightVector);
 	}
 
 	if (mKeys['D'])
 	{
-		movement = XMVectorSubtract(movement, rightVector);
+		movement = XMVectorAdd(movement, rightVector);
 	}
 
 	ScaledMovement = XMVectorScale(movement, MOVEMENT_SPEED * DeltaTime);
@@ -220,9 +219,14 @@ void SimplestApp::AppMainLoop()
 
 	ID3D12DescriptorHeap* heapPtr = mDeviceManager->GetDescriptorHeapHandle(mCbvSrvUavHandle);
 
+	ID3D12GraphicsCommandList* list = mDeviceManager->CreateAndReturnCommandList(mFrameInfo[0].alloc);
+
+	
+	auto event = CreateEvent(nullptr, false, false, nullptr);
+
 	while (true)
 	{
-		if (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE))
+		while (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE))
 		{
 			if (msg.message == WM_QUIT)
 			{
@@ -233,6 +237,21 @@ void SimplestApp::AppMainLoop()
 			DispatchMessage(&msg);
 		}
 
+		UINT currentFrame = mDeviceManager->GetCurrentFrameIndex();
+
+		FrameContext& frameInfo = mFrameInfo[currentFrame];
+
+		if (frameInfo.fenceValue != 0 &&
+			mFence->GetCompletedValue() < frameInfo.fenceValue)
+		{
+			mFence->SetEventOnCompletion(
+				frameInfo.fenceValue,
+				event);
+
+			WaitForSingleObject(event, INFINITE);
+		}
+
+		frameInfo.alloc->Reset();
 		auto currentTime = Clock::now();
 
 		float deltaTime = std::chrono::duration<float>(
@@ -254,56 +273,50 @@ void SimplestApp::AppMainLoop()
 
 		float clearColor[] = { 0.f, 0.f, 0.f, 1.f };
 		D3D12_RESOURCE_BARRIER barrier = mDeviceManager->GetBarrier();
-		mCmdList->ResourceBarrier(1, &barrier);
-		mCmdList->SetPipelineState(mPipeline.pipeLineState);
+		list->Reset(frameInfo.alloc, mPipeline.pipeLineState);
+		list->ResourceBarrier(1, &barrier);
+		list->SetPipelineState(mPipeline.pipeLineState);
 
 		D3D12_CPU_DESCRIPTOR_HANDLE rtvHeap = mDeviceManager->IncrementAndReturnRTVHeaps();
 		D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = mDeviceManager->GetDepthStencilBufferHeap()->GetCPUDescriptorHandleForHeapStart();
 
-		mCmdList->OMSetRenderTargets(1, &rtvHeap, true, &dsvHandle);
-		mCmdList->ClearRenderTargetView(rtvHeap, clearColor, 0, nullptr);
-		mCmdList->ClearDepthStencilView(dsvHandle, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
+		list->OMSetRenderTargets(1, &rtvHeap, true, &dsvHandle);
+		list->ClearRenderTargetView(rtvHeap, clearColor, 0, nullptr);
+		list->ClearDepthStencilView(dsvHandle, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
 
-		mCmdList->RSSetViewports(1, &mWholeScreenViewPortScissor.viewport);
-		mCmdList->RSSetScissorRects(1, &mWholeScreenViewPortScissor.scissor);
+		list->RSSetViewports(1, &mWholeScreenViewPortScissor.viewport);
+		list->RSSetScissorRects(1, &mWholeScreenViewPortScissor.scissor);
 
-		mCmdList->SetGraphicsRootSignature(mPipeline.rootSig);
-		mCmdList->SetDescriptorHeaps(1, &heapPtr);
+		list->SetGraphicsRootSignature(mPipeline.rootSig);
+		list->SetDescriptorHeaps(1, &heapPtr);
 
 		XMMATRIX world = mMeshes[0].mTransform;
 		XMMATRIX wvp = XMMatrixTranspose(world * view * projection);
-		memcpy(mMappedMatrixData, &wvp, sizeof(XMFLOAT4X4));
+		memcpy(frameInfo.mMappedMatrixData, &wvp, sizeof(XMFLOAT4X4));
 
-		mCmdList->SetGraphicsRootDescriptorTable(0, mMatrixBuffer.descHandle);
+		list->SetGraphicsRootDescriptorTable(0, frameInfo.TransformUpdateBuffer.descHandle);
 
 		for (auto& mesh : mMeshes)
 		{
-			
-			mesh.DrawMesh(mCmdList,mDeviceManager);
+			mesh.DrawMesh(list, mDeviceManager);
 		}
 
 		barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
 		barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
-		mCmdList->ResourceBarrier(1, &barrier);
-		mCmdList->Close();
+		list->ResourceBarrier(1, &barrier);
+		list->Close();
 
-		ID3D12CommandList* cmdLists[] = { mCmdList };
+		UINT64 submittedFenceVal = ++fenceVal;
+		ID3D12CommandList* cmdLists[] = { list};
 		mQueue->ExecuteCommandLists(1, cmdLists);
-		mQueue->Signal(mFence, ++fenceVal);
+		mQueue->Signal(mFence, submittedFenceVal);
 
-		if (mFence->GetCompletedValue() != fenceVal)
-		{
-			auto event = CreateEvent(nullptr, false, false, nullptr);
-			mFence->SetEventOnCompletion(fenceVal, event);
-			WaitForSingleObject(event, INFINITE);
-			CloseHandle(event);
-		}
-
-		mAllocator->Reset();
-		mCmdList->Reset(mAllocator, nullptr);
+		frameInfo.fenceValue = submittedFenceVal;
 
 		mDeviceManager->Present();
 	}
+
+	CloseHandle(event);
 
 	UnregisterClass(mLpszClassName, mHInstance);
 }

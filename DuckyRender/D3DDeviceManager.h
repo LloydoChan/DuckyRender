@@ -14,8 +14,8 @@ using Microsoft::WRL::ComPtr;
 
 struct PipelineAndRootSig
 {
-	ID3D12RootSignature* rootSig = nullptr;
-	ID3D12PipelineState* pipeLineState = nullptr;
+	ID3D12RootSignature* rootSig;
+	ID3D12PipelineState* pipeLineState;
 };
 
 struct ShaderCompilationOutput
@@ -27,7 +27,7 @@ struct ShaderCompilationOutput
 
 struct DescriptorHeapResource
 {
-	ID3D12Resource* buffer = nullptr;
+	ComPtr<ID3D12Resource> buffer;
 	UINT heapOffset = 0;
 	D3D12_GPU_DESCRIPTOR_HANDLE descHandle;
 };
@@ -71,16 +71,17 @@ class D3DDeviceManager
 		int CreateDescriptorHeap(D3D12_DESCRIPTOR_HEAP_FLAGS flags, D3D12_DESCRIPTOR_HEAP_TYPE type, UINT numDescriptors = MAX_NUM_DESCRIPTORS_PER_HEAP);
 		ID3D12Resource* CreateBuffer(size_t bufferSize);
 		DescriptorHeapResource CreateConstantBuffer(size_t bufferSize, int DescriptorHeapHandle);
-		ID3D12GraphicsCommandList* CreateAndReturnCommandList();
+		ID3D12GraphicsCommandList* CreateAndReturnCommandList(ID3D12CommandAllocator* Allocator);
 		PipelineAndRootSig CreatePSO(LPCWSTR vertexShader, LPCWSTR vertexEntry, LPCWSTR pixelShader, LPCWSTR pixelEntry, UINT numConstantBuffers, UINT numShaderResources);
+		ID3D12CommandAllocator* CreateCommandAllocator();
+
 
 		bool CompileShaderDXC(LPCWSTR ShaderFilePath, LPCWSTR entryPoint, LPCWSTR profile, ShaderCompilationOutput& newOutput);
 
 		size_t InitTexture(const wchar_t* Filepath, UINT DescriptorHeapIndex);
 
 		UINT GetCurrentSwapChainIndex() { return mSwapChain->GetCurrentBackBufferIndex(); }
-		ID3D12CommandQueue* GetCommandQueue() { return mCommandQueue; }
-		ID3D12CommandAllocator* GetCommandAllocator() { return mCmdAllocator; }
+		ID3D12CommandQueue* GetCommandQueue() { return mCommandQueue.Get(); }
 
 		DescriptorHeapResource GetTexture(UINT HashedInput) { return mTextures[HashedInput]; }
 
@@ -90,7 +91,7 @@ class D3DDeviceManager
 			UINT bbIdx = mSwapChain->GetCurrentBackBufferIndex();
 			BarrierDesc.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
 			BarrierDesc.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-			BarrierDesc.Transition.pResource = backBuffers[bbIdx];
+			BarrierDesc.Transition.pResource = backBuffers[bbIdx].Get();
 			BarrierDesc.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
 			BarrierDesc.Transition.StateBefore = D3D12_RESOURCE_STATE_PRESENT;
 			BarrierDesc.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
@@ -103,27 +104,28 @@ class D3DDeviceManager
 		void Present();
 
 		D3D12_CPU_DESCRIPTOR_HANDLE IncrementAndReturnRTVHeaps();
-		ID3D12DescriptorHeap* GetDepthStencilBufferHeap() { return mDsvHeaps; }
+		ID3D12DescriptorHeap* GetDepthStencilBufferHeap() { return mDsvHeaps.Get(); }
 
 		std::vector<D3D12_INPUT_ELEMENT_DESC> CreateInputLayout(ShaderCompilationOutput& shaderCompData);
+
+		UINT GetCurrentFrameIndex() { return  mSwapChain->GetCurrentBackBufferIndex(); }
 
 	private:
 		// only want to call this from the DeviceManager itself
 		DescriptorHeapResource CreateTexture(const wchar_t* Filepath, ID3D12DescriptorHeap* descHeap);
 		std::unordered_map<UINT,DescriptorHeapResource> mTextures;
 
-		ID3D12Device* mDevice = nullptr;
-		IDXGISwapChain3* mSwapChain = nullptr;
-		ID3D12CommandAllocator* mCmdAllocator = nullptr;
-		ID3D12CommandQueue* mCommandQueue = nullptr;
+		ComPtr<ID3D12Device> mDevice;
+		IDXGISwapChain3* mSwapChain;
+		ComPtr<ID3D12CommandQueue> mCommandQueue;
 
-		ID3D12DescriptorHeap* mDsvHeaps = nullptr;
-		ID3D12Resource* mDepthBuffer = nullptr;
+		ComPtr<ID3D12DescriptorHeap> mDsvHeaps;
+		ComPtr<ID3D12Resource> mDepthBuffer;
 
 		std::vector<ID3D12DescriptorHeap*> mDescriptorHeaps;
 
-		ID3D12DescriptorHeap* rtvHeaps = nullptr;
-		std::vector<ID3D12Resource*> backBuffers;
+		ComPtr<ID3D12DescriptorHeap> rtvHeaps = nullptr;
+		std::vector<ComPtr<ID3D12Resource>> backBuffers;
 
 		// compiler
 		ComPtr<IDxcUtils> mUtils;
