@@ -73,7 +73,7 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 
 LRESULT SimplestApp::WindowProcedure(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 {
-	if (msg == WM_DESTROY)
+	if (msg == WM_DESTROY || msg == WM_QUIT || wparam == VK_ESCAPE)
 	{
 		PostQuitMessage(0);
 		return 0;
@@ -258,9 +258,11 @@ void SimplestApp::AppMainLoop()
 		mCmdList->SetPipelineState(mPipeline.pipeLineState);
 
 		D3D12_CPU_DESCRIPTOR_HANDLE rtvHeap = mDeviceManager->IncrementAndReturnRTVHeaps();
+		D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = mDeviceManager->GetDepthStencilBufferHeap()->GetCPUDescriptorHandleForHeapStart();
 
-		mCmdList->OMSetRenderTargets(1, &rtvHeap, true, nullptr);
+		mCmdList->OMSetRenderTargets(1, &rtvHeap, true, &dsvHandle);
 		mCmdList->ClearRenderTargetView(rtvHeap, clearColor, 0, nullptr);
+		mCmdList->ClearDepthStencilView(dsvHandle, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
 
 		mCmdList->RSSetViewports(1, &mWholeScreenViewPortScissor.viewport);
 		mCmdList->RSSetScissorRects(1, &mWholeScreenViewPortScissor.scissor);

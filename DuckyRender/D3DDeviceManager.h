@@ -103,6 +103,7 @@ class D3DDeviceManager
 		void Present();
 
 		D3D12_CPU_DESCRIPTOR_HANDLE IncrementAndReturnRTVHeaps();
+		ID3D12DescriptorHeap* GetDepthStencilBufferHeap() { return mDsvHeaps; }
 
 		std::vector<D3D12_INPUT_ELEMENT_DESC> CreateInputLayout(ShaderCompilationOutput& shaderCompData);
 
@@ -115,10 +116,13 @@ class D3DDeviceManager
 		IDXGISwapChain3* mSwapChain = nullptr;
 		ID3D12CommandAllocator* mCmdAllocator = nullptr;
 		ID3D12CommandQueue* mCommandQueue = nullptr;
-		ID3D12DescriptorHeap* rtvHeaps = nullptr;
+
+		ID3D12DescriptorHeap* mDsvHeaps = nullptr;
+		ID3D12Resource* mDepthBuffer = nullptr;
 
 		std::vector<ID3D12DescriptorHeap*> mDescriptorHeaps;
 
+		ID3D12DescriptorHeap* rtvHeaps = nullptr;
 		std::vector<ID3D12Resource*> backBuffers;
 
 		// compiler

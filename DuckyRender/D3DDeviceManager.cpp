@@ -103,6 +103,7 @@ bool D3DDeviceManager::Init(HWND hWnd, UINT WindowWidth, UINT WindowHeight, std:
 	swapChainDesc.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
 
 	hResult = factory->CreateSwapChainForHwnd(mCommandQueue, hWnd, &swapChainDesc, nullptr, nullptr, (IDXGISwapChain1**)&mSwapChain);
+	factory->Release();
 
 	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "problem creating swapchain: ", *mLogFilePtr)) return false;
 
@@ -134,7 +135,66 @@ bool D3DDeviceManager::Init(HWND hWnd, UINT WindowWidth, UINT WindowHeight, std:
 		handle.ptr += mDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 	}
 
-	factory->Release();
+	// create Depth Buffer
+	D3D12_DESCRIPTOR_HEAP_DESC depthDesc = {};
+
+	depthDesc.NumDescriptors = 1;
+	depthDesc.NodeMask = 0;
+	depthDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
+	depthDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
+
+	hResult = mDevice->CreateDescriptorHeap(&depthDesc, IID_PPV_ARGS(&mDsvHeaps));
+	if(hResult != S_OK && !OutputErrorFromHResult(hResult, "problem initializing depth stencil heap ", *mLogFilePtr)) return false;
+
+	DXGI_FORMAT depthFormat = DXGI_FORMAT_D32_FLOAT;
+
+	D3D12_CLEAR_VALUE depthClearValue{};
+	depthClearValue.Format = depthFormat;
+	depthClearValue.DepthStencil.Depth = 1.0f;
+	depthClearValue.DepthStencil.Stencil = 0;
+
+	D3D12_HEAP_PROPERTIES heapProperties{};
+	heapProperties.Type = D3D12_HEAP_TYPE_DEFAULT;
+	heapProperties.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
+	heapProperties.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
+	heapProperties.CreationNodeMask = 1;
+	heapProperties.VisibleNodeMask = 1;
+
+	D3D12_RESOURCE_DESC depthResDesc = {};
+
+	depthResDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+	depthResDesc.Alignment = 0;
+	depthResDesc.Width = WindowWidth;
+	depthResDesc.Height = WindowHeight;
+	depthResDesc.DepthOrArraySize = 1;
+	depthResDesc.MipLevels = 1;
+	depthResDesc.Format = depthFormat;
+	depthResDesc.SampleDesc.Count = 1;
+	depthResDesc.SampleDesc.Quality = 0;
+	depthResDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+	depthResDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
+
+	mDevice->CreateCommittedResource(
+			&heapProperties,
+			D3D12_HEAP_FLAG_NONE,
+			&depthResDesc,
+			D3D12_RESOURCE_STATE_DEPTH_WRITE,
+			&depthClearValue,
+			IID_PPV_ARGS(&mDepthBuffer));
+
+	mDsvHeaps->SetName(L"Depth Buffer");
+	mDsvHeaps->SetName(L"DSV Heap");
+
+	D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc{};
+	dsvDesc.Format = depthFormat;
+	dsvDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
+	dsvDesc.Flags = D3D12_DSV_FLAG_NONE;
+	dsvDesc.Texture2D.MipSlice = 0;
+
+	mDevice->CreateDepthStencilView(
+		mDepthBuffer,
+		&dsvDesc,
+		mDsvHeaps->GetCPUDescriptorHandleForHeapStart());
 
 	// init directxtex file reading
 	hResult = CoInitializeEx(0, COINITBASE_MULTITHREADED);
@@ -398,7 +458,20 @@ PipelineAndRootSig D3DDeviceManager::CreatePSO(LPCWSTR vertexShader, LPCWSTR ver
 	rootSigBlob->Release();
 	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "couldn't create root sig ", *mLogFilePtr)) return newPipeline;
 
+	D3D12_DEPTH_STENCIL_DESC depthStencilDesc{};
+
+	depthStencilDesc.DepthEnable = TRUE;
+	depthStencilDesc.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
+	depthStencilDesc.DepthFunc = D3D12_COMPARISON_FUNC_LESS;
+
+	depthStencilDesc.StencilEnable = FALSE;
+	depthStencilDesc.StencilReadMask = D3D12_DEFAULT_STENCIL_READ_MASK;
+	depthStencilDesc.StencilWriteMask = D3D12_DEFAULT_STENCIL_WRITE_MASK;
+
 	D3D12_GRAPHICS_PIPELINE_STATE_DESC gPipeline = {};
+
+	gPipeline.DepthStencilState = depthStencilDesc;
+	gPipeline.DSVFormat = DXGI_FORMAT_D32_FLOAT;
 
 	gPipeline.pRootSignature = newPipeline.rootSig;
 
