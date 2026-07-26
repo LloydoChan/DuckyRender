@@ -108,7 +108,7 @@ void WriteOutSceneData(const tinygltf::Node& Node, const tinygltf::Model& Model,
 	for (const auto& childNode : Node.children)
 	{
 		const tinygltf::Node nextNode = Model.nodes[childNode];
-
+		XMMATRIX newMat = transform;
 		if (nextNode.matrix.size() > 0)
 		{
 			XMFLOAT4X4 temp;
@@ -122,10 +122,10 @@ void WriteOutSceneData(const tinygltf::Node& Node, const tinygltf::Model& Model,
 
 			XMMATRIX mat = XMLoadFloat4x4(&temp);
 			//mat = XMMatrixTranspose(mat);
-			transform = transform * mat;
+			newMat = transform * mat;
 		}
 
-		WriteOutSceneData(nextNode, Model, DataToFlushOut, NewString + "---", transform);
+		WriteOutSceneData(nextNode, Model, DataToFlushOut, NewString + "---", newMat);
 	}
 }
 

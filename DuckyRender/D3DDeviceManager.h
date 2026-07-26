@@ -4,10 +4,12 @@
 #include <fstream>
 #include <dxgi1_6.h>
 #include <vector>
-#include <dxcapi.h>
+
 #include <wrl/client.h>
 #include <DirectXMath.h>
 #include <unordered_map>
+
+#include "DuckyCompiler.h"
 
 using namespace DirectX;
 using Microsoft::WRL::ComPtr;
@@ -18,12 +20,6 @@ struct PipelineAndRootSig
 	ID3D12PipelineState* pipeLineState;
 };
 
-struct ShaderCompilationOutput
-{
-	ComPtr<IDxcBlob> reflectionBlob;
-	ComPtr<IDxcBlob> shaderBlob;
-	ComPtr<IDxcResult> result;
-};
 
 struct DescriptorHeapResource
 {
@@ -73,10 +69,8 @@ class D3DDeviceManager
 		DescriptorHeapResource CreateConstantBuffer(size_t bufferSize, int DescriptorHeapHandle);
 		ID3D12GraphicsCommandList* CreateAndReturnCommandList(ID3D12CommandAllocator* Allocator);
 		PipelineAndRootSig CreatePSO(LPCWSTR vertexShader, LPCWSTR vertexEntry, LPCWSTR pixelShader, LPCWSTR pixelEntry, UINT numConstantBuffers, UINT numShaderResources);
-		ID3D12CommandAllocator* CreateCommandAllocator();
+		ComPtr<ID3D12CommandAllocator> CreateCommandAllocator();
 
-
-		bool CompileShaderDXC(LPCWSTR ShaderFilePath, LPCWSTR entryPoint, LPCWSTR profile, ShaderCompilationOutput& newOutput);
 
 		size_t InitTexture(const wchar_t* Filepath, UINT DescriptorHeapIndex);
 
@@ -126,16 +120,11 @@ class D3DDeviceManager
 
 		ComPtr<ID3D12DescriptorHeap> rtvHeaps = nullptr;
 		std::vector<ComPtr<ID3D12Resource>> backBuffers;
-
-		// compiler
-		ComPtr<IDxcUtils> mUtils;
-		ComPtr<IDxcIncludeHandler> mIncludeHandler;
-		ComPtr<IDxcCompiler3> mCompiler;
-
+		
 		XMMATRIX matIdent;
 
 		UINT mDescriptorHandleIndex = 0;
 
 		std::wofstream* mLogFilePtr = nullptr;
-
+		DuckyCompiler* mCompiler = nullptr;
 };

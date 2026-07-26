@@ -1,28 +1,16 @@
 #include "D3DDeviceManager.h"
+#include "DuckyTools.h"
+
 #include <DirectXTex.h>
 #include <dxgi1_6.h>
 #include <vector>
-#include <winrt/base.h>
-#include <d3d12shader.h>
 #include <D3dx12.h>
+#include <d3d12shader.h>
 
 #pragma comment(lib, "d3d12.lib")
 #pragma comment(lib, "dxgi.lib")
-#pragma comment(lib, "dxcompiler.lib")
 #pragma comment(lib, "DirectXTex.lib")
 
-
-bool OutputErrorFromHResult(HRESULT hResult, const char* message, std::wofstream& logFile)
-{
-	if (hResult != S_OK)
-	{
-		const winrt::hstring hResultMessage = winrt::hresult_error(hResult).message().c_str();
-		logFile << message << hResultMessage << std::endl;
-		return false;
-	}
-
-	return true;
-}
 
 bool D3DDeviceManager::Init(HWND hWnd, UINT WindowWidth, UINT WindowHeight, std::wofstream* LogFile)
 {
@@ -62,16 +50,6 @@ bool D3DDeviceManager::Init(HWND hWnd, UINT WindowWidth, UINT WindowHeight, std:
 
 	// enumerated by high perf so take first adapter in list
 	IDXGIAdapter* chosenAdapter = adapters[0];
-
-	// create compilers
-	hResult = DxcCreateInstance(CLSID_DxcUtils, IID_PPV_ARGS(mUtils.ReleaseAndGetAddressOf()));
-	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "problem creating utils: ", *mLogFilePtr)) return 1;
-
-	hResult = mUtils->CreateDefaultIncludeHandler(mIncludeHandler.ReleaseAndGetAddressOf());
-	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "problem creating include handler: ", *mLogFilePtr)) return 1;
-
-	hResult = DxcCreateInstance(CLSID_DxcCompiler, IID_PPV_ARGS(&mCompiler));
-	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "problem creating compiler: ", *mLogFilePtr)) return 1;
 
 	D3D12_COMMAND_QUEUE_DESC cmdQueueDesc = {};
 	cmdQueueDesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
@@ -197,6 +175,9 @@ bool D3DDeviceManager::Init(HWND hWnd, UINT WindowWidth, UINT WindowHeight, std:
 	hResult = CoInitializeEx(0, COINITBASE_MULTITHREADED);
 	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "problem initializing com: ", *mLogFilePtr)) return false;
 
+	mCompiler = new DuckyCompiler;
+	if(!mCompiler->Init(mLogFilePtr)) return false;
+
 	return true;
 }
 
@@ -232,7 +213,7 @@ std::vector<D3D12_INPUT_ELEMENT_DESC> D3DDeviceManager::CreateInputLayout(Shader
 								 shaderCompData.reflectionBlob->GetBufferSize(),
 								 0U};
 
-	HRESULT hResult = mUtils->CreateReflection(&reflectionData, IID_PPV_ARGS(&vertReflectionData));
+	if (!mCompiler->CreateReflectionData(&reflectionData, vertReflectionData.ReleaseAndGetAddressOf())) return Elems;
 
 	D3D12_SHADER_DESC shaderDesc;
 	vertReflectionData->GetDesc(&shaderDesc);
@@ -263,41 +244,6 @@ std::vector<D3D12_INPUT_ELEMENT_DESC> D3DDeviceManager::CreateInputLayout(Shader
 	}
 
 	return Elems;
-}
-
-bool D3DDeviceManager::CompileShaderDXC(LPCWSTR ShaderFilePath, LPCWSTR entryPoint, LPCWSTR profile, ShaderCompilationOutput& newOutput)
-{
-	std::ifstream file(ShaderFilePath, std::ios::binary | std::ios::ate);
-	std::streamsize size = file.tellg();
-	file.seekg(0, std::ios::beg);
-	std::vector<char> buffer(size);
-	file.read(buffer.data(), size);
-
-	// 4. Populate DxcBuffer
-	DxcBuffer dxcBuffer;
-	dxcBuffer.Ptr = buffer.data();
-	dxcBuffer.Size = buffer.size();
-	dxcBuffer.Encoding = DXC_CP_UTF8; 
-
-	std::vector<LPCWSTR> arguments;
-	//entrypoint
-	arguments.push_back(L"-E");
-	arguments.push_back(entryPoint);
-
-	//profile
-	arguments.push_back(L"-T");
-	arguments.push_back(profile);
-
-	HRESULT hResult = mCompiler->Compile(&dxcBuffer, arguments.data(), (UINT32)arguments.size(), mIncludeHandler.Get(), IID_PPV_ARGS(&newOutput.result));
-	if (hResult != S_OK && OutputErrorFromHResult(hResult, "couldn't compile shader", *mLogFilePtr)) return false;
-
-	hResult = newOutput.result->GetOutput(DXC_OUT_REFLECTION, IID_PPV_ARGS(&newOutput.reflectionBlob), nullptr);
-	if (hResult != S_OK && OutputErrorFromHResult(hResult, "couldn't get reflection from result", *mLogFilePtr)) return false;
-
-	hResult = newOutput.result->GetOutput(DXC_OUT_OBJECT, IID_PPV_ARGS(&newOutput.shaderBlob), nullptr);
-	if (hResult != S_OK && OutputErrorFromHResult(hResult, "couldn't get shader info from result", *mLogFilePtr)) return false;
-
-	return true;
 }
 
 size_t D3DDeviceManager::InitTexture(const wchar_t* Filepath, UINT DescriptorHeapIndex)
@@ -396,9 +342,9 @@ PipelineAndRootSig D3DDeviceManager::CreatePSO(LPCWSTR vertexShader, LPCWSTR ver
 	PipelineAndRootSig newPipeline;
 	
 	ShaderCompilationOutput vertexShaderOutput;
-	if(!CompileShaderDXC(vertexShader, vertexEntry, L"vs_6_0", vertexShaderOutput)) return newPipeline;
+	if(!mCompiler->CompileShaderDXC(vertexShader, vertexEntry, L"vs_6_0", vertexShaderOutput)) return newPipeline;
 	ShaderCompilationOutput pixelShaderOutput;
-	if (!CompileShaderDXC(pixelShader, pixelEntry, L"ps_6_0", pixelShaderOutput)) return newPipeline;
+	if (!mCompiler->CompileShaderDXC(pixelShader, pixelEntry, L"ps_6_0", pixelShaderOutput)) return newPipeline;
 
 	UINT total = numConstantBuffers + numShaderResources;
 
@@ -514,9 +460,9 @@ PipelineAndRootSig D3DDeviceManager::CreatePSO(LPCWSTR vertexShader, LPCWSTR ver
 	return newPipeline;
 }
 
-ID3D12CommandAllocator* D3DDeviceManager::CreateCommandAllocator()
+ComPtr<ID3D12CommandAllocator> D3DDeviceManager::CreateCommandAllocator()
 {
-	ID3D12CommandAllocator* newAllocator = nullptr; 
+	ComPtr<ID3D12CommandAllocator> newAllocator;
 	mDevice->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&newAllocator)); 
 	return newAllocator;
 }

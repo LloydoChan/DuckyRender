@@ -5,7 +5,7 @@
 
 struct FrameContext
 {
-	ID3D12CommandAllocator* alloc;
+	ComPtr<ID3D12CommandAllocator> alloc;
 	UINT64 fenceValue = 0;
 	DescriptorHeapResource TransformUpdateBuffer;
 	unsigned char* mMappedMatrixData = nullptr;
@@ -22,7 +22,7 @@ public:
 	virtual void AppMainLoop();
 
 private:
-	bool mKeys[256];
+	bool mKeys[256] = {};
 	LONG mMouseDeltaX = 0;
 	LONG mMouseDeltaY = 0;
 
@@ -32,7 +32,7 @@ private:
 	DuckyMesh mTriangleMesh;
 
 	
-	ComPtr<ID3D12CommandQueue> mQueue;
+	ID3D12CommandQueue* mQueue;
 
 	ViewportScissor mWholeScreenViewPortScissor;
 

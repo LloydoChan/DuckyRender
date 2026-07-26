@@ -6,17 +6,6 @@
 #include <chrono>
 using Clock = std::chrono::steady_clock;
 
-//temp for first tri
-struct Vertex
-	vertices[] =
-{
-	{{-0.5f, -0.5f, 0.f},{0.f , 0.f}},
-	{{ 0.f,   0.5f, 0.f},{0.5f, 1.f}},
-	{{ 0.5f, -0.5f, 0.f},{1.f , 0.f}},
-};
-
-unsigned short indices[] = { 0,1,2 };
-
 const float MOVEMENT_SPEED = 15.f;
 const float ROTATIONAL_SPEED_YAW = 4.f * 3.141f;
 const float ROTATIONAL_SPEED_PITCH = 2.f * 3.141f;
@@ -48,9 +37,12 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 	for (auto& fi : mFrameInfo)
 	{
 		fi.alloc = mDeviceManager->CreateCommandAllocator();
+		if (fi.alloc == nullptr) return false;
+
 		fi.TransformUpdateBuffer = mDeviceManager->CreateConstantBuffer(sizeof(XMMATRIX), mCbvSrvUavHandle);
-		fi.TransformUpdateBuffer.buffer->Map(0, nullptr, (void**)&fi.mMappedMatrixData);
 		if (fi.TransformUpdateBuffer.buffer == nullptr) return false;
+
+		fi.TransformUpdateBuffer.buffer->Map(0, nullptr, (void**)&fi.mMappedMatrixData);
 	}
 
 	mPipeline = mDeviceManager->CreatePSO(L"BasicVertTransformation.hlsl", L"main", L"BasicColorPixelShader.hlsl", L"main", 1, 1);
@@ -72,7 +64,7 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 
 LRESULT SimplestApp::WindowProcedure(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 {
-	if (msg == WM_DESTROY || msg == WM_QUIT || wparam == VK_ESCAPE)
+	if (msg == WM_DESTROY)
 	{
 		PostQuitMessage(0);
 		return 0;
@@ -87,6 +79,12 @@ void SimplestApp::HandleInput(UINT msg, WPARAM wParam, LPARAM lParam)
 {
 	UINT keyValue = static_cast<UINT>(wParam);
 	if (keyValue >= 256) return;
+
+	if ((msg == WM_KEYDOWN || msg == WM_SYSKEYDOWN) && msg == VK_ESCAPE)
+	{
+		PostQuitMessage(0);
+		return;
+	}
 
 	if (msg == WM_KEYDOWN || msg == WM_SYSKEYDOWN)
 	{
@@ -155,7 +153,7 @@ void SimplestApp::UpdateMovementAndRotation(XMVECTOR& ViewVector, XMVECTOR& Scal
 	if (localMouseDeltaYCopy != 0)
 	{
 		float angle = XMConvertToRadians(static_cast<float>(mMouseDeltaY) * ROTATIONAL_SPEED_PITCH * DeltaTime);
-		XMVECTOR quat = XMQuaternionRotationAxis(rightVector, angle);
+		XMVECTOR quat = XMQuaternionRotationAxis(rightVector, -angle);
 		XMVECTOR possibleViewVector = XMVector3Rotate(ViewVector, quat);
 		possibleViewVector = XMVector3Normalize(possibleViewVector);
 
@@ -219,8 +217,14 @@ void SimplestApp::AppMainLoop()
 
 	ID3D12DescriptorHeap* heapPtr = mDeviceManager->GetDescriptorHeapHandle(mCbvSrvUavHandle);
 
-	ID3D12GraphicsCommandList* list = mDeviceManager->CreateAndReturnCommandList(mFrameInfo[0].alloc);
+	ID3D12GraphicsCommandList* list = mDeviceManager->CreateAndReturnCommandList(mFrameInfo[0].alloc.Get());
 
+	if (list == nullptr) return;
+
+	if (FAILED(list->Close()))
+	{
+		return;
+	}
 	
 	auto event = CreateEvent(nullptr, false, false, nullptr);
 
@@ -251,7 +255,8 @@ void SimplestApp::AppMainLoop()
 			WaitForSingleObject(event, INFINITE);
 		}
 
-		frameInfo.alloc->Reset();
+		frameInfo.alloc.Get()->Reset();
+		list->Reset(frameInfo.alloc.Get(), mPipeline.pipeLineState);
 		auto currentTime = Clock::now();
 
 		float deltaTime = std::chrono::duration<float>(
@@ -273,7 +278,6 @@ void SimplestApp::AppMainLoop()
 
 		float clearColor[] = { 0.f, 0.f, 0.f, 1.f };
 		D3D12_RESOURCE_BARRIER barrier = mDeviceManager->GetBarrier();
-		list->Reset(frameInfo.alloc, mPipeline.pipeLineState);
 		list->ResourceBarrier(1, &barrier);
 		list->SetPipelineState(mPipeline.pipeLineState);
 
@@ -307,13 +311,13 @@ void SimplestApp::AppMainLoop()
 		list->Close();
 
 		UINT64 submittedFenceVal = ++fenceVal;
-		ID3D12CommandList* cmdLists[] = { list};
+		ID3D12CommandList* cmdLists[] = {list};
 		mQueue->ExecuteCommandLists(1, cmdLists);
-		mQueue->Signal(mFence, submittedFenceVal);
+		mDeviceManager->Present();
 
+		mQueue->Signal(mFence, submittedFenceVal);
 		frameInfo.fenceValue = submittedFenceVal;
 
-		mDeviceManager->Present();
 	}
 
 	CloseHandle(event);
