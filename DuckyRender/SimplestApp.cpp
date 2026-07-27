@@ -329,7 +329,7 @@ void SimplestApp::AppMainLoop()
 
 		float clearColor[] = { 0.f, 0.f, 0.f, 1.f };
 
-		mDuckyContext->BeginFrame(currentFrame, mFence, mPipeline.pipeLineState.Get(), mFenceEvent, &mLogFile);
+		if (!mDuckyContext->BeginFrame(currentFrame, mFence, mPipeline.pipeLineState.Get(), mFenceEvent, &mLogFile)) break;
 		D3D12_RESOURCE_BARRIER barrier = mDeviceManager->GetBarrier();
 		list->ResourceBarrier(1, &barrier);
 		list->SetPipelineState(mPipeline.pipeLineState.Get());
@@ -361,13 +361,14 @@ void SimplestApp::AppMainLoop()
 		barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
 		barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
 		list->ResourceBarrier(1, &barrier);
-		list->Close();
+		HRESULT hr = list->Close();
+		if (FAILED(hr)) break;
 
 		ID3D12CommandList* cmdLists[] = {list};
 		mQueue->ExecuteCommandLists(1, cmdLists);
 		mDeviceManager->Present();
 
-		mDuckyContext->EndFrame(currentFrame, mQueue, mFence);
+		if (!mDuckyContext->EndFrame(currentFrame, mQueue, mFence)) break;
 		
 	}
 

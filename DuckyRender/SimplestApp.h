@@ -23,7 +23,7 @@ private:
 	LONG mMouseDeltaX = 0;
 	LONG mMouseDeltaY = 0;
 
-	ID3D12CommandQueue* mQueue;
+	ID3D12CommandQueue* mQueue = nullptr;
 
 	ViewportScissor mWholeScreenViewPortScissor;
 

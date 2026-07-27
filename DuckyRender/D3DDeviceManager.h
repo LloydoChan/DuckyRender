@@ -83,7 +83,7 @@ class D3DDeviceManager
 		size_t InitTexture(const wchar_t* Filepath, UINT DescriptorHeapIndex);
 
 		ID3D12CommandQueue* GetCommandQueue() { return mCommandQueue.Get(); }
-		DescriptorHeapResource GetTexture(UINT HashedInput) { return mTextures[HashedInput]; }
+		DescriptorHeapResource* GetTexture(size_t HashedInput);
 		ID3D12DescriptorHeap* GetDepthStencilBufferHeap() { return mDsvHeaps.Get(); }
 		UINT GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE type) { return mDevice->GetDescriptorHandleIncrementSize(type); }
 		ID3D12DescriptorHeap* GetDescriptorHeapHandle(int Index) { return mDescriptorHeaps[Index]; };
@@ -118,7 +118,7 @@ class D3DDeviceManager
 	private:
 		// only want to call this from the DeviceManager itself
 		DescriptorHeapResource CreateTexture(const wchar_t* Filepath, ID3D12DescriptorHeap* descHeap);
-		std::unordered_map<UINT,DescriptorHeapResource> mTextures;
+		std::unordered_map<size_t,DescriptorHeapResource> mTextures;
 
 		ComPtr<ID3D12Device> mDevice;
 		ComPtr<ID3D12CommandQueue> mCommandQueue;

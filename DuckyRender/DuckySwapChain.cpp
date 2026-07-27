@@ -23,11 +23,11 @@ bool DuckySwapChain::Init(D3DDeviceManager* DeviceManager, IDXGIFactory6* factor
 	ComPtr<IDXGISwapChain1> swapChain1;
 
 	HRESULT hResult = factory->CreateSwapChainForHwnd(DeviceManager->GetCommandQueue(), hWnd, &swapChainDesc, nullptr, nullptr, swapChain1.ReleaseAndGetAddressOf());
-	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "problem creating swapchain: ", *LogFile)) return false;
+	if (FAILED(hResult) && !OutputErrorFromHResult(hResult, "problem creating swapchain: ", *LogFile)) return false;
 	factory->Release();
 
 	hResult = swapChain1.As(&mSwapChain);
-	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "problem exchanging swap chain pointers ", *LogFile)) return false;
+	if (FAILED(hResult) && !OutputErrorFromHResult(hResult, "problem exchanging swap chain pointers ", *LogFile)) return false;
 
 	D3D12_DESCRIPTOR_HEAP_DESC heapDesc = {};
 
@@ -42,7 +42,7 @@ bool DuckySwapChain::Init(D3DDeviceManager* DeviceManager, IDXGIFactory6* factor
 
 	hResult = device->CreateDescriptorHeap(&heapDesc, IID_PPV_ARGS(&mRtvHeaps));
 
-	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "problem creating desc heap: ", *LogFile)) return false;
+	if (FAILED(hResult) && !OutputErrorFromHResult(hResult, "problem creating desc heap: ", *LogFile)) return false;
 
 
 	D3D12_CPU_DESCRIPTOR_HANDLE handle = mRtvHeaps->GetCPUDescriptorHandleForHeapStart();
@@ -53,7 +53,7 @@ bool DuckySwapChain::Init(D3DDeviceManager* DeviceManager, IDXGIFactory6* factor
 		mBackBuffers.push_back(ptr);
 		hResult = mSwapChain->GetBuffer(idx, IID_PPV_ARGS(&mBackBuffers[idx]));
 
-		if (hResult != S_OK && !OutputErrorFromHResult(hResult, "problem getting back buffer: ", *LogFile)) return false;
+		if (FAILED(hResult) && !OutputErrorFromHResult(hResult, "problem getting back buffer: ", *LogFile)) return false;
 
 		device->CreateRenderTargetView(mBackBuffers[idx].Get(), nullptr, handle);
 		handle.ptr += device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);

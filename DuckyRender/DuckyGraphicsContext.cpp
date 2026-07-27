@@ -11,29 +11,28 @@ bool DuckyGraphicsContext::Init(D3DDeviceManager* DeviceManager, std::wofstream*
 	}
 
 	HRESULT hResult = DeviceManager->GetDevice()->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, mFrames[0].allocator.Get(), nullptr, IID_PPV_ARGS(&mCommandList));
-	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "problem creating command list: ", *LogFile)) return false;
+	if (FAILED(hResult) && !OutputErrorFromHResult(hResult, "problem creating command list: ", *LogFile)) return false;
 	
 	return true;
 }
 
 bool DuckyGraphicsContext::BeginFrame(UINT CurrentFrame, ID3D12Fence* Fence, ID3D12PipelineState* PipelineState, HANDLE event, std::wofstream* LogFile)
 {
+	HRESULT hResult;
 	FrameContext& context = mFrames[CurrentFrame];
 	if (context.fenceValue != 0 &&
 		Fence->GetCompletedValue() < context.fenceValue)
 	{
-		Fence->SetEventOnCompletion(
-			context.fenceValue,
-			event);
-
-		WaitForSingleObject(event, INFINITE);
+		hResult = Fence->SetEventOnCompletion(context.fenceValue,event);
+		if (FAILED(hResult)) return false;
+		if(WaitForSingleObject(event, INFINITE) != WAIT_OBJECT_0) return false;
 	}
 
-	HRESULT hResult = context.allocator.Get()->Reset();
-	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "problem resetting Command Allocator", *LogFile)) return false;
+	hResult = context.allocator.Get()->Reset();
+	if (FAILED(hResult) && !OutputErrorFromHResult(hResult, "problem resetting Command Allocator", *LogFile)) return false;
 
 	hResult = mCommandList->Reset(context.allocator.Get(), PipelineState);
-	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "problem resetting Command List", *LogFile)) return false;
+	if (FAILED(hResult) && !OutputErrorFromHResult(hResult, "problem resetting Command List", *LogFile)) return false;
 
 	return true;
 }
@@ -48,7 +47,7 @@ bool DuckyGraphicsContext::EndFrame(UINT CurrentFrame, ID3D12CommandQueue* Queue
 	return true;
 }
 
-bool DuckyGraphicsContext::WaitForGpu(ID3D12CommandQueue* queue, ID3D12Fence* fence, HANDLE eventHandle)
+bool DuckyGraphicsContext::WaitForGpu(ID3D12CommandQueue* queue, ID3D12Fence* fence, HANDLE event)
 {
 	const UINT64 fenceValue = ++mGlobalFenceValue;
 
@@ -58,11 +57,11 @@ bool DuckyGraphicsContext::WaitForGpu(ID3D12CommandQueue* queue, ID3D12Fence* fe
 
 	if (fence->GetCompletedValue() < fenceValue)
 	{
-		hr = fence->SetEventOnCompletion(fenceValue, eventHandle);
+		hr = fence->SetEventOnCompletion(fenceValue, event);
 
 		if (hr != S_OK) return false;
 
-		WaitForSingleObject(eventHandle, INFINITE);
+		if (WaitForSingleObject(event, INFINITE) != WAIT_OBJECT_0) return false;
 	}
 
 	return true;

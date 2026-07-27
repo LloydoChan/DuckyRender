@@ -57,9 +57,9 @@ class DuckyMeshData
 				D3D12_VERTEX_BUFFER_VIEW vertexView{};
 				D3D12_INDEX_BUFFER_VIEW indexView{};
 
-				UINT mHashedTextureName = 0;
-				UINT mNumVertices = 0;
-				UINT mNumIndices = 0;
+				size_t mHashedTextureName = 0;
+				size_t mNumVertices = 0;
+				size_t mNumIndices = 0;
 
 				bool InitBuffer(D3DDeviceManager* DeviceManager, BufferInfo& BufferInfo, ID3D12Resource** Data);
 
@@ -68,11 +68,11 @@ class DuckyMeshData
 
 		std::vector<DuckyPrimitive> mPrimitives;
 
-		void AddPrimitive(DuckyPrimitive&& NewPrimitive) { mPrimitives.emplace_back(NewPrimitive); }
+		void AddPrimitive(DuckyPrimitive&& NewPrimitive) { mPrimitives.emplace_back(std::move(NewPrimitive)); }
 };
 
 struct DuckyMeshInstance
 {
 	XMMATRIX mTransform = XMMatrixIdentity();
-	DuckyMeshData* mMeshData;
+	DuckyMeshData* mMeshData = nullptr;
 };

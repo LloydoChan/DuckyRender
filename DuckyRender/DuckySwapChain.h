@@ -24,6 +24,6 @@ class DuckySwapChain
         ComPtr<ID3D12DescriptorHeap> mRtvHeaps = nullptr;
         std::vector<ComPtr<ID3D12Resource>> mBackBuffers;
 
-        HANDLE mHWnd = nullptr;
+        HWND mHWnd = nullptr;
 
 };
