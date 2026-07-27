@@ -17,7 +17,7 @@ class DuckyGraphicsContext
 {
 public:
     bool Init(D3DDeviceManager* DeviceManager, std::wofstream* LogFile);
-    bool BeginFrame(UINT CurrentFrame, ID3D12Fence* Fence, ID3D12PipelineState* PipelineState, HANDLE event);
+    bool BeginFrame(UINT CurrentFrame, ID3D12Fence* Fence, ID3D12PipelineState* PipelineState, HANDLE event, std::wofstream* LogFile);
     bool EndFrame(UINT CurrentFrame, ID3D12CommandQueue* Queue, ID3D12Fence* Fence);
     bool WaitForGpu(ID3D12CommandQueue* queue, ID3D12Fence* fence, HANDLE eventHandle);
 

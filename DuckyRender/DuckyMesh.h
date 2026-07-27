@@ -27,7 +27,7 @@ struct BufferInfo
 {
 	size_t BufferSize = 0;
 	UINT Stride = 0;
-	void* Data = nullptr;
+	std::vector<std::byte> Data;
 };
 
 class DuckyMeshData;

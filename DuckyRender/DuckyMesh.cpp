@@ -32,12 +32,12 @@ bool DuckyMeshData::DuckyPrimitive::InitPrimitive(D3DDeviceManager* DeviceManage
 
 bool DuckyMeshData::DuckyPrimitive::InitBuffer(D3DDeviceManager* DeviceManager, BufferInfo& BufferInfo, ID3D12Resource** Data)
 {
-	*Data = DeviceManager->CreateBuffer(BufferInfo.BufferSize);
-	if (Data == nullptr) return false;
+	*Data = DeviceManager->CreateBuffer(BufferInfo.Data.size());
+	if (*Data == nullptr) return false;
 
 	void* map = nullptr;
 	HRESULT hResult = (*Data)->Map(0, nullptr, &map);
-	std::memcpy(map, BufferInfo.Data, BufferInfo.BufferSize);
+	std::memcpy(map, BufferInfo.Data.data(), BufferInfo.Data.size());
 	(*Data)->Unmap(0, nullptr);
 
 	return true;
@@ -87,14 +87,14 @@ bool DuckyMeshData::Init(D3DDeviceManager* DeviceManager, std::ifstream& InFile,
 		BufferInfo vertBufferInfo;
 		vertBufferInfo.Stride = 20;
 		InFile.read((char*)&vertBufferInfo.BufferSize, sizeof(size_t));
-		vertBufferInfo.Data = new unsigned char[vertBufferInfo.BufferSize];
-		InFile.read((char*)vertBufferInfo.Data, vertBufferInfo.BufferSize);
-		
+		vertBufferInfo.Data.resize(vertBufferInfo.BufferSize);
+		InFile.read(reinterpret_cast<char*>(vertBufferInfo.Data.data()),vertBufferInfo.BufferSize);
+
 		BufferInfo indexBufferInfo;
 		indexBufferInfo.Stride = 4;
 		InFile.read((char*)&indexBufferInfo.BufferSize, sizeof(size_t));
-		indexBufferInfo.Data = new unsigned char[indexBufferInfo.BufferSize];
-		InFile.read((char*)indexBufferInfo.Data, indexBufferInfo.BufferSize);
+		indexBufferInfo.Data.resize(indexBufferInfo.BufferSize);
+		InFile.read(reinterpret_cast<char*>(indexBufferInfo.Data.data()), indexBufferInfo.BufferSize);
 
 		vertices.emplace_back(std::move(vertBufferInfo));
 		indices.emplace_back(std::move(indexBufferInfo));

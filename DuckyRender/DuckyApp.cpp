@@ -13,7 +13,7 @@ bool DuckyApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* WindowNa
 	LPWSTR* argv = CommandLineToArgvW(GetCommandLineW(), &argc);
 	for (int i = 0; i < argc; i++)
 	{
-		if (wcscmp(argv[i], L"-debug")) {
+		if (wcscmp(argv[i], L"-debug") == 0) {
 			ID3D12Debug* debugLayer = nullptr;
 			D3D12GetDebugInterface(IID_PPV_ARGS(&debugLayer));
 			debugLayer->EnableDebugLayer();

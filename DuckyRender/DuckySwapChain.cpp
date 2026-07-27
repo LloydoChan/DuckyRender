@@ -20,12 +20,14 @@ bool DuckySwapChain::Init(D3DDeviceManager* DeviceManager, IDXGIFactory6* factor
 	swapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
 	swapChainDesc.AlphaMode = DXGI_ALPHA_MODE_UNSPECIFIED;
 	swapChainDesc.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
-	IDXGISwapChain3** swapPtr = &mSwapChain;
+	ComPtr<IDXGISwapChain1> swapChain1;
 
-	HRESULT hResult = factory->CreateSwapChainForHwnd(DeviceManager->GetCommandQueue(), hWnd, &swapChainDesc, nullptr, nullptr, (IDXGISwapChain1**)swapPtr);
+	HRESULT hResult = factory->CreateSwapChainForHwnd(DeviceManager->GetCommandQueue(), hWnd, &swapChainDesc, nullptr, nullptr, swapChain1.ReleaseAndGetAddressOf());
+	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "problem creating swapchain: ", *LogFile)) return false;
 	factory->Release();
 
-	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "problem creating swapchain: ", *LogFile)) return false;
+	hResult = swapChain1.As(&mSwapChain);
+	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "problem exchanging swap chain pointers ", *LogFile)) return false;
 
 	D3D12_DESCRIPTOR_HEAP_DESC heapDesc = {};
 

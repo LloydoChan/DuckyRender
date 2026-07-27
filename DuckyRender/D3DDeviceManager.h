@@ -23,8 +23,8 @@ struct RootSignatureDesc
 
 struct PipelineAndRootSig
 {
-	ID3D12RootSignature* rootSig;
-	ID3D12PipelineState* pipeLineState;
+	ComPtr<ID3D12RootSignature> rootSig;
+	ComPtr<ID3D12PipelineState> pipeLineState;
 };
 
 
@@ -70,19 +70,27 @@ class D3DDeviceManager
 		bool Init(HWND hWnd, UINT WindowWidth, UINT WindowHeight, std::wofstream* LogFile);
 
 		ID3D12Fence* CreateFence(UINT64 FenceVal);
+		ID3D12GraphicsCommandList* CreateAndReturnCommandList(ID3D12CommandAllocator* Allocator);
+		ComPtr<ID3D12CommandAllocator> CreateCommandAllocator();
 
 		int CreateDescriptorHeap(D3D12_DESCRIPTOR_HEAP_FLAGS flags, D3D12_DESCRIPTOR_HEAP_TYPE type, UINT numDescriptors = MAX_NUM_DESCRIPTORS_PER_HEAP);
+
 		ID3D12Resource* CreateBuffer(size_t bufferSize);
 		DescriptorHeapResource CreateConstantBuffer(size_t bufferSize, int DescriptorHeapHandle);
-		ID3D12GraphicsCommandList* CreateAndReturnCommandList(ID3D12CommandAllocator* Allocator);
 		PipelineAndRootSig CreatePSO(LPCWSTR vertexShader, LPCWSTR vertexEntry, LPCWSTR pixelShader, LPCWSTR pixelEntry, RootSignatureDesc& NewRootSigDesc);
-		ComPtr<ID3D12CommandAllocator> CreateCommandAllocator();
+		std::vector<D3D12_INPUT_ELEMENT_DESC> CreateInputLayout(ShaderCompilationOutput& shaderCompData);
 
 		size_t InitTexture(const wchar_t* Filepath, UINT DescriptorHeapIndex);
 
 		ID3D12CommandQueue* GetCommandQueue() { return mCommandQueue.Get(); }
-
 		DescriptorHeapResource GetTexture(UINT HashedInput) { return mTextures[HashedInput]; }
+		ID3D12DescriptorHeap* GetDepthStencilBufferHeap() { return mDsvHeaps.Get(); }
+		UINT GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE type) { return mDevice->GetDescriptorHandleIncrementSize(type); }
+		ID3D12DescriptorHeap* GetDescriptorHeapHandle(int Index) { return mDescriptorHeaps[Index]; };
+		ID3D12Device* GetDevice() { return mDevice.Get(); }
+		UINT32 GetCurrentFrameIndex() { return mSwapChain->GetCurrentBackBufferIndex(); };
+		bool CreateDepthBuffer(UINT width, UINT height);
+		bool CreateDepthBufferHeap();
 
 		D3D12_RESOURCE_BARRIER GetBarrier()
 		{
@@ -98,22 +106,14 @@ class D3DDeviceManager
 			return BarrierDesc;
 		}
 
-		UINT GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE type) { return mDevice->GetDescriptorHandleIncrementSize(type); }
-		ID3D12DescriptorHeap* GetDescriptorHeapHandle(int Index) { return mDescriptorHeaps[Index]; };
+
+
 		void Present() { mSwapChain->Present(); }
-
 		D3D12_CPU_DESCRIPTOR_HANDLE IncrementAndReturnRTVHeaps() { return mSwapChain->GetCurrentRtv(this); };
-		ID3D12DescriptorHeap* GetDepthStencilBufferHeap() { return mDsvHeaps.Get(); }
 
-		std::vector<D3D12_INPUT_ELEMENT_DESC> CreateInputLayout(ShaderCompilationOutput& shaderCompData);
-
-		ID3D12Device* GetDevice() { return mDevice.Get(); }
-
-		UINT32 GetCurrentFrameIndex() { return mSwapChain->GetCurrentBackBufferIndex(); };
 
 		bool Resize(UINT WindowWidth, UINT WindowHeight);
 
-		bool CreateDepthBuffer(UINT width, UINT height);
 
 	private:
 		// only want to call this from the DeviceManager itself

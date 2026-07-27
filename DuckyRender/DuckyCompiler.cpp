@@ -48,13 +48,13 @@ bool DuckyCompiler::CompileShaderDXC(LPCWSTR ShaderFilePath, LPCWSTR entryPoint,
 	arguments.push_back(profile);
 
 	HRESULT hResult = mCompiler->Compile(&dxcBuffer, arguments.data(), (UINT32)arguments.size(), mIncludeHandler.Get(), IID_PPV_ARGS(&newOutput.result));
-	if (hResult != S_OK && OutputErrorFromHResult(hResult, "couldn't compile shader", *mLogFilePtr)) return false;
+	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "couldn't compile shader", *mLogFilePtr)) return false;
 
 	hResult = newOutput.result->GetOutput(DXC_OUT_REFLECTION, IID_PPV_ARGS(&newOutput.reflectionBlob), nullptr);
-	if (hResult != S_OK && OutputErrorFromHResult(hResult, "couldn't get reflection from result", *mLogFilePtr)) return false;
+	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "couldn't get reflection from result", *mLogFilePtr)) return false;
 
 	hResult = newOutput.result->GetOutput(DXC_OUT_OBJECT, IID_PPV_ARGS(&newOutput.shaderBlob), nullptr);
-	if (hResult != S_OK && OutputErrorFromHResult(hResult, "couldn't get shader info from result", *mLogFilePtr)) return false;
+	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "couldn't get shader info from result", *mLogFilePtr)) return false;
 
 	return true;
 }

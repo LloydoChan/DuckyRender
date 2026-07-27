@@ -16,7 +16,7 @@ bool DuckyGraphicsContext::Init(D3DDeviceManager* DeviceManager, std::wofstream*
 	return true;
 }
 
-bool DuckyGraphicsContext::BeginFrame(UINT CurrentFrame, ID3D12Fence* Fence, ID3D12PipelineState* PipelineState, HANDLE event)
+bool DuckyGraphicsContext::BeginFrame(UINT CurrentFrame, ID3D12Fence* Fence, ID3D12PipelineState* PipelineState, HANDLE event, std::wofstream* LogFile)
 {
 	FrameContext& context = mFrames[CurrentFrame];
 	if (context.fenceValue != 0 &&
@@ -29,8 +29,12 @@ bool DuckyGraphicsContext::BeginFrame(UINT CurrentFrame, ID3D12Fence* Fence, ID3
 		WaitForSingleObject(event, INFINITE);
 	}
 
-	context.allocator.Get()->Reset();
-	mCommandList->Reset(context.allocator.Get(), PipelineState);
+	HRESULT hResult = context.allocator.Get()->Reset();
+	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "problem resetting Command Allocator", *LogFile)) return false;
+
+	hResult = mCommandList->Reset(context.allocator.Get(), PipelineState);
+	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "problem resetting Command List", *LogFile)) return false;
+
 	return true;
 }
 

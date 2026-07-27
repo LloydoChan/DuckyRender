@@ -113,6 +113,8 @@ LRESULT SimplestApp::WindowProcedure(HWND hwnd, UINT msg, WPARAM wparam, LPARAM 
 			return 0;
 		}
 
+		mMinimized = false;
+
 		const UINT width = static_cast<UINT>(LOWORD(lparam));
 
 		const UINT height = static_cast<UINT>(HIWORD(lparam));
@@ -327,11 +329,10 @@ void SimplestApp::AppMainLoop()
 
 		float clearColor[] = { 0.f, 0.f, 0.f, 1.f };
 
-		mDuckyContext->WaitForGpu(mQueue, mFence, mFenceEvent);
-		mDuckyContext->BeginFrame(currentFrame, mFence, mPipeline.pipeLineState, mFenceEvent);
+		mDuckyContext->BeginFrame(currentFrame, mFence, mPipeline.pipeLineState.Get(), mFenceEvent, &mLogFile);
 		D3D12_RESOURCE_BARRIER barrier = mDeviceManager->GetBarrier();
 		list->ResourceBarrier(1, &barrier);
-		list->SetPipelineState(mPipeline.pipeLineState);
+		list->SetPipelineState(mPipeline.pipeLineState.Get());
 
 		D3D12_CPU_DESCRIPTOR_HANDLE rtvHeap = mDeviceManager->IncrementAndReturnRTVHeaps();
 		D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = mDeviceManager->GetDepthStencilBufferHeap()->GetCPUDescriptorHandleForHeapStart();
@@ -343,7 +344,7 @@ void SimplestApp::AppMainLoop()
 		list->RSSetViewports(1, &mWholeScreenViewPortScissor.viewport);
 		list->RSSetScissorRects(1, &mWholeScreenViewPortScissor.scissor);
 
-		list->SetGraphicsRootSignature(mPipeline.rootSig);
+		list->SetGraphicsRootSignature(mPipeline.rootSig.Get());
 		list->SetDescriptorHeaps(1, &heapPtr);
 
 		XMMATRIX world = XMMatrixIdentity();

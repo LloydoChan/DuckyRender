@@ -64,6 +64,7 @@ bool D3DDeviceManager::Init(HWND hWnd, UINT WindowWidth, UINT WindowHeight, std:
 	mSwapChain = new DuckySwapChain();
 	if (!mSwapChain->Init(this, factory, hWnd, WindowWidth, WindowHeight, LogFile)) return false;
 
+	if (!CreateDepthBufferHeap()) return false;
 	if(!CreateDepthBuffer(WindowWidth, WindowHeight)) return false;
 
 	// init directxtex file reading
@@ -266,7 +267,7 @@ PipelineAndRootSig D3DDeviceManager::CreatePSO(LPCWSTR vertexShader, LPCWSTR ver
 	gPipeline.DepthStencilState = depthStencilDesc;
 	gPipeline.DSVFormat = DXGI_FORMAT_D32_FLOAT;
 
-	gPipeline.pRootSignature = newPipeline.rootSig;
+	gPipeline.pRootSignature = newPipeline.rootSig.Get();
 
 	gPipeline.VS.pShaderBytecode = vertexShaderOutput.shaderBlob.Get()->GetBufferPointer();
 	gPipeline.VS.BytecodeLength = vertexShaderOutput.shaderBlob.Get()->GetBufferSize();
@@ -335,17 +336,6 @@ bool D3DDeviceManager::Resize(UINT WindowWidth, UINT WindowHeight)
 
 bool D3DDeviceManager::CreateDepthBuffer(UINT WindowWidth, UINT WindowHeight)
 {
-	// create Depth Buffer
-	D3D12_DESCRIPTOR_HEAP_DESC depthDesc = {};
-
-	depthDesc.NumDescriptors = 1;
-	depthDesc.NodeMask = 0;
-	depthDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
-	depthDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
-
-	HRESULT hResult = mDevice->CreateDescriptorHeap(&depthDesc, IID_PPV_ARGS(&mDsvHeaps));
-	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "problem initializing depth stencil heap ", *mLogFilePtr)) return false;
-
 	DXGI_FORMAT depthFormat = DXGI_FORMAT_D32_FLOAT;
 
 	D3D12_CLEAR_VALUE depthClearValue{};
@@ -374,13 +364,15 @@ bool D3DDeviceManager::CreateDepthBuffer(UINT WindowWidth, UINT WindowHeight)
 	depthResDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
 	depthResDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
 
-	mDevice->CreateCommittedResource(
+	HRESULT hResult = mDevice->CreateCommittedResource(
 		&heapProperties,
 		D3D12_HEAP_FLAG_NONE,
 		&depthResDesc,
 		D3D12_RESOURCE_STATE_DEPTH_WRITE,
 		&depthClearValue,
 		IID_PPV_ARGS(&mDepthBuffer));
+
+	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "problem initializing depth buffer ", *mLogFilePtr)) return false;
 
 	mDepthBuffer->SetName(L"Depth Buffer");
 	mDsvHeaps->SetName(L"DSV Heap");
@@ -396,6 +388,21 @@ bool D3DDeviceManager::CreateDepthBuffer(UINT WindowWidth, UINT WindowHeight)
 		&dsvDesc,
 		mDsvHeaps->GetCPUDescriptorHandleForHeapStart());
 
+	return true;
+}
+
+bool D3DDeviceManager::CreateDepthBufferHeap()
+{
+	// create Depth Buffer
+	D3D12_DESCRIPTOR_HEAP_DESC depthDesc = {};
+
+	depthDesc.NumDescriptors = 1;
+	depthDesc.NodeMask = 0;
+	depthDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
+	depthDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
+
+	HRESULT hResult = mDevice->CreateDescriptorHeap(&depthDesc, IID_PPV_ARGS(&mDsvHeaps));
+	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "problem initializing depth stencil heap ", *mLogFilePtr)) return false;
 	return true;
 }
 
