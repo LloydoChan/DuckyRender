@@ -79,5 +79,8 @@
     <ClInclude Include="DuckyGraphicsContext.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="DuckyDescriptor.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

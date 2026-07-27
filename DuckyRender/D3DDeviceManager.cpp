@@ -277,7 +277,7 @@ DescriptorHeapResource D3DDeviceManager::CreateConstantBuffer(size_t bufferSize,
 	return constantBuffer;
 }
 
-PipelineAndRootSig D3DDeviceManager::CreatePSO(LPCWSTR vertexShader, LPCWSTR vertexEntry, LPCWSTR pixelShader, LPCWSTR pixelEntry, UINT numConstantBuffers, UINT numShaderResources)
+PipelineAndRootSig D3DDeviceManager::CreatePSO(LPCWSTR vertexShader, LPCWSTR vertexEntry, LPCWSTR pixelShader, LPCWSTR pixelEntry, RootSignatureDesc& NewRootSigDesc)
 {
 	PipelineAndRootSig newPipeline;
 	
@@ -286,44 +286,13 @@ PipelineAndRootSig D3DDeviceManager::CreatePSO(LPCWSTR vertexShader, LPCWSTR ver
 	ShaderCompilationOutput pixelShaderOutput;
 	if (!mCompiler->CompileShaderDXC(pixelShader, pixelEntry, L"ps_6_0", pixelShaderOutput)) return newPipeline;
 
-	UINT total = numConstantBuffers + numShaderResources;
-
-	std::vector<D3D12_DESCRIPTOR_RANGE> descTables(total);
-	std::vector<D3D12_ROOT_PARAMETER> rootParams(total);
+	std::vector<D3D12_DESCRIPTOR_RANGE> descTables(NewRootSigDesc.parameters.size());
 	
-	for (UINT inputCounter = 0; inputCounter < total; inputCounter++)
-	{
-		descTables[inputCounter].NumDescriptors = 1;
-		if(inputCounter < numConstantBuffers) descTables[inputCounter].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_CBV;
-		else descTables[inputCounter].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-		descTables[inputCounter].BaseShaderRegister = 0;
-		descTables[inputCounter].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
-
-		rootParams[inputCounter].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-		if (inputCounter < numConstantBuffers) rootParams[inputCounter].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
-		else rootParams[inputCounter].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-		rootParams[inputCounter].DescriptorTable.pDescriptorRanges = &descTables[inputCounter];
-		rootParams[inputCounter].DescriptorTable.NumDescriptorRanges = 1;
-	}
-
 	D3D12_ROOT_SIGNATURE_DESC rootSigDesc = {};
 	rootSigDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
-	rootSigDesc.pParameters = rootParams.data();
-	rootSigDesc.NumParameters = numConstantBuffers + numShaderResources;
-
-	D3D12_STATIC_SAMPLER_DESC samplerDesc = {};
-
-	samplerDesc.AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-	samplerDesc.AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-	samplerDesc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-	samplerDesc.BorderColor = D3D12_STATIC_BORDER_COLOR_TRANSPARENT_BLACK;
-	samplerDesc.Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
-	samplerDesc.MaxLOD = D3D12_FLOAT32_MAX;
-	samplerDesc.MinLOD = 0.f;
-	samplerDesc.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-	samplerDesc.ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
-
-	rootSigDesc.pStaticSamplers = &samplerDesc;
+	rootSigDesc.pParameters = NewRootSigDesc.parameters.data();
+	rootSigDesc.NumParameters = NewRootSigDesc.parameters.size();
+	rootSigDesc.pStaticSamplers = NewRootSigDesc.staticSamplers.data();
 	rootSigDesc.NumStaticSamplers = 1;
 
 	ID3DBlob* rootSigBlob = nullptr;

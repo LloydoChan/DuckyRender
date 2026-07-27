@@ -38,7 +38,45 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 	mDuckyContext = new DuckyGraphicsContext;
 	mDuckyContext->Init(mDeviceManager, &mLogFile);
 
-	mPipeline = mDeviceManager->CreatePSO(L"BasicVertTransformation.hlsl", L"main", L"BasicColorPixelShader.hlsl", L"main", 1, 1);
+	RootSignatureDesc DrawSig = {};
+
+	D3D12_DESCRIPTOR_RANGE descTables[2]{};
+	D3D12_ROOT_PARAMETER rootParams[2]{};
+	
+	rootParams[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
+	rootParams[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+
+	descTables[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_CBV;
+	descTables[1].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+
+	for (UINT inputCounter = 0; inputCounter < 2; inputCounter++)
+	{
+		descTables[inputCounter].NumDescriptors = 1;
+		descTables[inputCounter].BaseShaderRegister = 0;
+		descTables[inputCounter].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+
+		rootParams[inputCounter].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+		
+		rootParams[inputCounter].DescriptorTable.pDescriptorRanges = &descTables[inputCounter];
+		rootParams[inputCounter].DescriptorTable.NumDescriptorRanges = 1;
+		DrawSig.parameters.emplace_back(rootParams[inputCounter]);
+	}
+
+	D3D12_STATIC_SAMPLER_DESC samplerDesc = {};
+
+	samplerDesc.AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+	samplerDesc.AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+	samplerDesc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+	samplerDesc.BorderColor = D3D12_STATIC_BORDER_COLOR_TRANSPARENT_BLACK;
+	samplerDesc.Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
+	samplerDesc.MaxLOD = D3D12_FLOAT32_MAX;
+	samplerDesc.MinLOD = 0.f;
+	samplerDesc.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+	samplerDesc.ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
+
+	DrawSig.staticSamplers.emplace_back(samplerDesc);
+
+	mPipeline = mDeviceManager->CreatePSO(L"BasicVertTransformation.hlsl", L"main", L"BasicColorPixelShader.hlsl", L"main", DrawSig);
 	if (mPipeline.rootSig == nullptr || mPipeline.pipeLineState == nullptr) return false;
 
 	mWholeScreenViewPortScissor.scissor.left = 0;

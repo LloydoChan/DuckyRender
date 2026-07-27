@@ -15,6 +15,12 @@
 using namespace DirectX;
 using Microsoft::WRL::ComPtr;
 
+struct RootSignatureDesc
+{
+	std::vector<D3D12_ROOT_PARAMETER> parameters;
+	std::vector<D3D12_STATIC_SAMPLER_DESC> staticSamplers;
+};
+
 struct PipelineAndRootSig
 {
 	ID3D12RootSignature* rootSig;
@@ -69,7 +75,7 @@ class D3DDeviceManager
 		ID3D12Resource* CreateBuffer(size_t bufferSize);
 		DescriptorHeapResource CreateConstantBuffer(size_t bufferSize, int DescriptorHeapHandle);
 		ID3D12GraphicsCommandList* CreateAndReturnCommandList(ID3D12CommandAllocator* Allocator);
-		PipelineAndRootSig CreatePSO(LPCWSTR vertexShader, LPCWSTR vertexEntry, LPCWSTR pixelShader, LPCWSTR pixelEntry, UINT numConstantBuffers, UINT numShaderResources);
+		PipelineAndRootSig CreatePSO(LPCWSTR vertexShader, LPCWSTR vertexEntry, LPCWSTR pixelShader, LPCWSTR pixelEntry, RootSignatureDesc& NewRootSigDesc);
 		ComPtr<ID3D12CommandAllocator> CreateCommandAllocator();
 
 		size_t InitTexture(const wchar_t* Filepath, UINT DescriptorHeapIndex);
