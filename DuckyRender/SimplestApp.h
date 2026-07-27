@@ -16,6 +16,8 @@ public:
 	void UpdateMovementAndRotation(XMVECTOR& ViewVector, XMVECTOR& ScaledMovement, float DeltaTime);
 	virtual void AppMainLoop();
 
+	bool Resize(UINT WindowWidth, UINT WindowHeight);
+
 private:
 	bool mKeys[256] = {};
 	LONG mMouseDeltaX = 0;

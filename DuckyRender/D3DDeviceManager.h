@@ -111,6 +111,10 @@ class D3DDeviceManager
 
 		UINT32 GetCurrentFrameIndex() { return mSwapChain->GetCurrentBackBufferIndex(); };
 
+		bool Resize(UINT WindowWidth, UINT WindowHeight);
+
+		bool CreateDepthBuffer(UINT width, UINT height);
+
 	private:
 		// only want to call this from the DeviceManager itself
 		DescriptorHeapResource CreateTexture(const wchar_t* Filepath, ID3D12DescriptorHeap* descHeap);

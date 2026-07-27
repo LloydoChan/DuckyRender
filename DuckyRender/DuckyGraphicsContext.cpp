@@ -34,10 +34,32 @@ bool DuckyGraphicsContext::BeginFrame(UINT CurrentFrame, ID3D12Fence* Fence, ID3
 	return true;
 }
 
-void DuckyGraphicsContext::EndFrame(UINT CurrentFrame, ID3D12CommandQueue* Queue, ID3D12Fence* Fence)
+bool DuckyGraphicsContext::EndFrame(UINT CurrentFrame, ID3D12CommandQueue* Queue, ID3D12Fence* Fence)
 {
+	UINT64 submittedFenceVal = ++mGlobalFenceValue;
+	HRESULT hr = Queue->Signal(Fence, submittedFenceVal);
+	if (hr != S_OK) return false;
 	FrameContext& context = mFrames[CurrentFrame];
-	UINT64 submittedFenceVal = ++context.fenceValue;
-	Queue->Signal(Fence, submittedFenceVal);
 	context.fenceValue = submittedFenceVal;
+	return true;
+}
+
+bool DuckyGraphicsContext::WaitForGpu(ID3D12CommandQueue* queue, ID3D12Fence* fence, HANDLE eventHandle)
+{
+	const UINT64 fenceValue = ++mGlobalFenceValue;
+
+	HRESULT hr = queue->Signal(fence, fenceValue);
+
+	if (hr != S_OK) return false;
+
+	if (fence->GetCompletedValue() < fenceValue)
+	{
+		hr = fence->SetEventOnCompletion(fenceValue, eventHandle);
+
+		if (hr != S_OK) return false;
+
+		WaitForSingleObject(eventHandle, INFINITE);
+	}
+
+	return true;
 }

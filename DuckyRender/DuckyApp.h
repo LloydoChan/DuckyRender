@@ -21,4 +21,9 @@ protected:
 	LPCWSTR mLpszClassName = nullptr;
 
 	std::wofstream mLogFile;
+
+	HANDLE mFenceEvent = nullptr;
+
+	UINT mClientWidth  = 0;
+	UINT mClientHeight = 0;
 };

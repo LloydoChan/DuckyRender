@@ -4,6 +4,7 @@
 
 bool DuckySwapChain::Init(D3DDeviceManager* DeviceManager, IDXGIFactory6* factory, HWND hWnd, UINT Width, UINT Height, std::wofstream* LogFile)
 {
+	mHWnd = hWnd;
 	DXGI_SWAP_CHAIN_DESC1 swapChainDesc = {};
 
 	swapChainDesc.Width = Width;
@@ -57,6 +58,49 @@ bool DuckySwapChain::Init(D3DDeviceManager* DeviceManager, IDXGIFactory6* factor
 	}
 
 	return true;
+}
+
+bool DuckySwapChain::Resize(D3DDeviceManager* DeviceManager, UINT32 width, UINT32 height, std::wofstream* LogFile)
+{
+    if (width == 0 || height == 0)
+    {
+        return true;
+    }
+
+    constexpr UINT bufferCount = 2;
+    constexpr DXGI_FORMAT format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    constexpr UINT flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
+
+    // All references to the old back buffers must be gone.
+    for (ComPtr<ID3D12Resource>& backBuffer :mBackBuffers)
+    {
+        backBuffer.Reset();
+    }
+
+    mBackBuffers.clear();
+
+    HRESULT hr = mSwapChain->ResizeBuffers(bufferCount, width, height, format, flags);
+
+    if (hr != S_OK && !OutputErrorFromHResult(hr, "couldn't resize swap-chain buffers: ", *LogFile)) return false;
+
+    ID3D12Device* device = DeviceManager->GetDevice();
+
+    const UINT rtvIncrement = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+
+    D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = mRtvHeaps->GetCPUDescriptorHandleForHeapStart();
+
+    mBackBuffers.resize(bufferCount);
+
+    for (UINT index = 0; index < bufferCount; ++index)
+    {
+        hr = mSwapChain->GetBuffer(index, IID_PPV_ARGS(mBackBuffers[index].ReleaseAndGetAddressOf()));
+        if (hr != S_OK && !OutputErrorFromHResult(hr, "couldn't retrieve resized back buffer: ", *LogFile))return false;
+        
+        device->CreateRenderTargetView(mBackBuffers[index].Get(), nullptr, rtvHandle);
+		rtvHandle.ptr += rtvIncrement;
+    }
+
+    return true;
 }
 
 ID3D12Resource* DuckySwapChain::GetCurrentBackBuffer() const

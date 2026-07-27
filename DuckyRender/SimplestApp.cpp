@@ -90,6 +90,10 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 
 	mQueue = mDeviceManager->GetCommandQueue();
 
+	mFenceEvent = CreateEvent(nullptr, false, false, nullptr);
+
+	if (mFenceEvent == nullptr) return false;
+
 	return true;
 }
 
@@ -98,6 +102,20 @@ LRESULT SimplestApp::WindowProcedure(HWND hwnd, UINT msg, WPARAM wparam, LPARAM 
 	if (msg == WM_DESTROY)
 	{
 		PostQuitMessage(0);
+		return 0;
+	}
+
+	if (msg == WM_SIZE)
+	{
+		const UINT width = static_cast<UINT>(LOWORD(lparam));
+
+		const UINT height = static_cast<UINT>(HIWORD(lparam));
+
+		if (mDuckyContext != nullptr &&  mDeviceManager != nullptr && width > 0 && height > 0)
+		{
+			Resize(width, height);
+		}
+
 		return 0;
 	}
 
@@ -158,11 +176,6 @@ void SimplestApp::HandleInput(UINT msg, WPARAM wParam, LPARAM lParam)
 			mMouseDeltaX += rawInput->data.mouse.lLastX;
 			mMouseDeltaY += rawInput->data.mouse.lLastY;
 		}
-	}
-
-	if (msg == WM_SIZE)
-	{
-		// handle this later
 	}
 }
 
@@ -257,13 +270,9 @@ void SimplestApp::AppMainLoop()
 
 	if (list == nullptr) return;
 
-	if (FAILED(list->Close()))
-	{
-		return;
-	}
-	
-	auto event = CreateEvent(nullptr, false, false, nullptr);
+	if (FAILED(list->Close())) return;
 
+	
 	bool bRunning = true;
 
 	while (bRunning)
@@ -306,7 +315,8 @@ void SimplestApp::AppMainLoop()
 
 		float clearColor[] = { 0.f, 0.f, 0.f, 1.f };
 
-		mDuckyContext->BeginFrame(currentFrame, mFence, mPipeline.pipeLineState, event);
+		mDuckyContext->WaitForGpu(mQueue, mFence, mFenceEvent);
+		mDuckyContext->BeginFrame(currentFrame, mFence, mPipeline.pipeLineState, mFenceEvent);
 		D3D12_RESOURCE_BARRIER barrier = mDeviceManager->GetBarrier();
 		list->ResourceBarrier(1, &barrier);
 		list->SetPipelineState(mPipeline.pipeLineState);
@@ -345,9 +355,36 @@ void SimplestApp::AppMainLoop()
 		mDeviceManager->Present();
 
 		mDuckyContext->EndFrame(currentFrame, mQueue, mFence);
+		
 	}
 
-	CloseHandle(event);
+	CloseHandle(mFenceEvent);
 
 	UnregisterClass(mLpszClassName, mHInstance);
+}
+
+bool SimplestApp::Resize(UINT WindowWidth, UINT WindowHeight)
+{
+	if (WindowWidth == 0 || WindowHeight == 0) return true;
+	
+	if (!mDuckyContext->WaitForGpu(mQueue, mFence, mFenceEvent)) return false;
+
+	if (!mDeviceManager->Resize(WindowWidth,WindowHeight)) return false;
+
+	mClientWidth = WindowWidth;
+	mClientHeight = WindowHeight;
+
+	mWholeScreenViewPortScissor.viewport.TopLeftX = 0.0f;
+	mWholeScreenViewPortScissor.viewport.TopLeftY = 0.0f;
+	mWholeScreenViewPortScissor.viewport.Width  = static_cast<float>(WindowWidth);
+	mWholeScreenViewPortScissor.viewport.Height = static_cast<float>(WindowHeight);
+	mWholeScreenViewPortScissor.viewport.MinDepth = 0.0f;
+	mWholeScreenViewPortScissor.viewport.MaxDepth = 1.0f;
+
+	mWholeScreenViewPortScissor.scissor.left = 0;
+	mWholeScreenViewPortScissor.scissor.top = 0;
+	mWholeScreenViewPortScissor.scissor.right  = static_cast<LONG>(WindowWidth);
+	mWholeScreenViewPortScissor.scissor.bottom = static_cast<LONG>(WindowHeight);
+
+	return true;
 }
