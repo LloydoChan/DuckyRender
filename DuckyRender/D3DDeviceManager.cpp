@@ -61,55 +61,6 @@ bool D3DDeviceManager::Init(HWND hWnd, UINT WindowWidth, UINT WindowHeight, std:
 
 	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "problem creating command queue: ", *mLogFilePtr)) return 1;
 
-	DXGI_SWAP_CHAIN_DESC1 swapChainDesc = {};
-
-	swapChainDesc.Width = WindowWidth;
-	swapChainDesc.Height = WindowHeight;
-	swapChainDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-	swapChainDesc.Stereo = false;
-	swapChainDesc.SampleDesc.Count = 1;
-	swapChainDesc.SampleDesc.Quality = 0;
-	swapChainDesc.BufferUsage = DXGI_USAGE_BACK_BUFFER;
-	swapChainDesc.BufferCount = 2;
-
-	swapChainDesc.Scaling = DXGI_SCALING_STRETCH;
-	swapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
-	swapChainDesc.AlphaMode = DXGI_ALPHA_MODE_UNSPECIFIED;
-	swapChainDesc.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
-	IDXGISwapChain3** swapPtr = &mSwapChain;
-	hResult = factory->CreateSwapChainForHwnd(mCommandQueue.Get(), hWnd, &swapChainDesc, nullptr, nullptr, (IDXGISwapChain1**)swapPtr);
-	factory->Release();
-
-	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "problem creating swapchain: ", *mLogFilePtr)) return false;
-
-	D3D12_DESCRIPTOR_HEAP_DESC heapDesc = {};
-
-	heapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
-	heapDesc.NodeMask = 0;
-	heapDesc.NumDescriptors = 2;
-	heapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
-
-	rtvHeaps = nullptr;
-
-	hResult = mDevice->CreateDescriptorHeap(&heapDesc, IID_PPV_ARGS(&rtvHeaps));
-
-	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "problem creating desc heap: ", *mLogFilePtr)) return false;
-
-	
-	D3D12_CPU_DESCRIPTOR_HANDLE handle = rtvHeaps->GetCPUDescriptorHandleForHeapStart();
-
-	for (UINT idx = 0; idx < swapChainDesc.BufferCount; idx++)
-	{
-		ComPtr<ID3D12Resource> ptr;
-		backBuffers.push_back(ptr);
-		hResult = mSwapChain->GetBuffer(idx, IID_PPV_ARGS(&backBuffers[idx]));
-
-		if (hResult != S_OK && !OutputErrorFromHResult(hResult, "problem getting back buffer: ", *mLogFilePtr)) return false;
-
-		mDevice->CreateRenderTargetView(backBuffers[idx].Get(), nullptr, handle);
-		handle.ptr += mDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
-	}
-
 	// create Depth Buffer
 	D3D12_DESCRIPTOR_HEAP_DESC depthDesc = {};
 
@@ -120,6 +71,9 @@ bool D3DDeviceManager::Init(HWND hWnd, UINT WindowWidth, UINT WindowHeight, std:
 
 	hResult = mDevice->CreateDescriptorHeap(&depthDesc, IID_PPV_ARGS(&mDsvHeaps));
 	if(hResult != S_OK && !OutputErrorFromHResult(hResult, "problem initializing depth stencil heap ", *mLogFilePtr)) return false;
+
+	mSwapChain = new DuckySwapChain();
+	if (!mSwapChain->Init(this, factory, hWnd, WindowWidth, WindowHeight, LogFile)) return false;
 
 	DXGI_FORMAT depthFormat = DXGI_FORMAT_D32_FLOAT;
 
@@ -187,20 +141,6 @@ ID3D12GraphicsCommandList* D3DDeviceManager::CreateAndReturnCommandList(ID3D12Co
 	HRESULT hResult = mDevice->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, Allocator, nullptr, IID_PPV_ARGS(&cmdList));
 	if (hResult != S_OK && !OutputErrorFromHResult(hResult, "problem creating command list: ", *mLogFilePtr)) return nullptr;
 	return cmdList;
-}
-
-void D3DDeviceManager::Present()
-{
-	mSwapChain->Present(1, 0);
-}
-
-D3D12_CPU_DESCRIPTOR_HANDLE D3DDeviceManager::IncrementAndReturnRTVHeaps()
-{
-	// d3d12 code
-	UINT bbIdx = mSwapChain->GetCurrentBackBufferIndex();
-	D3D12_CPU_DESCRIPTOR_HANDLE rtvHeap = rtvHeaps->GetCPUDescriptorHandleForHeapStart();
-	rtvHeap.ptr += bbIdx * mDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
-	return rtvHeap;
 }
 
 std::vector<D3D12_INPUT_ELEMENT_DESC> D3DDeviceManager::CreateInputLayout(ShaderCompilationOutput& shaderCompData)

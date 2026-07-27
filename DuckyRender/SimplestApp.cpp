@@ -1,5 +1,6 @@
 #include "SimplestApp.h"
 #include "D3DDeviceManager.h"
+#include "DuckyGraphicsContext.h"
 #include <vector>
 #include <errno.h>
 
@@ -12,7 +13,7 @@ const float ROTATIONAL_SPEED_PITCH = 2.f * 3.141f;
 
 bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* WindowName)
 {
-	DuckyApp::Init(WindowWidth, WindowHeight, WindowName);
+	if (!DuckyApp::Init(WindowWidth, WindowHeight, WindowName)) return false;
 	mCbvSrvUavHandle = mDeviceManager->CreateDescriptorHeap(D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
 	std::ifstream DuckyFile;
@@ -34,16 +35,8 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 		mMeshes.emplace_back(std::move(nextMesh));
 	}
 
-	for (auto& fi : mFrameInfo)
-	{
-		fi.alloc = mDeviceManager->CreateCommandAllocator();
-		if (fi.alloc == nullptr) return false;
-
-		fi.TransformUpdateBuffer = mDeviceManager->CreateConstantBuffer(sizeof(XMMATRIX), mCbvSrvUavHandle);
-		if (fi.TransformUpdateBuffer.buffer == nullptr) return false;
-
-		fi.TransformUpdateBuffer.buffer->Map(0, nullptr, (void**)&fi.mMappedMatrixData);
-	}
+	mDuckyContext = new DuckyGraphicsContext;
+	mDuckyContext->Init(mDeviceManager, &mLogFile);
 
 	mPipeline = mDeviceManager->CreatePSO(L"BasicVertTransformation.hlsl", L"main", L"BasicColorPixelShader.hlsl", L"main", 1, 1);
 	if (mPipeline.rootSig == nullptr || mPipeline.pipeLineState == nullptr) return false;
@@ -217,7 +210,7 @@ void SimplestApp::AppMainLoop()
 
 	ID3D12DescriptorHeap* heapPtr = mDeviceManager->GetDescriptorHeapHandle(mCbvSrvUavHandle);
 
-	ID3D12GraphicsCommandList* list = mDeviceManager->CreateAndReturnCommandList(mFrameInfo[0].alloc.Get());
+	ID3D12GraphicsCommandList* list = mDuckyContext->GetCommandList();
 
 	if (list == nullptr) return;
 
@@ -243,20 +236,7 @@ void SimplestApp::AppMainLoop()
 
 		UINT currentFrame = mDeviceManager->GetCurrentFrameIndex();
 
-		FrameContext& frameInfo = mFrameInfo[currentFrame];
-
-		if (frameInfo.fenceValue != 0 &&
-			mFence->GetCompletedValue() < frameInfo.fenceValue)
-		{
-			mFence->SetEventOnCompletion(
-				frameInfo.fenceValue,
-				event);
-
-			WaitForSingleObject(event, INFINITE);
-		}
-
-		frameInfo.alloc.Get()->Reset();
-		list->Reset(frameInfo.alloc.Get(), mPipeline.pipeLineState);
+		
 		auto currentTime = Clock::now();
 
 		float deltaTime = std::chrono::duration<float>(
@@ -277,6 +257,8 @@ void SimplestApp::AppMainLoop()
 		mMouseDeltaX = mMouseDeltaY = 0;
 
 		float clearColor[] = { 0.f, 0.f, 0.f, 1.f };
+
+		mDuckyContext->BeginFrame(currentFrame, mFence, mPipeline.pipeLineState, event);
 		D3D12_RESOURCE_BARRIER barrier = mDeviceManager->GetBarrier();
 		list->ResourceBarrier(1, &barrier);
 		list->SetPipelineState(mPipeline.pipeLineState);
@@ -294,11 +276,11 @@ void SimplestApp::AppMainLoop()
 		list->SetGraphicsRootSignature(mPipeline.rootSig);
 		list->SetDescriptorHeaps(1, &heapPtr);
 
-		XMMATRIX world = mMeshes[0].mTransform;
+		XMMATRIX world = XMMatrixIdentity();
 		XMMATRIX wvp = XMMatrixTranspose(world * view * projection);
-		memcpy(frameInfo.mMappedMatrixData, &wvp, sizeof(XMFLOAT4X4));
+		//memcpy(frameInfo.mMappedMatrixData, &wvp, sizeof(XMFLOAT4X4));
 
-		list->SetGraphicsRootDescriptorTable(0, frameInfo.TransformUpdateBuffer.descHandle);
+		//list->SetGraphicsRootDescriptorTable(0, frameInfo.TransformUpdateBuffer.descHandle);
 
 		for (auto& mesh : mMeshes)
 		{
@@ -310,14 +292,11 @@ void SimplestApp::AppMainLoop()
 		list->ResourceBarrier(1, &barrier);
 		list->Close();
 
-		UINT64 submittedFenceVal = ++fenceVal;
 		ID3D12CommandList* cmdLists[] = {list};
 		mQueue->ExecuteCommandLists(1, cmdLists);
 		mDeviceManager->Present();
 
-		mQueue->Signal(mFence, submittedFenceVal);
-		frameInfo.fenceValue = submittedFenceVal;
-
+		mDuckyContext->EndFrame(currentFrame, mQueue, mFence);
 	}
 
 	CloseHandle(event);

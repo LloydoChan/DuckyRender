@@ -146,7 +146,9 @@
     <ClCompile Include="D3DDeviceManager.cpp" />
     <ClCompile Include="DuckyApp.cpp" />
     <ClCompile Include="DuckyCompiler.cpp" />
+    <ClCompile Include="DuckyGraphicsContext.cpp" />
     <ClCompile Include="DuckyMesh.cpp" />
+    <ClCompile Include="DuckySwapChain.cpp" />
     <ClCompile Include="DuckyTools.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="SimplestApp.cpp" />
@@ -173,7 +175,9 @@
     <ClInclude Include="D3DDeviceManager.h" />
     <ClInclude Include="DuckyApp.h" />
     <ClInclude Include="DuckyCompiler.h" />
+    <ClInclude Include="DuckyGraphicsContext.h" />
     <ClInclude Include="DuckyMesh.h" />
+    <ClInclude Include="DuckySwapChain.h" />
     <ClInclude Include="DuckyTools.h" />
     <ClInclude Include="SimplestApp.h" />
   </ItemGroup>

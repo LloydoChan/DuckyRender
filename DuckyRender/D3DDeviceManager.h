@@ -10,6 +10,7 @@
 #include <unordered_map>
 
 #include "DuckyCompiler.h"
+#include "DuckySwapChain.h"
 
 using namespace DirectX;
 using Microsoft::WRL::ComPtr;
@@ -71,10 +72,8 @@ class D3DDeviceManager
 		PipelineAndRootSig CreatePSO(LPCWSTR vertexShader, LPCWSTR vertexEntry, LPCWSTR pixelShader, LPCWSTR pixelEntry, UINT numConstantBuffers, UINT numShaderResources);
 		ComPtr<ID3D12CommandAllocator> CreateCommandAllocator();
 
-
 		size_t InitTexture(const wchar_t* Filepath, UINT DescriptorHeapIndex);
 
-		UINT GetCurrentSwapChainIndex() { return mSwapChain->GetCurrentBackBufferIndex(); }
 		ID3D12CommandQueue* GetCommandQueue() { return mCommandQueue.Get(); }
 
 		DescriptorHeapResource GetTexture(UINT HashedInput) { return mTextures[HashedInput]; }
@@ -85,7 +84,7 @@ class D3DDeviceManager
 			UINT bbIdx = mSwapChain->GetCurrentBackBufferIndex();
 			BarrierDesc.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
 			BarrierDesc.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-			BarrierDesc.Transition.pResource = backBuffers[bbIdx].Get();
+			BarrierDesc.Transition.pResource = mSwapChain->GetCurrentBackBuffer();
 			BarrierDesc.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
 			BarrierDesc.Transition.StateBefore = D3D12_RESOURCE_STATE_PRESENT;
 			BarrierDesc.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
@@ -95,14 +94,16 @@ class D3DDeviceManager
 
 		UINT GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE type) { return mDevice->GetDescriptorHandleIncrementSize(type); }
 		ID3D12DescriptorHeap* GetDescriptorHeapHandle(int Index) { return mDescriptorHeaps[Index]; };
-		void Present();
+		void Present() { mSwapChain->Present(); }
 
-		D3D12_CPU_DESCRIPTOR_HANDLE IncrementAndReturnRTVHeaps();
+		D3D12_CPU_DESCRIPTOR_HANDLE IncrementAndReturnRTVHeaps() { return mSwapChain->GetCurrentRtv(this); };
 		ID3D12DescriptorHeap* GetDepthStencilBufferHeap() { return mDsvHeaps.Get(); }
 
 		std::vector<D3D12_INPUT_ELEMENT_DESC> CreateInputLayout(ShaderCompilationOutput& shaderCompData);
 
-		UINT GetCurrentFrameIndex() { return  mSwapChain->GetCurrentBackBufferIndex(); }
+		ID3D12Device* GetDevice() { return mDevice.Get(); }
+
+		UINT32 GetCurrentFrameIndex() { return mSwapChain->GetCurrentBackBufferIndex(); };
 
 	private:
 		// only want to call this from the DeviceManager itself
@@ -110,16 +111,12 @@ class D3DDeviceManager
 		std::unordered_map<UINT,DescriptorHeapResource> mTextures;
 
 		ComPtr<ID3D12Device> mDevice;
-		IDXGISwapChain3* mSwapChain;
 		ComPtr<ID3D12CommandQueue> mCommandQueue;
 
 		ComPtr<ID3D12DescriptorHeap> mDsvHeaps;
 		ComPtr<ID3D12Resource> mDepthBuffer;
 
 		std::vector<ID3D12DescriptorHeap*> mDescriptorHeaps;
-
-		ComPtr<ID3D12DescriptorHeap> rtvHeaps = nullptr;
-		std::vector<ComPtr<ID3D12Resource>> backBuffers;
 		
 		XMMATRIX matIdent;
 
@@ -127,4 +124,5 @@ class D3DDeviceManager
 
 		std::wofstream* mLogFilePtr = nullptr;
 		DuckyCompiler* mCompiler = nullptr;
+		DuckySwapChain* mSwapChain = nullptr;
 };

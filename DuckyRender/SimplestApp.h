@@ -3,13 +3,8 @@
 #include "D3DDeviceManager.h"
 #include "DuckyMesh.h"
 
-struct FrameContext
-{
-	ComPtr<ID3D12CommandAllocator> alloc;
-	UINT64 fenceValue = 0;
-	DescriptorHeapResource TransformUpdateBuffer;
-	unsigned char* mMappedMatrixData = nullptr;
-};
+class DuckyGraphicsContext;
+
 
 class SimplestApp : public DuckyApp
 {
@@ -46,5 +41,5 @@ private:
 
 	int mCbvSrvUavHandle = -1;
 
-	FrameContext mFrameInfo[2];
+	DuckyGraphicsContext* mDuckyContext = nullptr;
 };
