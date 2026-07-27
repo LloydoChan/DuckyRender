@@ -3,21 +3,24 @@
 #include <DirectXMath.h>
 #include <vector>
 #include <fstream>
+#include <wrl/client.h>
+
+using Microsoft::WRL::ComPtr;
 
 using namespace DirectX;
 
 class D3DDeviceManager;
+struct ID3D12Resource;
 
-struct VBPair
+struct GpuBuffer
 {
-	ID3D12Resource* vertBuffPointer = nullptr;
-	D3D12_VERTEX_BUFFER_VIEW vbView = {};
-};
+	ComPtr<ID3D12Resource> resource;
 
-struct IBPair
-{
-	ID3D12Resource* idxBuffPointer = nullptr;
-	D3D12_INDEX_BUFFER_VIEW ibView = {};
+	uint64_t size = 0;
+	uint32_t stride = 0;
+
+	D3D12_RESOURCE_STATES state =
+		D3D12_RESOURCE_STATE_COMMON;
 };
 
 struct BufferInfo
@@ -27,18 +30,15 @@ struct BufferInfo
 	void* Data = nullptr;
 };
 
-class DuckyMesh;
+class DuckyMeshData;
 
-
-class DuckyMesh
+class DuckyMeshData
 {
 	public:
-		DuckyMesh() {};
-		bool Init(D3DDeviceManager* DeviceManager, std::vector<BufferInfo>& VertexInfos, std::vector<BufferInfo>& IndexInfos, XMMATRIX& matrices, std::vector<size_t>& TextureHashes);
+		DuckyMeshData() {};
+		bool Init(D3DDeviceManager* DeviceManager, std::vector<BufferInfo>& VertexInfos, std::vector<BufferInfo>& IndexInfos, std::vector<size_t>& TextureHashes);
 		bool Init(D3DDeviceManager* DeviceManager, std::ifstream& InFile, UINT DescriptorHeapHandle);
 		void DrawMesh(ID3D12GraphicsCommandList* CmdList, D3DDeviceManager* DeviceManager);
-
-		XMMATRIX mTransform = XMMatrixIdentity();
 
 	protected:
 
@@ -51,19 +51,28 @@ class DuckyMesh
 									BufferInfo& IndexBufferInfo,
 									size_t TextureHash);
 			private:
-				VBPair mVertices;
-				IBPair mIndices;
+				GpuBuffer mVertices;
+				GpuBuffer mIndices;
+
+				D3D12_VERTEX_BUFFER_VIEW vertexView{};
+				D3D12_INDEX_BUFFER_VIEW indexView{};
+
+				UINT mHashedTextureName = 0;
 				UINT mNumVertices = 0;
 				UINT mNumIndices = 0;
 
-				UINT mHashedTextureName = 0;
-
 				bool InitBuffer(D3DDeviceManager* DeviceManager, BufferInfo& BufferInfo, ID3D12Resource** Data);
 
-				friend DuckyMesh;
+				friend DuckyMeshData;
 		};
 
 		std::vector<DuckyPrimitive> mPrimitives;
 
 		void AddPrimitive(DuckyPrimitive&& NewPrimitive) { mPrimitives.emplace_back(NewPrimitive); }
+};
+
+struct DuckyMeshInstance
+{
+	XMMATRIX mTransform = XMMatrixIdentity();
+	DuckyMeshData* mMeshData;
 };

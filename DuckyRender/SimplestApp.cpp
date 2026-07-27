@@ -30,7 +30,7 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 
 	for (int i = 0; i < numMeshes; i++)
 	{
-		DuckyMesh nextMesh;
+		DuckyMeshData nextMesh;
 		nextMesh.Init(mDeviceManager, DuckyFile, mCbvSrvUavHandle);
 		mMeshes.emplace_back(std::move(nextMesh));
 	}
@@ -73,7 +73,7 @@ void SimplestApp::HandleInput(UINT msg, WPARAM wParam, LPARAM lParam)
 	UINT keyValue = static_cast<UINT>(wParam);
 	if (keyValue >= 256) return;
 
-	if ((msg == WM_KEYDOWN || msg == WM_SYSKEYDOWN) && msg == VK_ESCAPE)
+	if ((msg == WM_KEYDOWN || msg == WM_SYSKEYDOWN) && wParam == VK_ESCAPE)
 	{
 		PostQuitMessage(0);
 		return;
@@ -120,6 +120,11 @@ void SimplestApp::HandleInput(UINT msg, WPARAM wParam, LPARAM lParam)
 			mMouseDeltaX += rawInput->data.mouse.lLastX;
 			mMouseDeltaY += rawInput->data.mouse.lLastY;
 		}
+	}
+
+	if (msg == WM_SIZE)
+	{
+		// handle this later
 	}
 }
 
@@ -221,18 +226,23 @@ void SimplestApp::AppMainLoop()
 	
 	auto event = CreateEvent(nullptr, false, false, nullptr);
 
-	while (true)
+	bool bRunning = true;
+
+	while (bRunning)
 	{
 		while (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE))
 		{
 			if (msg.message == WM_QUIT)
 			{
+				bRunning = false;
 				break;
 			}
 
 			TranslateMessage(&msg);
 			DispatchMessage(&msg);
 		}
+
+		if (!bRunning) break;
 
 		UINT currentFrame = mDeviceManager->GetCurrentFrameIndex();
 

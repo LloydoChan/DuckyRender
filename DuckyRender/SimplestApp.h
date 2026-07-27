@@ -21,12 +21,6 @@ private:
 	LONG mMouseDeltaX = 0;
 	LONG mMouseDeltaY = 0;
 
-	VBPair mTrianglePair;
-	IBPair mTriangleIndexPair;
-
-	DuckyMesh mTriangleMesh;
-
-	
 	ID3D12CommandQueue* mQueue;
 
 	ViewportScissor mWholeScreenViewPortScissor;
@@ -37,7 +31,7 @@ private:
 	DescriptorHeapResource mTextureBuffer;
 	PipelineAndRootSig mPipeline;
 
-	std::vector<DuckyMesh> mMeshes;
+	std::vector<DuckyMeshData> mMeshes;
 
 	int mCbvSrvUavHandle = -1;
 
