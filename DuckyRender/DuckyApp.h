@@ -26,4 +26,6 @@ protected:
 
 	UINT mClientWidth  = 0;
 	UINT mClientHeight = 0;
+
+	bool mMinimized = false;
 };

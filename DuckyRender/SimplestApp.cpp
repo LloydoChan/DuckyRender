@@ -107,6 +107,12 @@ LRESULT SimplestApp::WindowProcedure(HWND hwnd, UINT msg, WPARAM wparam, LPARAM 
 
 	if (msg == WM_SIZE)
 	{
+		if (wparam == SIZE_MINIMIZED)
+		{
+			mMinimized = true;
+			return 0;
+		}
+
 		const UINT width = static_cast<UINT>(LOWORD(lparam));
 
 		const UINT height = static_cast<UINT>(HIWORD(lparam));
@@ -290,6 +296,12 @@ void SimplestApp::AppMainLoop()
 		}
 
 		if (!bRunning) break;
+
+		if (mMinimized)
+		{
+			WaitMessage();
+			continue;
+		}
 
 		UINT currentFrame = mDeviceManager->GetCurrentFrameIndex();
 
