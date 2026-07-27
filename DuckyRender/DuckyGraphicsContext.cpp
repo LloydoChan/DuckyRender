@@ -13,6 +13,9 @@ bool DuckyGraphicsContext::Init(D3DDeviceManager* DeviceManager, std::wofstream*
 	HRESULT hResult = DeviceManager->GetDevice()->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, mFrames[0].allocator.Get(), nullptr, IID_PPV_ARGS(&mCommandList));
 	if (FAILED(hResult) && !OutputErrorFromHResult(hResult, "problem creating command list: ", *LogFile)) return false;
 	
+	hResult = mCommandList->Close();
+	if (FAILED(hResult) && !OutputErrorFromHResult(hResult, "couldn't close on new cmd list: ", *LogFile)) return false;
+
 	return true;
 }
 
@@ -40,8 +43,8 @@ bool DuckyGraphicsContext::BeginFrame(UINT CurrentFrame, ID3D12Fence* Fence, ID3
 bool DuckyGraphicsContext::EndFrame(UINT CurrentFrame, ID3D12CommandQueue* Queue, ID3D12Fence* Fence)
 {
 	UINT64 submittedFenceVal = ++mGlobalFenceValue;
-	HRESULT hr = Queue->Signal(Fence, submittedFenceVal);
-	if (hr != S_OK) return false;
+	HRESULT hResult = Queue->Signal(Fence, submittedFenceVal);
+	if (FAILED(hResult)) return false;
 	FrameContext& context = mFrames[CurrentFrame];
 	context.fenceValue = submittedFenceVal;
 	return true;
@@ -51,15 +54,15 @@ bool DuckyGraphicsContext::WaitForGpu(ID3D12CommandQueue* queue, ID3D12Fence* fe
 {
 	const UINT64 fenceValue = ++mGlobalFenceValue;
 
-	HRESULT hr = queue->Signal(fence, fenceValue);
+	HRESULT hResult = queue->Signal(fence, fenceValue);
 
-	if (hr != S_OK) return false;
+	if (FAILED(hResult)) return false;
 
 	if (fence->GetCompletedValue() < fenceValue)
 	{
-		hr = fence->SetEventOnCompletion(fenceValue, event);
+		hResult = fence->SetEventOnCompletion(fenceValue, event);
 
-		if (hr != S_OK) return false;
+		if (FAILED(hResult)) return false;
 
 		if (WaitForSingleObject(event, INFINITE) != WAIT_OBJECT_0) return false;
 	}

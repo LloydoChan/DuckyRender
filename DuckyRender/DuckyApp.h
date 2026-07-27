@@ -8,6 +8,9 @@ class D3DDeviceManager;
 class DuckyApp
 {
 public:
+
+	virtual ~DuckyApp();
+
 	virtual bool Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* WindowName);
 	static LRESULT CALLBACK StaticWindowProcedure(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam);
 	virtual LRESULT WindowProcedure(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) = 0;
@@ -15,7 +18,7 @@ public:
 	virtual void AppMainLoop() = 0;
 protected:
 	
-	D3DDeviceManager* mDeviceManager = nullptr;
+	std::unique_ptr<D3DDeviceManager> mDeviceManager;
 
 	HINSTANCE mHInstance = nullptr;
 	LPCWSTR mLpszClassName = nullptr;

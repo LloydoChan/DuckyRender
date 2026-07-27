@@ -4,6 +4,7 @@
 
 #pragma comment(lib, "WindowsApp.lib")
 
+DuckyApp::~DuckyApp() = default;
 
 bool DuckyApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* WindowName)
 {
@@ -61,7 +62,7 @@ bool DuckyApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* WindowNa
 		throw std::runtime_error("Failed to register raw mouse input.");
 	}
 
-	mDeviceManager = new D3DDeviceManager();
+	mDeviceManager = std::make_unique<D3DDeviceManager>();
 	if (!mDeviceManager->Init(hwnd, WindowWidth, WindowHeight, &mLogFile)) return false;
 
 	ShowWindow(hwnd, SW_SHOW);

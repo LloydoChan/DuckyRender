@@ -58,10 +58,10 @@ class DuckyMeshData
 				D3D12_INDEX_BUFFER_VIEW indexView{};
 
 				size_t mHashedTextureName = 0;
-				size_t mNumVertices = 0;
-				size_t mNumIndices = 0;
+				UINT mNumVertices = 0;
+				UINT mNumIndices = 0;
 
-				bool InitBuffer(D3DDeviceManager* DeviceManager, BufferInfo& BufferInfo, ID3D12Resource** Data);
+				bool InitBuffer(D3DDeviceManager* DeviceManager, BufferInfo& BufferInfo, ComPtr<ID3D12Resource>& Data);
 
 				friend DuckyMeshData;
 		};
@@ -74,5 +74,5 @@ class DuckyMeshData
 struct DuckyMeshInstance
 {
 	XMMATRIX mTransform = XMMatrixIdentity();
-	DuckyMeshData* mMeshData = nullptr;
+	int mMeshDataIndex;
 };

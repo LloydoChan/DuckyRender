@@ -12,7 +12,7 @@ cbuffer cbuff0 : register(b0)
 Output main( float4 pos : POSITION, float2 uv : TEXCOORD) 
 {
     Output result;
-    result.svpos = pos; //mul(pos, mat);
+    result.svpos = mul(pos, mat);
     result.uv = uv;
 	return result;
 }

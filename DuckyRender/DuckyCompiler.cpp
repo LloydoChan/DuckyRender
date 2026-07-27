@@ -49,9 +49,10 @@ bool DuckyCompiler::CompileShaderDXC(LPCWSTR ShaderFilePath, LPCWSTR entryPoint,
 	arguments.push_back(profile);
 
 	HRESULT hResult = mCompiler->Compile(&dxcBuffer, arguments.data(), (UINT32)arguments.size(), mIncludeHandler.Get(), IID_PPV_ARGS(&newOutput.result));
+	if (FAILED(hResult) && !OutputErrorFromHResult(hResult, "couldn't compile shader: ", *mLogFilePtr)) return false;
+
 	HRESULT compileStatus;
 	hResult = newOutput.result->GetStatus(&compileStatus);
-
 	if (FAILED(hResult) && !OutputErrorFromHResult(hResult, "couldn't obtain shader compilation status: ", *mLogFilePtr)) return false;
 
 	if (FAILED(compileStatus))
@@ -62,8 +63,9 @@ bool DuckyCompiler::CompileShaderDXC(LPCWSTR ShaderFilePath, LPCWSTR entryPoint,
 		if (errors && errors->GetStringLength() > 0)
 		{
 			std::cerr << errors->GetStringPointer();
-			return false;
 		}
+
+		return false;
 	}
 		
 	hResult = newOutput.result->GetOutput(DXC_OUT_REFLECTION, IID_PPV_ARGS(&newOutput.reflectionBlob), nullptr);
@@ -78,6 +80,6 @@ bool DuckyCompiler::CompileShaderDXC(LPCWSTR ShaderFilePath, LPCWSTR entryPoint,
 bool DuckyCompiler::CreateReflectionData(DxcBuffer* ReflectionBlob, ID3D12ShaderReflection** ReflectionDataResult)
 {
 	HRESULT hResult = mUtils->CreateReflection(ReflectionBlob, IID_PPV_ARGS(ReflectionDataResult));
-	if (FAILED(hResult) && OutputErrorFromHResult(hResult, "couldn't get shader reflection info", *mLogFilePtr)) return false;
+	if (FAILED(hResult) && !OutputErrorFromHResult(hResult, "couldn't get shader reflection info", *mLogFilePtr)) return false;
 	return true;
 }

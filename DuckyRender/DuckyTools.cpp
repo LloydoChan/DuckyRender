@@ -1,6 +1,6 @@
 #include "DuckyTools.h"
 #include <winrt/base.h>
-#include <fstream>
+
 
 bool OutputErrorFromHResult(HRESULT hResult, const char* message, std::wofstream& logFile)
 {
@@ -13,4 +13,18 @@ bool OutputErrorFromHResult(HRESULT hResult, const char* message, std::wofstream
 	}
 
 	return true;
+}
+
+void DebugMatrix(XMMATRIX& nextTransform, std::wofstream& logFile)
+{
+	XMFLOAT4X4 debugMatrix;
+	XMStoreFloat4x4(
+		&debugMatrix,
+		nextTransform);
+
+	logFile
+		<< std::setw(10) << debugMatrix._41 << ", "
+		<< std::setw(10) << debugMatrix._42 << ", "
+		<< std::setw(10) << debugMatrix._43 << ", "
+		<< std::setw(10) << debugMatrix._44 << std::endl;
 }

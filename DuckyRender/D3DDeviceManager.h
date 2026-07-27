@@ -1,5 +1,4 @@
 #pragma once
-
 #include <d3d12.h>
 #include <fstream>
 #include <dxgi1_6.h>
@@ -14,6 +13,7 @@
 
 using namespace DirectX;
 using Microsoft::WRL::ComPtr;
+const size_t INVALID_HANDLE = (std::numeric_limits<size_t>::max)();
 
 struct RootSignatureDesc
 {
@@ -69,13 +69,12 @@ class D3DDeviceManager
 	public:
 		bool Init(HWND hWnd, UINT WindowWidth, UINT WindowHeight, std::wofstream* LogFile);
 
-		ID3D12Fence* CreateFence(UINT64 FenceVal);
-		ID3D12GraphicsCommandList* CreateAndReturnCommandList(ID3D12CommandAllocator* Allocator);
+		ComPtr<ID3D12Fence> CreateFence(UINT64 FenceVal);
 		ComPtr<ID3D12CommandAllocator> CreateCommandAllocator();
 
 		int CreateDescriptorHeap(D3D12_DESCRIPTOR_HEAP_FLAGS flags, D3D12_DESCRIPTOR_HEAP_TYPE type, UINT numDescriptors = MAX_NUM_DESCRIPTORS_PER_HEAP);
 
-		ID3D12Resource* CreateBuffer(size_t bufferSize);
+		ComPtr<ID3D12Resource> CreateBuffer(size_t bufferSize);
 		DescriptorHeapResource CreateConstantBuffer(size_t bufferSize, int DescriptorHeapHandle);
 		PipelineAndRootSig CreatePSO(LPCWSTR vertexShader, LPCWSTR vertexEntry, LPCWSTR pixelShader, LPCWSTR pixelEntry, RootSignatureDesc& NewRootSigDesc);
 		std::vector<D3D12_INPUT_ELEMENT_DESC> CreateInputLayout(ShaderCompilationOutput& shaderCompData);
@@ -86,7 +85,7 @@ class D3DDeviceManager
 		DescriptorHeapResource* GetTexture(size_t HashedInput);
 		ID3D12DescriptorHeap* GetDepthStencilBufferHeap() { return mDsvHeaps.Get(); }
 		UINT GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE type) { return mDevice->GetDescriptorHandleIncrementSize(type); }
-		ID3D12DescriptorHeap* GetDescriptorHeapHandle(int Index) { return mDescriptorHeaps[Index]; };
+		ID3D12DescriptorHeap* GetDescriptorHeapHandle(int Index) { return mDescriptorHeaps[Index].Get(); };
 		ID3D12Device* GetDevice() { return mDevice.Get(); }
 		UINT32 GetCurrentFrameIndex() { return mSwapChain->GetCurrentBackBufferIndex(); };
 		bool CreateDepthBuffer(UINT width, UINT height);
@@ -126,13 +125,13 @@ class D3DDeviceManager
 		ComPtr<ID3D12DescriptorHeap> mDsvHeaps;
 		ComPtr<ID3D12Resource> mDepthBuffer;
 
-		std::vector<ID3D12DescriptorHeap*> mDescriptorHeaps;
+		std::vector<ComPtr<ID3D12DescriptorHeap>> mDescriptorHeaps;
 		
 		XMMATRIX matIdent;
 
 		UINT mDescriptorHandleIndex = 0;
 
 		std::wofstream* mLogFilePtr = nullptr;
-		DuckyCompiler* mCompiler = nullptr;
-		DuckySwapChain* mSwapChain = nullptr;
+		std::unique_ptr<DuckyCompiler> mCompiler;
+		std::unique_ptr<DuckySwapChain> mSwapChain;
 };

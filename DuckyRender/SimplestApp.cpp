@@ -1,8 +1,8 @@
 #include "SimplestApp.h"
 #include "D3DDeviceManager.h"
-#include "DuckyGraphicsContext.h"
 #include <vector>
 #include <errno.h>
+#include "DuckyTools.h"
 
 #include <chrono>
 using Clock = std::chrono::steady_clock;
@@ -25,18 +25,31 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 		return false;
 	}
 
+	//first, get the instance data
+	size_t numInstances = 0;
+	DuckyFile.read((char*)&numInstances, sizeof(size_t));
+	
+	for (int i = 0; i < numInstances; i++)
+	{
+		DuckyMeshInstance meshInstance;
+		DuckyFile.read((char*)&meshInstance.mMeshDataIndex, sizeof(int));
+		DuckyFile.read((char*)&meshInstance.mTransform, sizeof(XMMATRIX));
+		DebugMatrix(meshInstance.mTransform, mLogFile);
+		mInstances.emplace_back(std::move(meshInstance));
+	}
+
 	size_t numMeshes = 0;
 	DuckyFile.read((char*)&numMeshes, sizeof(size_t));
-
+	std::streampos p = 0;
 	for (int i = 0; i < numMeshes; i++)
 	{
 		DuckyMeshData nextMesh;
-		nextMesh.Init(mDeviceManager, DuckyFile, mCbvSrvUavHandle);
+		if(!nextMesh.Init(mDeviceManager.get(), DuckyFile, mCbvSrvUavHandle)) return false;
 		mMeshes.emplace_back(std::move(nextMesh));
 	}
 
-	mDuckyContext = new DuckyGraphicsContext;
-	mDuckyContext->Init(mDeviceManager, &mLogFile);
+	mDuckyContext = std::make_unique<DuckyGraphicsContext>();
+	if(!mDuckyContext->Init(mDeviceManager.get(), &mLogFile)) return false;
 
 	RootSignatureDesc DrawSig = {};
 
@@ -94,6 +107,15 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 
 	if (mFenceEvent == nullptr) return false;
 
+	for (int i = 0; i < 2; i++)
+	{
+		mMatrixBuffer[i] = mDeviceManager->CreateConstantBuffer(sizeof(XMMATRIX), mCbvSrvUavHandle);
+		if (mMatrixBuffer[i].buffer == nullptr) return false;
+		HRESULT hResult = mMatrixBuffer[i].buffer->Map(0, nullptr, reinterpret_cast<void**>(&mMappedTransform[i]));
+
+		if (FAILED(hResult))return false;
+	}
+	
 	return true;
 }
 
@@ -121,7 +143,7 @@ LRESULT SimplestApp::WindowProcedure(HWND hwnd, UINT msg, WPARAM wparam, LPARAM 
 
 		if (mDuckyContext != nullptr &&  mDeviceManager != nullptr && width > 0 && height > 0)
 		{
-			Resize(width, height);
+			if(!Resize(width, height)) PostQuitMessage(1);
 		}
 
 		return 0;
@@ -134,25 +156,6 @@ LRESULT SimplestApp::WindowProcedure(HWND hwnd, UINT msg, WPARAM wparam, LPARAM 
 
 void SimplestApp::HandleInput(UINT msg, WPARAM wParam, LPARAM lParam)
 {
-	UINT keyValue = static_cast<UINT>(wParam);
-	if (keyValue >= 256) return;
-
-	if ((msg == WM_KEYDOWN || msg == WM_SYSKEYDOWN) && wParam == VK_ESCAPE)
-	{
-		PostQuitMessage(0);
-		return;
-	}
-
-	if (msg == WM_KEYDOWN || msg == WM_SYSKEYDOWN)
-	{
-		mKeys[keyValue] = true;
-	}
-
-	if (msg == WM_KEYUP || msg == WM_SYSKEYUP)
-	{
-		mKeys[keyValue] = false;
-	}
-
 	if (msg == WM_INPUT)
 	{
 		UINT dataSize = 0;
@@ -183,6 +186,28 @@ void SimplestApp::HandleInput(UINT msg, WPARAM wParam, LPARAM lParam)
 		{
 			mMouseDeltaX += rawInput->data.mouse.lLastX;
 			mMouseDeltaY += rawInput->data.mouse.lLastY;
+		}
+	}
+
+	if (msg == WM_KEYDOWN || msg == WM_SYSKEYDOWN  || msg == WM_KEYUP || msg == WM_SYSKEYUP)
+	{
+		UINT keyValue = static_cast<UINT>(wParam);
+		if (keyValue >= 256) return;
+
+		if ((msg == WM_KEYDOWN || msg == WM_SYSKEYDOWN) && wParam == VK_ESCAPE)
+		{
+			PostQuitMessage(0);
+			return;
+		}
+
+		if (msg == WM_KEYUP || msg == WM_SYSKEYUP)
+		{
+			mKeys[keyValue] = false;
+		}
+
+		if (msg == WM_KEYDOWN || msg == WM_SYSKEYDOWN)
+		{
+			mKeys[keyValue] = true;
 		}
 	}
 }
@@ -263,8 +288,8 @@ void SimplestApp::AppMainLoop()
 
 	float angle = 0.f;
 
-	XMVECTOR eye = XMVectorSet(0.f, 0.f, -3.f, 1.f);
-	XMVECTOR at = XMVectorSet(0.f, 0.f, -2.f, 1.f);
+	XMVECTOR eye = XMVectorSet(0.f, 50.f, -50.f, 1.f);
+	XMVECTOR at = XMVectorSet(0.f, 0.f, 0.f, 1.f);
 	const XMVECTOR up = XMVectorSet(0.f, 1.f, 0.f, 0.f);
 
 	auto previousTime = Clock::now();
@@ -278,9 +303,6 @@ void SimplestApp::AppMainLoop()
 
 	if (list == nullptr) return;
 
-	if (FAILED(list->Close())) return;
-
-	
 	bool bRunning = true;
 
 	while (bRunning)
@@ -329,7 +351,7 @@ void SimplestApp::AppMainLoop()
 
 		float clearColor[] = { 0.f, 0.f, 0.f, 1.f };
 
-		if (!mDuckyContext->BeginFrame(currentFrame, mFence, mPipeline.pipeLineState.Get(), mFenceEvent, &mLogFile)) break;
+		if (!mDuckyContext->BeginFrame(currentFrame, mFence.Get(), mPipeline.pipeLineState.Get(), mFenceEvent, &mLogFile)) break;
 		D3D12_RESOURCE_BARRIER barrier = mDeviceManager->GetBarrier();
 		list->ResourceBarrier(1, &barrier);
 		list->SetPipelineState(mPipeline.pipeLineState.Get());
@@ -347,33 +369,43 @@ void SimplestApp::AppMainLoop()
 		list->SetGraphicsRootSignature(mPipeline.rootSig.Get());
 		list->SetDescriptorHeaps(1, &heapPtr);
 
-		XMMATRIX world = XMMatrixIdentity();
-		XMMATRIX wvp = XMMatrixTranspose(world * view * projection);
-		//memcpy(frameInfo.mMappedMatrixData, &wvp, sizeof(XMFLOAT4X4));
-
-		//list->SetGraphicsRootDescriptorTable(0, frameInfo.TransformUpdateBuffer.descHandle);
-
-		for (auto& mesh : mMeshes)
+		list->SetGraphicsRootDescriptorTable(0, mMatrixBuffer[currentFrame].descHandle);
+		size_t numMeshes = mMeshes.size();
+		static int currentInstance = 0;
+		static int frameCnt = 0;
+		auto instance = mInstances[currentInstance];
+		for (auto& instance : mInstances)
 		{
-			mesh.DrawMesh(list, mDeviceManager);
+			if (instance.mMeshDataIndex == 1 && instance.mMeshDataIndex < numMeshes)
+			{
+				XMMATRIX world = instance.mTransform;
+				XMMATRIX wvp = world * view * projection;
+				XMStoreFloat4x4(mMappedTransform[currentFrame], XMMatrixTranspose(wvp));
+				mMeshes[instance.mMeshDataIndex].DrawMesh(list, mDeviceManager.get());
+			}
 		}
 
 		barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
 		barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
 		list->ResourceBarrier(1, &barrier);
-		HRESULT hr = list->Close();
-		if (FAILED(hr)) break;
+		HRESULT hResult = list->Close();
+		if (FAILED(hResult)) break;
 
 		ID3D12CommandList* cmdLists[] = {list};
 		mQueue->ExecuteCommandLists(1, cmdLists);
 		mDeviceManager->Present();
 
-		if (!mDuckyContext->EndFrame(currentFrame, mQueue, mFence)) break;
+		if (!mDuckyContext->EndFrame(currentFrame, mQueue, mFence.Get())) break;
 		
 	}
 
-	CloseHandle(mFenceEvent);
+	if (mDuckyContext && mQueue && mFence && mFenceEvent)
+	{
+		mDuckyContext->WaitForGpu(mQueue, mFence.Get(), mFenceEvent);
+	}
 
+	CloseHandle(mFenceEvent);
+	mFenceEvent = nullptr;
 	UnregisterClass(mLpszClassName, mHInstance);
 }
 
@@ -381,7 +413,7 @@ bool SimplestApp::Resize(UINT WindowWidth, UINT WindowHeight)
 {
 	if (WindowWidth == 0 || WindowHeight == 0) return true;
 	
-	if (!mDuckyContext->WaitForGpu(mQueue, mFence, mFenceEvent)) return false;
+	if (!mDuckyContext->WaitForGpu(mQueue, mFence.Get(), mFenceEvent)) return false;
 
 	if (!mDeviceManager->Resize(WindowWidth,WindowHeight)) return false;
 

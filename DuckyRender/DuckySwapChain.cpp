@@ -24,7 +24,6 @@ bool DuckySwapChain::Init(D3DDeviceManager* DeviceManager, IDXGIFactory6* factor
 
 	HRESULT hResult = factory->CreateSwapChainForHwnd(DeviceManager->GetCommandQueue(), hWnd, &swapChainDesc, nullptr, nullptr, swapChain1.ReleaseAndGetAddressOf());
 	if (FAILED(hResult) && !OutputErrorFromHResult(hResult, "problem creating swapchain: ", *LogFile)) return false;
-	factory->Release();
 
 	hResult = swapChain1.As(&mSwapChain);
 	if (FAILED(hResult) && !OutputErrorFromHResult(hResult, "problem exchanging swap chain pointers ", *LogFile)) return false;
@@ -81,9 +80,9 @@ bool DuckySwapChain::Resize(D3DDeviceManager* DeviceManager, UINT32 width, UINT3
 
     mBackBuffers.clear();
 
-    HRESULT hr = mSwapChain->ResizeBuffers(bufferCount, width, height, format, flags);
+    HRESULT hResult = mSwapChain->ResizeBuffers(bufferCount, width, height, format, flags);
 
-    if (hr != S_OK && !OutputErrorFromHResult(hr, "couldn't resize swap-chain buffers: ", *LogFile)) return false;
+    if (FAILED(hResult) && !OutputErrorFromHResult(hResult, "couldn't resize swap-chain buffers: ", *LogFile)) return false;
 
     ID3D12Device* device = DeviceManager->GetDevice();
 
@@ -95,8 +94,8 @@ bool DuckySwapChain::Resize(D3DDeviceManager* DeviceManager, UINT32 width, UINT3
 
     for (UINT index = 0; index < bufferCount; ++index)
     {
-        hr = mSwapChain->GetBuffer(index, IID_PPV_ARGS(mBackBuffers[index].ReleaseAndGetAddressOf()));
-        if (hr != S_OK && !OutputErrorFromHResult(hr, "couldn't retrieve resized back buffer: ", *LogFile))return false;
+		hResult = mSwapChain->GetBuffer(index, IID_PPV_ARGS(mBackBuffers[index].ReleaseAndGetAddressOf()));
+        if (FAILED(hResult) && !OutputErrorFromHResult(hResult, "couldn't retrieve resized back buffer: ", *LogFile))return false;
         
         device->CreateRenderTargetView(mBackBuffers[index].Get(), nullptr, rtvHandle);
 		rtvHandle.ptr += rtvIncrement;

@@ -1,4 +1,5 @@
 #include <iostream>
+#include <iomanip>
 #include <fstream>
 #include <sstream>
 #include <DirectXMath.h>
@@ -19,6 +20,20 @@ struct PrimitiveOutput
 };
 
 size_t totalMeshes = 0;
+
+void DebugMatrix(XMMATRIX& nextTransform)
+{
+	XMFLOAT4X4 debugMatrix;
+	XMStoreFloat4x4(
+		&debugMatrix,
+		nextTransform);
+
+	std::cout
+		<< std::setw(10) << debugMatrix._41 << ", "
+		<< std::setw(10) << debugMatrix._42 << ", "
+		<< std::setw(10) << debugMatrix._43 << ", "
+		<< std::setw(10) << debugMatrix._44 << std::endl;
+}
 
 void FindPrimitiveDataPositionUVs(const tinygltf::Primitive& Primitive, const tinygltf::Model& Model, stringstream& DataToFlushOut)
 {
@@ -48,24 +63,72 @@ void FindPrimitiveDataPositionUVs(const tinygltf::Primitive& Primitive, const ti
 	size_t pos = DataToFlushOut.tellp();
 }
 
-void WriteOutSceneData(const tinygltf::Node& Node, const tinygltf::Model& Model, stringstream& DataToFlushOut, string NewString, XMMATRIX transform)
+void CountMeshNodes(const tinygltf::Node& Node, const tinygltf::Model& Model, size_t& numMeshNodes)
 {
-	// show recursion in output
-	cout << NewString << endl;
+	if (Node.mesh != -1) numMeshNodes++;
 
-	int meshIndex = Node.mesh;
-	if (meshIndex != -1)
+	for (auto childNode : Node.children)
 	{
-		totalMeshes++;
-		const tinygltf::Mesh nextMesh = Model.meshes[meshIndex];
+		const tinygltf::Node& nextNode = Model.nodes[childNode];
+		CountMeshNodes(nextNode, Model, numMeshNodes);
+	}
+}
 
-		//write out num primitives
-		size_t numPrims = nextMesh.primitives.size();
-		DataToFlushOut.write((const char*)&numPrims, sizeof(size_t));
-		//write out transform data first
-		DataToFlushOut.write((const char*)&transform, sizeof(float) * 16);
+void WriteOutNodeData(const tinygltf::Node& Node, const tinygltf::Model& Model, stringstream& DataToFlushOut, XMMATRIX transform)
+{
+	XMMATRIX nextTransform = XMMatrixIdentity();
+	if (Node.matrix.size() != 0)
+	{
+		unsigned int i = 0;
+		for (unsigned int i = 0; i < 16; i+=4)
+		{
+			XMVECTORF32 nextVector{ static_cast<float>(Node.matrix[i]), 
+									 static_cast<float>(Node.matrix[i + 1]), 
+									 static_cast<float>(Node.matrix[i + 2]), 
+									 static_cast<float>(Node.matrix[i + 3])};
 
-		for (const auto& primitive : nextMesh.primitives)
+			nextTransform.r[i/4] = nextVector;
+		}
+
+		transform = nextTransform * transform;
+	}
+	else if (Node.translation.size() > 0 || Node.scale.size() > 0 || Node.rotation.size() > 0)
+	{
+		cout << "huh" << endl;
+	}
+
+	streampos p = 0;
+	if (Node.mesh != -1)
+	{
+		XMFLOAT4X4 storedWorld;
+		XMStoreFloat4x4(&storedWorld,transform);
+		XMMATRIX transposed = XMMatrixTranspose(transform);
+		DebugMatrix(transposed);
+		tinygltf::Mesh mesh = Model.meshes[Node.mesh];
+		int nodeMesh = Node.mesh;
+		DataToFlushOut.write((char*)&nodeMesh, sizeof(int));
+		DataToFlushOut.write((char*)&storedWorld, sizeof(XMFLOAT4X4));
+	}
+
+	for (auto childNode : Node.children)
+	{
+		const tinygltf::Node& nextNode = Model.nodes[childNode];
+		WriteOutNodeData(nextNode, Model, DataToFlushOut, transform);
+	}
+}
+
+void WriteOutMeshData(const tinygltf::Node& Node, const tinygltf::Model& Model, stringstream& DataToFlushOut)
+{
+	// first write out Node info, get transforms and mesh indices of all nodes...
+	//top node
+
+	// now write out Mesh Data
+	for (auto& mesh : Model.meshes)
+	{
+		size_t numPrims = mesh.primitives.size();
+		DataToFlushOut.write((char*)&numPrims, sizeof(size_t));
+
+		for (const auto& primitive : mesh.primitives)
 		{
 			// get texture info for this primitive
 			const tinygltf::Material primMaterial = Model.materials[primitive.material];
@@ -78,7 +141,7 @@ void WriteOutSceneData(const tinygltf::Node& Node, const tinygltf::Model& Model,
 
 			size_t pos_t = DataToFlushOut.tellp();
 			FindPrimitiveDataPositionUVs(primitive, Model, DataToFlushOut);
-		
+			
 			pos_t = DataToFlushOut.tellp();
 			if (primitive.indices >= 0)
 			{
@@ -102,30 +165,6 @@ void WriteOutSceneData(const tinygltf::Node& Node, const tinygltf::Model& Model,
 
 			}
 		}
-		
-	}
-
-	for (const auto& childNode : Node.children)
-	{
-		const tinygltf::Node nextNode = Model.nodes[childNode];
-		XMMATRIX newMat = transform;
-		if (nextNode.matrix.size() > 0)
-		{
-			XMFLOAT4X4 temp;
-
-			float* dst = &temp._11;
-
-			for (size_t i = 0; i < 16; ++i)
-			{
-				dst[i] = static_cast<float>(nextNode.matrix[i]);
-			}
-
-			XMMATRIX mat = XMLoadFloat4x4(&temp);
-			//mat = XMMatrixTranspose(mat);
-			newMat = transform * mat;
-		}
-
-		WriteOutSceneData(nextNode, Model, DataToFlushOut, NewString + "---", newMat);
 	}
 }
 
@@ -148,9 +187,18 @@ int main()
 	stringstream dataToFlushOut;
 
 	const tinygltf::Scene& scene = model.scenes[model.defaultScene];
+	const tinygltf::Node& rootNode = model.nodes[scene.nodes[0]];
+
+	size_t numMeshNodes = 0;
+	CountMeshNodes(rootNode, model, numMeshNodes);
+	dataToFlushOut.write((char*)&numMeshNodes, sizeof(size_t));
+
+	XMMATRIX Transform = XMMatrixIdentity();
+	WriteOutNodeData(rootNode, model, dataToFlushOut, Transform);
+
 	size_t numMeshes = model.meshes.size();
 	dataToFlushOut.write((char*)&numMeshes, sizeof(size_t));
-	WriteOutSceneData(model.nodes[scene.nodes[0]], model, dataToFlushOut, "", XMMatrixIdentity());
+	WriteOutMeshData(model.nodes[scene.nodes[0]], model, dataToFlushOut);
 
 	outputFile << dataToFlushOut.rdbuf();
 	size_t s = outputFile.tellp();

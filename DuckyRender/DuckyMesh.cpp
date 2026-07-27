@@ -8,12 +8,12 @@ bool DuckyMeshData::DuckyPrimitive::InitPrimitive(D3DDeviceManager* DeviceManage
 								   BufferInfo& IndexBufferInfo,
 								   size_t TextureHash)
 {
-	if(!InitBuffer(DeviceManager, VertexBufferInfo, &mVertices.resource)) return false;
+	if(!InitBuffer(DeviceManager, VertexBufferInfo, mVertices.resource)) return false;
 	vertexView.BufferLocation = mVertices.resource->GetGPUVirtualAddress();
 	vertexView.SizeInBytes = VertexBufferInfo.BufferSize;
 	vertexView.StrideInBytes = VertexBufferInfo.Stride;
 
-	if(!InitBuffer(DeviceManager, IndexBufferInfo, &mIndices.resource)) return false;
+	if(!InitBuffer(DeviceManager, IndexBufferInfo, mIndices.resource)) return false;
 	indexView.BufferLocation = mIndices.resource->GetGPUVirtualAddress();
 
 
@@ -31,6 +31,8 @@ bool DuckyMeshData::DuckyPrimitive::InitPrimitive(D3DDeviceManager* DeviceManage
 
 	indexView.SizeInBytes = IndexBufferInfo.BufferSize;
 
+	if (VertexBufferInfo.Stride == 0 || IndexBufferInfo.Stride == 0) return false;
+
 	mNumVertices = VertexBufferInfo.BufferSize / VertexBufferInfo.Stride;
 	mNumIndices = IndexBufferInfo.BufferSize / IndexBufferInfo.Stride;
 
@@ -39,18 +41,18 @@ bool DuckyMeshData::DuckyPrimitive::InitPrimitive(D3DDeviceManager* DeviceManage
 	return true;
 }
 
-bool DuckyMeshData::DuckyPrimitive::InitBuffer(D3DDeviceManager* DeviceManager, BufferInfo& BufferInfo, ID3D12Resource** Data)
+bool DuckyMeshData::DuckyPrimitive::InitBuffer(D3DDeviceManager* DeviceManager, BufferInfo& BufferInfo, ComPtr<ID3D12Resource>& Data)
 {
-	*Data = DeviceManager->CreateBuffer(BufferInfo.Data.size());
-	if (*Data == nullptr) return false;
+	Data = DeviceManager->CreateBuffer(BufferInfo.Data.size());
+	if (!Data) return false;
 
 	void* map = nullptr;
 
-	HRESULT hResult = (*Data)->Map(0, nullptr, &map);
+	HRESULT hResult = Data->Map(0, nullptr, &map);
 	if (FAILED(hResult)) return false;
 
 	std::memcpy(map, BufferInfo.Data.data(), BufferInfo.Data.size());
-	(*Data)->Unmap(0, nullptr);
+	Data->Unmap(0, nullptr);
 
 	return true;
 }
@@ -76,9 +78,6 @@ bool DuckyMeshData::Init(D3DDeviceManager* DeviceManager, std::ifstream& InFile,
 	size_t numPrimitives = 0;
 	InFile.read((char*)&numPrimitives, sizeof(size_t));
 
-	XMMATRIX transform;
-	InFile.read((char*)&transform, sizeof(float) * 16);
-
 	std::vector<BufferInfo> vertices;
 	std::vector<BufferInfo> indices;
 	std::vector<size_t> textureHashes;
@@ -93,6 +92,7 @@ bool DuckyMeshData::Init(D3DDeviceManager* DeviceManager, std::ifstream& InFile,
 
 		// read texture file
 		size_t hashIndex = DeviceManager->InitTexture(wideVersion.c_str(), DescriptorHeapHandle);
+		if (hashIndex == INVALID_HANDLE) continue;
 		textureHashes.push_back(hashIndex);
 
 		BufferInfo vertBufferInfo;
@@ -119,6 +119,7 @@ void DuckyMeshData::DrawMesh(ID3D12GraphicsCommandList* mCmdList, D3DDeviceManag
 	for (const DuckyPrimitive& prim : mPrimitives)
 	{
 		DescriptorHeapResource* texture = DeviceManager->GetTexture(prim.mHashedTextureName);
+		if (texture == nullptr) continue;
 		mCmdList->SetGraphicsRootDescriptorTable(1, texture->descHandle);
 		mCmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 		mCmdList->IASetVertexBuffers(0, 1, &prim.vertexView);
