@@ -16,34 +16,58 @@
     <Filter Include="Shaders">
       <UniqueIdentifier>{c262f3fd-c224-4637-88d7-cb0273c458ab}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Header Files\Apps">
+      <UniqueIdentifier>{94a0084f-e861-4a21-91ed-4b9f6af3b0e2}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\Resources">
+      <UniqueIdentifier>{36b4bd28-a77e-4136-b124-5ec5898b45d4}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\Core">
+      <UniqueIdentifier>{f609cbbe-bfc8-475b-93aa-84160c8f0d11}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\Tools">
+      <UniqueIdentifier>{be8931cc-f592-4e77-b98d-938c5eaf8ffb}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\Apps">
+      <UniqueIdentifier>{d7d166fa-ce26-45aa-aae5-e6483e6ba0b9}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\Core">
+      <UniqueIdentifier>{d51c5706-d04e-446a-b5f6-53a27e60ef2f}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\Resources">
+      <UniqueIdentifier>{a76dcd3b-27c8-46ed-8d3d-395bc6711f84}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\Tools">
+      <UniqueIdentifier>{cdd1e2bc-f343-41e2-9975-d08271ee071e}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="D3DDeviceManager.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="DuckyApp.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="main.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="SimplestApp.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\Apps</Filter>
     </ClCompile>
-    <ClCompile Include="DuckyMesh.cpp">
-      <Filter>Source Files</Filter>
+    <ClCompile Include="DuckyApp.cpp">
+      <Filter>Source Files\Apps</Filter>
     </ClCompile>
-    <ClCompile Include="DuckyCompiler.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="DuckyTools.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="DuckySwapChain.cpp">
-      <Filter>Source Files</Filter>
+    <ClCompile Include="D3DDeviceManager.cpp">
+      <Filter>Source Files\Core</Filter>
     </ClCompile>
     <ClCompile Include="DuckyGraphicsContext.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\Core</Filter>
+    </ClCompile>
+    <ClCompile Include="DuckySwapChain.cpp">
+      <Filter>Source Files\Core</Filter>
+    </ClCompile>
+    <ClCompile Include="DuckyMesh.cpp">
+      <Filter>Source Files\Resources</Filter>
+    </ClCompile>
+    <ClCompile Include="DuckyCompiler.cpp">
+      <Filter>Source Files\Resources</Filter>
+    </ClCompile>
+    <ClCompile Include="DuckyTools.cpp">
+      <Filter>Source Files\Tools</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -55,32 +79,32 @@
     </FxCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="D3DDeviceManager.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="DuckyApp.h">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Apps</Filter>
     </ClInclude>
     <ClInclude Include="SimplestApp.h">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Apps</Filter>
     </ClInclude>
     <ClInclude Include="DuckyMesh.h">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Resources</Filter>
     </ClInclude>
     <ClInclude Include="DuckyCompiler.h">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Resources</Filter>
     </ClInclude>
-    <ClInclude Include="DuckyTools.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="DuckySwapChain.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="DuckyGraphicsContext.h">
-      <Filter>Header Files</Filter>
+    <ClInclude Include="D3DDeviceManager.h">
+      <Filter>Header Files\Core</Filter>
     </ClInclude>
     <ClInclude Include="DuckyDescriptor.h">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Core</Filter>
+    </ClInclude>
+    <ClInclude Include="DuckyGraphicsContext.h">
+      <Filter>Header Files\Core</Filter>
+    </ClInclude>
+    <ClInclude Include="DuckySwapChain.h">
+      <Filter>Header Files\Core</Filter>
+    </ClInclude>
+    <ClInclude Include="DuckyTools.h">
+      <Filter>Header Files\Tools</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

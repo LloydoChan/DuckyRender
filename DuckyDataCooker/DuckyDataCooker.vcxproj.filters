@@ -2,13 +2,30 @@
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
     <ClCompile Include="main.cpp" />
-    <ClCompile Include="tiny_gltf.cc" />
+    <ClCompile Include="tiny_gltf.cc">
+      <Filter>TinyGltf</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="tiny_gltf.h" />
-    <ClInclude Include="tinygltf_json_c.h" />
-    <ClInclude Include="json.hpp" />
-    <ClInclude Include="stb_image.h" />
-    <ClInclude Include="stb_image_write.h" />
+    <ClInclude Include="stb_image.h">
+      <Filter>TinyGltf</Filter>
+    </ClInclude>
+    <ClInclude Include="stb_image_write.h">
+      <Filter>TinyGltf</Filter>
+    </ClInclude>
+    <ClInclude Include="tiny_gltf.h">
+      <Filter>TinyGltf</Filter>
+    </ClInclude>
+    <ClInclude Include="tinygltf_json_c.h">
+      <Filter>TinyGltf</Filter>
+    </ClInclude>
+    <ClInclude Include="json.hpp">
+      <Filter>TinyGltf</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="TinyGltf">
+      <UniqueIdentifier>{3e892237-17d8-41d7-86e4-b43302c9aa49}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
 </Project>
