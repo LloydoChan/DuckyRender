@@ -167,7 +167,7 @@ void WriteOutMeshData(const tinygltf::Node& Node, const tinygltf::Model& Model, 
 			DataToFlushOut.write((char*)&albedoNameLength, sizeof(size_t));
 			DataToFlushOut.write((char*)&albedoName[0], albedoNameLength);
 
-			std::vector<std::string> names{ "POSITION", "TEXCOORD_0"/*, "TEXCOORD_1", "NORMAL", "TANGENT"*/ };
+			std::vector<std::string> names{ "POSITION", "TEXCOORD_0", "TEXCOORD_1", "NORMAL", "TANGENT" };
 			FindPrimitiveData(primitive, Model,names, DataToFlushOut);
 			
 			if (primitive.indices >= 0)

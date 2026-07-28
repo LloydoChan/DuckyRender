@@ -121,6 +121,12 @@ std::vector<D3D12_INPUT_ELEMENT_DESC> D3DDeviceManager::CreateInputLayout(Shader
 			currentDesc.Format = DXGI_FORMAT_R32G32_FLOAT;
 		}
 
+		if (std::strcmp(paramDesc.SemanticName, "NORMAL") == 0)
+		{
+			currentDesc.SemanticName = "NORMAL";
+			currentDesc.Format = DXGI_FORMAT_R32G32B32_FLOAT;
+		}
+
 		Elems.push_back(currentDesc);
 	}
 
