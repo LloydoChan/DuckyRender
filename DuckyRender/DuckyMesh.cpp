@@ -97,8 +97,7 @@ bool DuckyMeshData::Init(D3DDeviceManager* DeviceManager, std::ifstream& InFile,
 
 			// read texture file
 			size_t hashIndex = DeviceManager->InitTexture(wideVersion.c_str(), DescriptorHeapHandle);
-			if (hashIndex == INVALID_HANDLE) continue;
-			textureHashes.push_back(hashIndex);
+			if (hashIndex != INVALID_HANDLE) textureHashes.push_back(hashIndex);
 		}
 		else
 		{
