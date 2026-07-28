@@ -12,6 +12,12 @@ using namespace DirectX;
 class D3DDeviceManager;
 struct ID3D12Resource;
 
+struct PBRValues
+{
+	float roughness = 0.f;
+	float metal = 0.f;
+};
+
 struct GpuBuffer
 {
 	ComPtr<ID3D12Resource> resource;
@@ -36,7 +42,7 @@ class DuckyMeshData
 {
 	public:
 		DuckyMeshData() {};
-		bool Init(D3DDeviceManager* DeviceManager, std::vector<BufferInfo>& VertexInfos, std::vector<BufferInfo>& IndexInfos, std::vector<size_t>& TextureHashes);
+		bool Init(D3DDeviceManager* DeviceManager, std::vector<BufferInfo>& VertexInfos, std::vector<BufferInfo>& IndexInfos, std::vector<size_t>& TextureHashes, std::vector<PBRValues>& pbrValues);
 		bool Init(D3DDeviceManager* DeviceManager, std::ifstream& InFile, UINT DescriptorHeapHandle);
 		void DrawMesh(ID3D12GraphicsCommandList* CmdList, D3DDeviceManager* DeviceManager);
 
@@ -49,7 +55,10 @@ class DuckyMeshData
 				bool InitPrimitive(D3DDeviceManager* DeviceManager,
 									BufferInfo& VertexBufferInfo,
 									BufferInfo& IndexBufferInfo,
-									size_t TextureHash);
+									size_t AlbedoHash,
+									size_t NormalHash,
+									size_t MetallicHash,
+									PBRValues& pbrValues);
 			private:
 				GpuBuffer mVertices;
 				GpuBuffer mIndices;
@@ -58,8 +67,12 @@ class DuckyMeshData
 				D3D12_INDEX_BUFFER_VIEW indexView{};
 
 				size_t mHashedTextureName = 0;
+				size_t mHashedNormalMapName = 0;
+				size_t mHashedMetallicRoughnessName = 0;
 				UINT mNumVertices = 0;
 				UINT mNumIndices = 0;
+
+				PBRValues mMaterialValues{};
 
 				bool InitBuffer(D3DDeviceManager* DeviceManager, BufferInfo& BufferInfo, ComPtr<ID3D12Resource>& Data);
 

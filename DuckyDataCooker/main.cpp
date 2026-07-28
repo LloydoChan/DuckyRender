@@ -57,9 +57,9 @@ void FindPrimitiveData(const tinygltf::Primitive& Primitive, const tinygltf::Mod
 		const tinygltf::BufferView& bufferView = Model.bufferViews[accessor.bufferView];
 		const tinygltf::Buffer& buffer = Model.buffers[bufferView.buffer];
 
-		accessors.emplace_back(accessor);
-		bufferViews.emplace_back(bufferView);
-		buffers.emplace_back(buffer);
+		accessors.emplace_back(std::move(accessor));
+		bufferViews.emplace_back(std::move(bufferView));
+		buffers.emplace_back(std::move(buffer));
 
 		const unsigned char* bufferStart = &buffer.data[accessor.byteOffset + bufferView.byteOffset];
 		startPoints.push_back(bufferStart);
@@ -145,6 +145,19 @@ void WriteOutNodeData(const tinygltf::Node& Node, const tinygltf::Model& Model, 
 	}
 }
 
+void WriteOutTextureData(int index, tinygltf::Model Model, stringstream& DataToFlushOut)
+{
+	if (index != -1)
+	{
+		const tinygltf::Texture tex = Model.textures[index];
+		const tinygltf::Image img = Model.images[tex.source];
+		std::string albedoName = img.uri;
+		size_t albedoNameLength = albedoName.length();
+		DataToFlushOut.write((char*)&albedoNameLength, sizeof(size_t));
+		DataToFlushOut.write((char*)&albedoName[0], albedoNameLength);
+	}
+}
+
 void WriteOutMeshData(const tinygltf::Node& Node, const tinygltf::Model& Model, stringstream& DataToFlushOut)
 {
 	// first write out Node info, get transforms and mesh indices of all nodes...
@@ -161,18 +174,26 @@ void WriteOutMeshData(const tinygltf::Node& Node, const tinygltf::Model& Model, 
 			// get texture info for this primitive
 			const tinygltf::Material primMaterial = Model.materials[primitive.material];
 			int primTextureIndex = primMaterial.pbrMetallicRoughness.baseColorTexture.index;
-			DataToFlushOut.write((char*)&primTextureIndex, sizeof(int));
-			if (primTextureIndex != -1)
-			{
-				cout << primTextureIndex << endl;
-				const tinygltf::Image img = Model.images[primTextureIndex];
-				std::string albedoName = img.uri;
-				size_t albedoNameLength = albedoName.length();
-				DataToFlushOut.write((char*)&albedoNameLength, sizeof(size_t));
-				DataToFlushOut.write((char*)&albedoName[0], albedoNameLength);
-			}
 
-			std::vector<std::string> names{ "POSITION", "TEXCOORD_0", "TEXCOORD_1", "NORMAL", "TANGENT" };
+			DataToFlushOut.write((char*)&primTextureIndex, sizeof(int));
+			WriteOutTextureData(primTextureIndex, Model, DataToFlushOut);
+
+			int normTextureIndex = primMaterial.normalTexture.index;
+			DataToFlushOut.write((char*)&normTextureIndex, sizeof(int));
+			WriteOutTextureData(normTextureIndex, Model, DataToFlushOut);
+
+			int metallicIndex = primMaterial.pbrMetallicRoughness.metallicRoughnessTexture.index;
+			DataToFlushOut.write((char*)&metallicIndex, sizeof(int));
+			WriteOutTextureData(metallicIndex, Model, DataToFlushOut);
+
+			const tinygltf::PbrMetallicRoughness& pbrValues = primMaterial.pbrMetallicRoughness;
+			float roughness = static_cast<float>(pbrValues.roughnessFactor);
+			DataToFlushOut.write((char*)&roughness, sizeof(float));
+			float metal = static_cast<float>(pbrValues.metallicFactor);
+			DataToFlushOut.write((char*)&metal, sizeof(float));
+
+			
+			std::vector<std::string> names{ "POSITION", "TEXCOORD_0", "TEXCOORD_1", "NORMAL", "TANGENT", "COLOR_0"};
 			FindPrimitiveData(primitive, Model,names, DataToFlushOut);
 			
 			if (primitive.indices >= 0)
