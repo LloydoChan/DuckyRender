@@ -120,7 +120,7 @@ void DuckyMeshData::DrawMesh(ID3D12GraphicsCommandList* mCmdList, D3DDeviceManag
 	{
 		DescriptorHeapResource* texture = DeviceManager->GetTexture(prim.mHashedTextureName);
 		if (texture == nullptr) continue;
-		mCmdList->SetGraphicsRootDescriptorTable(1, texture->descHandle);
+		mCmdList->SetGraphicsRootDescriptorTable(2, texture->descHandle);
 		mCmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 		mCmdList->IASetVertexBuffers(0, 1, &prim.vertexView);
 		mCmdList->IASetIndexBuffer(&prim.indexView);

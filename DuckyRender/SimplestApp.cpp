@@ -48,51 +48,51 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 		mMeshes.emplace_back(std::move(nextMesh));
 	}
 
-	// work out number of bytes for matrices needed
-	UINT64 neededCapacity = numInstances * AlignConstantBufferSize(sizeof(XMMATRIX));
+	// work out number of bytes for matrices needed - instances plus the world proj matrix
+	UINT64 neededCapacity = (numInstances + 1) * AlignConstantBufferSize(sizeof(XMMATRIX));
 	mDuckyContext = std::make_unique<DuckyGraphicsContext>();
 	if(!mDuckyContext->Init(mDeviceManager.get(), neededCapacity, &mLogFile)) return false;
 
 	RootSignatureDesc drawSig = {};
 
-	D3D12_ROOT_PARAMETER rootParams[2]{};
+	D3D12_ROOT_PARAMETER rootParams[3]{};
 
 	// Root parameter 0:
 	// Direct root CBV at b0 for the vertex shader.
-	rootParams[0].ParameterType =
-		D3D12_ROOT_PARAMETER_TYPE_CBV;
+	rootParams[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
 
 	rootParams[0].Descriptor.ShaderRegister = 0;
 	rootParams[0].Descriptor.RegisterSpace = 0;
 
-	rootParams[0].ShaderVisibility =
-		D3D12_SHADER_VISIBILITY_VERTEX;
+	rootParams[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
+
+	// Root parameter 1:
+	// Direct root CBV at b0 for the vertex shader.
+	rootParams[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+
+	rootParams[1].Descriptor.ShaderRegister = 1;
+	rootParams[1].Descriptor.RegisterSpace = 0;
+
+	rootParams[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
 
 	// Root parameter 1:
 	// SRV descriptor table at t0 for the pixel shader.
 	D3D12_DESCRIPTOR_RANGE srvRange = {};
 
-	srvRange.RangeType =
-		D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-
+	srvRange.RangeType =D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
 	srvRange.NumDescriptors = 1;
 	srvRange.BaseShaderRegister = 0;
 	srvRange.RegisterSpace = 0;
-	srvRange.OffsetInDescriptorsFromTableStart =
-		D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+	srvRange.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
 
-	rootParams[1].ParameterType =
-		D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-
-	rootParams[1].DescriptorTable.NumDescriptorRanges = 1;
-	rootParams[1].DescriptorTable.pDescriptorRanges =
-		&srvRange;
-
-	rootParams[1].ShaderVisibility =
-		D3D12_SHADER_VISIBILITY_PIXEL;
+	rootParams[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+	rootParams[2].DescriptorTable.NumDescriptorRanges = 1;
+	rootParams[2].DescriptorTable.pDescriptorRanges = &srvRange;
+	rootParams[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
 	drawSig.parameters.emplace_back(rootParams[0]);
 	drawSig.parameters.emplace_back(rootParams[1]);
+	drawSig.parameters.emplace_back(rootParams[2]);
 
 	D3D12_STATIC_SAMPLER_DESC samplerDesc = {};
 
@@ -391,18 +391,21 @@ void SimplestApp::AppMainLoop()
 		size_t numMeshes = mMeshes.size();
 		static int currentInstance = 0;
 		static int frameCnt = 0;
-		auto instance = mInstances[currentInstance];
+		
+		// per frame matrix buffer setting
+		XMMATRIX vp = view * projection;
+		auto vpAllocation = cbvAllocator->AllocateConstantBuffer(sizeof(XMFLOAT4X4));
+		XMStoreFloat4x4(static_cast<XMFLOAT4X4*>(vpAllocation.mCpuAddress), XMMatrixTranspose(vp));
+		list->SetGraphicsRootConstantBufferView(0, vpAllocation.mGpuAddress);
+
 		for (auto& instance : mInstances)
 		{
 			if (instance.mMeshDataIndex >= 0 && instance.mMeshDataIndex < numMeshes)
 			{
 				auto allocation = cbvAllocator->AllocateConstantBuffer(sizeof(XMFLOAT4X4));
-
 				XMMATRIX world = instance.mTransform;
-				XMMATRIX wvp = world * view * projection;
-
-				XMStoreFloat4x4(static_cast<XMFLOAT4X4*>(allocation.mCpuAddress),XMMatrixTranspose(world * view * projection));
-				list->SetGraphicsRootConstantBufferView(0,allocation.mGpuAddress);
+				XMStoreFloat4x4(static_cast<XMFLOAT4X4*>(allocation.mCpuAddress), XMMatrixTranspose(world));
+				list->SetGraphicsRootConstantBufferView(1,allocation.mGpuAddress);
 
 				mMeshes[instance.mMeshDataIndex].DrawMesh(list, mDeviceManager.get());
 			}
