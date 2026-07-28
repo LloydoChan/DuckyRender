@@ -96,13 +96,13 @@ bool DuckyMeshData::Init(D3DDeviceManager* DeviceManager, std::ifstream& InFile,
 		textureHashes.push_back(hashIndex);
 
 		BufferInfo vertBufferInfo;
-		vertBufferInfo.Stride = 20;
+		InFile.read((char*)&vertBufferInfo.Stride, sizeof(size_t));
 		InFile.read((char*)&vertBufferInfo.BufferSize, sizeof(size_t));
 		vertBufferInfo.Data.resize(vertBufferInfo.BufferSize);
 		InFile.read(reinterpret_cast<char*>(vertBufferInfo.Data.data()),vertBufferInfo.BufferSize);
 
 		BufferInfo indexBufferInfo;
-		indexBufferInfo.Stride = 4;
+		InFile.read((char*)&indexBufferInfo.Stride, sizeof(unsigned int));
 		InFile.read((char*)&indexBufferInfo.BufferSize, sizeof(size_t));
 		indexBufferInfo.Data.resize(indexBufferInfo.BufferSize);
 		InFile.read(reinterpret_cast<char*>(indexBufferInfo.Data.data()), indexBufferInfo.BufferSize);

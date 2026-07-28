@@ -35,29 +35,54 @@ void DebugMatrix(XMMATRIX& nextTransform)
 		<< std::setw(10) << debugMatrix._44 << std::endl;
 }
 
-void FindPrimitiveDataPositionUVs(const tinygltf::Primitive& Primitive, const tinygltf::Model& Model, stringstream& DataToFlushOut)
+void FindPrimitiveData(const tinygltf::Primitive& Primitive, const tinygltf::Model& Model, const vector<string>& AttributeNames, stringstream& DataToFlushOut)
 {
-	const tinygltf::Accessor& vertexAccessor = Model.accessors[Primitive.attributes.find("POSITION")->second];
-	const tinygltf::BufferView& vertexBufferView = Model.bufferViews[vertexAccessor.bufferView];
-	const tinygltf::Buffer& vertexBuffer = Model.buffers[vertexBufferView.buffer];
+	vector<tinygltf::Accessor> accessors;
+	vector<tinygltf::BufferView> bufferViews;
+	vector<tinygltf::Buffer> buffers;
+	vector<const unsigned char*> startPoints;
+	vector<int> strides;
 
-	const tinygltf::Accessor& uvAccessor = Model.accessors[Primitive.attributes.find("TEXCOORD_0")->second];
-	const tinygltf::BufferView& uvBufferView = Model.bufferViews[uvAccessor.bufferView];
-	const tinygltf::Buffer& uvBuffer = Model.buffers[uvBufferView.buffer];
+	size_t byteStride = 0;
 
-	const unsigned char* vertexStart = &vertexBuffer.data[vertexAccessor.byteOffset + vertexBufferView.byteOffset];
-	const unsigned char* uvStart     = &uvBuffer.data[uvAccessor.byteOffset + uvBufferView.byteOffset];
-
-	size_t size = vertexAccessor.count * sizeof(float) * 5;
-	DataToFlushOut.write((char*)&size, sizeof(size_t));
-	size_t vertSize = sizeof(float) * 3;
-	size_t uvSize = sizeof(float) * 2;
-	for (int elem = 0; elem < vertexAccessor.count; elem++)
+	for (const auto& attribute : AttributeNames)
 	{
-		DataToFlushOut.write(reinterpret_cast<const char*>(vertexStart), vertSize);
-		vertexStart += vertSize;
-		DataToFlushOut.write(reinterpret_cast<const char*>(uvStart), uvSize);
-		uvStart += uvSize;
+		auto itr = Primitive.attributes.find(attribute);
+		if (itr == Primitive.attributes.end())
+		{
+			cout << "couldn't find for attribute name " << attribute << endl;
+			continue;
+		}
+		const tinygltf::Accessor& accessor = Model.accessors[itr->second];
+		const tinygltf::BufferView& bufferView = Model.bufferViews[accessor.bufferView];
+		const tinygltf::Buffer& buffer = Model.buffers[bufferView.buffer];
+
+		accessors.emplace_back(accessor);
+		bufferViews.emplace_back(bufferView);
+		buffers.emplace_back(buffer);
+
+		const unsigned char* bufferStart = &buffer.data[accessor.byteOffset + bufferView.byteOffset];
+		startPoints.push_back(bufferStart);
+		int stride = accessor.ByteStride(bufferView);
+		strides.emplace_back(stride);
+		byteStride += stride;
+	}
+
+	if (accessors.size() == 0) {
+		cout << "no data?" << endl;
+		return;
+	}
+
+	size_t overallDataSize = accessors[0].count * byteStride;
+	DataToFlushOut.write((char*)&byteStride, sizeof(size_t));
+	DataToFlushOut.write((char*)&overallDataSize, sizeof(size_t));
+	for (int elem = 0; elem < accessors[0].count; elem++)
+	{
+		for (int accessor = 0; accessor < accessors.size(); accessor++)
+		{
+			DataToFlushOut.write(reinterpret_cast<const char*>(startPoints[accessor]), strides[accessor]);
+			startPoints[accessor] += strides[accessor];
+		}
 	}
 	
 	size_t pos = DataToFlushOut.tellp();
@@ -97,13 +122,16 @@ void WriteOutNodeData(const tinygltf::Node& Node, const tinygltf::Model& Model, 
 		cout << "huh" << endl;
 	}
 
+	if (Node.light != -1)
+	{
+		cout << "light!" << endl;
+	}
+
 	streampos p = 0;
 	if (Node.mesh != -1)
 	{
 		XMFLOAT4X4 storedWorld;
 		XMStoreFloat4x4(&storedWorld,transform);
-		XMMATRIX transposed = XMMatrixTranspose(transform);
-		DebugMatrix(transposed);
 		tinygltf::Mesh mesh = Model.meshes[Node.mesh];
 		int nodeMesh = Node.mesh;
 		DataToFlushOut.write((char*)&nodeMesh, sizeof(int));
@@ -139,10 +167,9 @@ void WriteOutMeshData(const tinygltf::Node& Node, const tinygltf::Model& Model, 
 			DataToFlushOut.write((char*)&albedoNameLength, sizeof(size_t));
 			DataToFlushOut.write((char*)&albedoName[0], albedoNameLength);
 
-			size_t pos_t = DataToFlushOut.tellp();
-			FindPrimitiveDataPositionUVs(primitive, Model, DataToFlushOut);
+			std::vector<std::string> names{ "POSITION", "TEXCOORD_0"/*, "TEXCOORD_1", "NORMAL", "TANGENT"*/ };
+			FindPrimitiveData(primitive, Model,names, DataToFlushOut);
 			
-			pos_t = DataToFlushOut.tellp();
 			if (primitive.indices >= 0)
 			{
 				const tinygltf::Accessor& accessor = Model.accessors[primitive.indices];
@@ -150,15 +177,17 @@ void WriteOutMeshData(const tinygltf::Node& Node, const tinygltf::Model& Model, 
 				const tinygltf::Buffer& buffer = Model.buffers[bufferView.buffer];
 
 				unsigned int stride = 0;
-				pos_t = DataToFlushOut.tellp();
 				std::cout << "found index data " << accessor.count << " indices " << std::endl;
 
 				if (accessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE) stride = 1;
 				else if (accessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT) stride = 2;
 				else if (accessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT)   stride = 4;
 
+				DataToFlushOut.write((char*)&stride, sizeof(unsigned int));
+
 				const unsigned char* start = &buffer.data[accessor.byteOffset + bufferView.byteOffset];
 				const unsigned char* end = start + accessor.count * stride;
+
 				size_t size = end - start;
 				DataToFlushOut.write((char*)&size, sizeof(size_t));
 				DataToFlushOut.write((char*)start, size);
