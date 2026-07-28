@@ -84,16 +84,26 @@ bool DuckyMeshData::Init(D3DDeviceManager* DeviceManager, std::ifstream& InFile,
 
 	for (size_t i = 0; i < numPrimitives; i++)
 	{
-		size_t albedoNameLength = 0;
-		InFile.read((char*)&albedoNameLength, sizeof(size_t));
-		std::string albedoName(albedoNameLength, ' ');
-		InFile.read((char*)&albedoName[0], albedoNameLength);
-		std::wstring wideVersion(albedoName.begin(), albedoName.end());
+		//check for null texture
+		int checkVal = 0;
+		InFile.read((char*)&checkVal, sizeof(int));
+		if (checkVal != -1)
+		{
+			size_t albedoNameLength = 0;
+			InFile.read((char*)&albedoNameLength, sizeof(size_t));
+			std::string albedoName(albedoNameLength, ' ');
+			InFile.read((char*)&albedoName[0], albedoNameLength);
+			std::wstring wideVersion(albedoName.begin(), albedoName.end());
 
-		// read texture file
-		size_t hashIndex = DeviceManager->InitTexture(wideVersion.c_str(), DescriptorHeapHandle);
-		if (hashIndex == INVALID_HANDLE) continue;
-		textureHashes.push_back(hashIndex);
+			// read texture file
+			size_t hashIndex = DeviceManager->InitTexture(wideVersion.c_str(), DescriptorHeapHandle);
+			if (hashIndex == INVALID_HANDLE) continue;
+			textureHashes.push_back(hashIndex);
+		}
+		else
+		{
+			textureHashes.push_back(INVALID_HANDLE);
+		}
 
 		BufferInfo vertBufferInfo;
 		InFile.read((char*)&vertBufferInfo.Stride, sizeof(size_t));

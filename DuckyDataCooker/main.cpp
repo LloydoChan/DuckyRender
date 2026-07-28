@@ -161,11 +161,16 @@ void WriteOutMeshData(const tinygltf::Node& Node, const tinygltf::Model& Model, 
 			// get texture info for this primitive
 			const tinygltf::Material primMaterial = Model.materials[primitive.material];
 			int primTextureIndex = primMaterial.pbrMetallicRoughness.baseColorTexture.index;
-			const tinygltf::Image img = Model.images[primTextureIndex];
-			std::string albedoName = img.uri;
-			size_t albedoNameLength = albedoName.length();
-			DataToFlushOut.write((char*)&albedoNameLength, sizeof(size_t));
-			DataToFlushOut.write((char*)&albedoName[0], albedoNameLength);
+			DataToFlushOut.write((char*)&primTextureIndex, sizeof(int));
+			if (primTextureIndex != -1)
+			{
+				cout << primTextureIndex << endl;
+				const tinygltf::Image img = Model.images[primTextureIndex];
+				std::string albedoName = img.uri;
+				size_t albedoNameLength = albedoName.length();
+				DataToFlushOut.write((char*)&albedoNameLength, sizeof(size_t));
+				DataToFlushOut.write((char*)&albedoName[0], albedoNameLength);
+			}
 
 			std::vector<std::string> names{ "POSITION", "TEXCOORD_0", "TEXCOORD_1", "NORMAL", "TANGENT" };
 			FindPrimitiveData(primitive, Model,names, DataToFlushOut);
@@ -197,14 +202,20 @@ void WriteOutMeshData(const tinygltf::Node& Node, const tinygltf::Model& Model, 
 	}
 }
 
-int main()
+int main(int argc, char** argv)
 {
 	tinygltf::TinyGLTF loader;
 	tinygltf::Model model;
 	std::string error;
 	std::string warning;
 
-	bool success = loader.LoadASCIIFromFile(&model, &error, &warning, "models//scene.gltf");
+	if (argc < 2)
+	{
+		cout << "please give a input model to the command line" << endl;
+		return 1;
+	}
+
+	bool success = loader.LoadASCIIFromFile(&model, &error, &warning, argv[1]);
 
 	if (!success)
 	{
