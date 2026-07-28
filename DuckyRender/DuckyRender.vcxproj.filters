@@ -109,5 +109,8 @@
     <ClInclude Include="DuckyTools.h">
       <Filter>Header Files\Tools</Filter>
     </ClInclude>
+    <ClInclude Include="DuckyMaterial.h">
+      <Filter>Header Files\Resources</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

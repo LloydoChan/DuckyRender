@@ -4,6 +4,23 @@
 #include "DuckyMesh.h"
 #include "DuckyGraphicsContext.h"
 
+struct PerFrameConstants
+{
+	XMFLOAT4X4 mViewProjection;
+
+	XMFLOAT4 mCameraPosition;
+	XMFLOAT4 mLightDirection;
+	XMFLOAT4 mLightColor;
+
+// put this in here to pad out entire struct to 32 bytes
+private:
+	XMFLOAT4 mDummyPadding;
+};
+
+struct PerInstanceConstants
+{
+	XMFLOAT4X4 world;
+};
 
 class SimplestApp : public DuckyApp
 {
@@ -13,6 +30,9 @@ class SimplestApp : public DuckyApp
 		virtual LRESULT WindowProcedure(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam);
 		virtual void HandleInput(UINT msg, WPARAM wParam, LPARAM lParam);
 		void UpdateMovementAndRotation(XMVECTOR& ViewVector, XMVECTOR& ScaledMovement, float DeltaTime);
+		bool BindMaterial(ID3D12GraphicsCommandList* commandList, ConstantBufferAllocator& allocator, const DuckyMaterial& material);
+		void BindTexture(ID3D12GraphicsCommandList* commandList, UINT rootParameter, size_t textureHandle);
+		bool BindInstanceConstants(ID3D12GraphicsCommandList* commandList, ConstantBufferAllocator& allocator, const DuckyMeshInstance& instance);
 		virtual void AppMainLoop();
 
 		bool Resize(UINT WindowWidth, UINT WindowHeight);
@@ -35,9 +55,10 @@ class SimplestApp : public DuckyApp
 		XMFLOAT4X4* mMappedTransform[2] = {};
 
 		std::vector<DuckyMeshData> mMeshes;
-		std::vector<DuckyMeshInstance> mInstances;
 
 		int mCbvSrvUavHandle = -1;
 
 		std::unique_ptr<DuckyGraphicsContext> mDuckyContext;
+
+		std::vector<DuckyMeshInstance> mInstances;
 };

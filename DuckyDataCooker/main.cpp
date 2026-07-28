@@ -43,7 +43,7 @@ void FindPrimitiveData(const tinygltf::Primitive& Primitive, const tinygltf::Mod
 	vector<const unsigned char*> startPoints;
 	vector<int> strides;
 
-	size_t byteStride = 0;
+	unsigned int byteStride = 0;
 
 	for (const auto& attribute : AttributeNames)
 	{
@@ -74,7 +74,7 @@ void FindPrimitiveData(const tinygltf::Primitive& Primitive, const tinygltf::Mod
 	}
 
 	size_t overallDataSize = accessors[0].count * byteStride;
-	DataToFlushOut.write((char*)&byteStride, sizeof(size_t));
+	DataToFlushOut.write((char*)&byteStride, sizeof(unsigned int));
 	DataToFlushOut.write((char*)&overallDataSize, sizeof(size_t));
 	for (int elem = 0; elem < accessors[0].count; elem++)
 	{

@@ -11,6 +11,18 @@ const float MOVEMENT_SPEED = 15.f;
 const float ROTATIONAL_SPEED_YAW = 4.f * 3.141f;
 const float ROTATIONAL_SPEED_PITCH = 2.f * 3.141f;
 
+namespace RootParameter
+{
+	constexpr UINT PerFrame = 0;
+	constexpr UINT PerInstance = 1;
+	constexpr UINT PerMaterial = 2;
+	constexpr UINT BaseColorTexture = 3;
+	constexpr UINT NormalTexture = 4;
+	constexpr UINT MetallicRoughnessTexture = 5;
+	constexpr UINT Count = 6;
+
+}
+
 bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* WindowName)
 {
 	if (!DuckyApp::Init(WindowWidth, WindowHeight, WindowName)) return false;
@@ -25,17 +37,29 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 		return false;
 	}
 
-	//first, get the instance data
 	size_t numInstances = 0;
-	DuckyFile.read((char*)&numInstances, sizeof(size_t));
-	
-	for (int i = 0; i < numInstances; i++)
+
+	DuckyFile.read(
+		reinterpret_cast<char*>(&numInstances),
+		sizeof(numInstances));
+
+	if (!DuckyFile)
 	{
-		DuckyMeshInstance meshInstance;
-		DuckyFile.read((char*)&meshInstance.mMeshDataIndex, sizeof(int));
-		DuckyFile.read((char*)&meshInstance.mTransform, sizeof(XMMATRIX));
-		DebugMatrix(meshInstance.mTransform, mLogFile);
-		mInstances.emplace_back(std::move(meshInstance));
+		return false;
+	}
+
+	mInstances.reserve(numInstances);
+
+	for (size_t instanceIndex = 0; instanceIndex < numInstances; ++instanceIndex)
+	{
+		DuckyMeshInstance instance;
+
+		DuckyFile.read( reinterpret_cast<char*>(&instance.mMeshDataIndex), sizeof(instance.mMeshDataIndex));
+		DuckyFile.read( reinterpret_cast<char*>(&instance.mTransform), sizeof(instance.mTransform));
+
+		if (!DuckyFile) return false;
+
+		mInstances.emplace_back(std::move(instance));
 	}
 
 	size_t numMeshes = 0;
@@ -48,32 +72,40 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 		mMeshes.emplace_back(std::move(nextMesh));
 	}
 
+	size_t totalPrimitiveDraws = 0;
+
+	for (const DuckyMeshInstance& instance :mInstances)
+	{
+		if (instance.mMeshDataIndex < 0 || instance.mMeshDataIndex >= static_cast<int>(mMeshes.size())) continue;
+
+		totalPrimitiveDraws += mMeshes[instance.mMeshDataIndex].GetPrimitiveCount();
+	}
+
 	// work out number of bytes for matrices needed - instances plus the world proj matrix
-	UINT64 neededCapacity = (numInstances + 1) * AlignConstantBufferSize(sizeof(XMMATRIX));
+	const UINT64 neededCapacity = AlignConstantBufferSize(sizeof(PerFrameConstants)) +
+								  numInstances * AlignConstantBufferSize(sizeof(PerInstanceConstants)) +
+								  totalPrimitiveDraws * AlignConstantBufferSize(sizeof(MaterialConstants));
+
 	mDuckyContext = std::make_unique<DuckyGraphicsContext>();
 	if(!mDuckyContext->Init(mDeviceManager.get(), neededCapacity, &mLogFile)) return false;
 
 	RootSignatureDesc drawSig = {};
 
-	D3D12_ROOT_PARAMETER rootParams[3]{};
+	D3D12_ROOT_PARAMETER rootParams[RootParameter::Count]{};
 
 	// Root parameter 0:
 	// Direct root CBV at b0 for the vertex shader.
-	rootParams[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
-
-	rootParams[0].Descriptor.ShaderRegister = 0;
-	rootParams[0].Descriptor.RegisterSpace = 0;
-
-	rootParams[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
+	rootParams[RootParameter::PerFrame].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+	rootParams[RootParameter::PerFrame].Descriptor.ShaderRegister = 0;
+	rootParams[RootParameter::PerFrame].Descriptor.RegisterSpace = 0;
+	rootParams[RootParameter::PerFrame].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
 
 	// Root parameter 1:
 	// Direct root CBV at b0 for the vertex shader.
-	rootParams[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
-
-	rootParams[1].Descriptor.ShaderRegister = 1;
-	rootParams[1].Descriptor.RegisterSpace = 0;
-
-	rootParams[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
+	rootParams[RootParameter::PerInstance].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+	rootParams[RootParameter::PerInstance].Descriptor.ShaderRegister = 1;
+	rootParams[RootParameter::PerInstance].Descriptor.RegisterSpace = 0;
+	rootParams[RootParameter::PerInstance].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
 
 	// Root parameter 1:
 	// SRV descriptor table at t0 for the pixel shader.
@@ -85,14 +117,35 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 	srvRange.RegisterSpace = 0;
 	srvRange.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
 
-	rootParams[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-	rootParams[2].DescriptorTable.NumDescriptorRanges = 1;
-	rootParams[2].DescriptorTable.pDescriptorRanges = &srvRange;
-	rootParams[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+	rootParams[RootParameter::PerMaterial].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+	rootParams[RootParameter::PerMaterial].Descriptor.ShaderRegister = 2;
+	rootParams[RootParameter::PerMaterial].Descriptor.RegisterSpace = 0;
+	rootParams[RootParameter::PerMaterial].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
-	drawSig.parameters.emplace_back(rootParams[0]);
-	drawSig.parameters.emplace_back(rootParams[1]);
-	drawSig.parameters.emplace_back(rootParams[2]);
+	D3D12_DESCRIPTOR_RANGE textureRanges[3]{};
+
+	for (UINT index = 0; index < 3; ++index)
+	{
+		textureRanges[index].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+		textureRanges[index].NumDescriptors = 1;
+		textureRanges[index].BaseShaderRegister = index;
+		textureRanges[index].RegisterSpace = 0;
+		textureRanges[index].OffsetInDescriptorsFromTableStart =D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+	}
+
+	for (UINT index = 0; index < 3; ++index)
+	{
+		const UINT rootIndex = RootParameter::BaseColorTexture + index;
+		rootParams[rootIndex].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+		rootParams[rootIndex].DescriptorTable.NumDescriptorRanges = 1;
+		rootParams[rootIndex].DescriptorTable.pDescriptorRanges = &textureRanges[index];
+		rootParams[rootIndex].ShaderVisibility =D3D12_SHADER_VISIBILITY_PIXEL;
+	}
+
+	for (const auto& param : rootParams)
+	{
+		drawSig.parameters.emplace_back(param);
+	}
 
 	D3D12_STATIC_SAMPLER_DESC samplerDesc = {};
 
@@ -294,6 +347,52 @@ void SimplestApp::UpdateMovementAndRotation(XMVECTOR& ViewVector, XMVECTOR& Scal
 	ScaledMovement = XMVectorScale(movement, MOVEMENT_SPEED * DeltaTime);
 }
 
+bool SimplestApp::BindMaterial( ID3D12GraphicsCommandList* commandList, ConstantBufferAllocator& allocator, const DuckyMaterial& material)
+{
+	ConstantBufferAllocation allocation = allocator.AllocateConstantBuffer(sizeof(MaterialConstants));
+
+	if (allocation.mCpuAddress == nullptr) return false;
+
+	std::memcpy(allocation.mCpuAddress, &material.constants, sizeof(MaterialConstants));
+
+	commandList->SetGraphicsRootConstantBufferView(RootParameter::PerMaterial, allocation.mGpuAddress);
+
+	BindTexture( commandList, RootParameter::BaseColorTexture, material.mBaseColorTexture);
+	BindTexture(commandList, RootParameter::NormalTexture, material.mNormalTexture);
+	BindTexture(commandList, RootParameter::MetallicRoughnessTexture, material.mMetallicRoughnessTexture);
+
+	return true;
+}
+
+void SimplestApp::BindTexture(ID3D12GraphicsCommandList* commandList, UINT rootParameter, size_t textureHandle)
+{
+	DescriptorHeapResource* texture = mDeviceManager->GetTexture(textureHandle);
+
+	if (texture == nullptr)
+	{
+		// TODO
+		// Bind an appropriate fallback descriptor here.
+		return;
+	}
+
+	commandList->SetGraphicsRootDescriptorTable(rootParameter,texture->descHandle);
+}
+
+bool SimplestApp::BindInstanceConstants( ID3D12GraphicsCommandList* commandList, ConstantBufferAllocator& allocator, const DuckyMeshInstance& instance)
+{
+	ConstantBufferAllocation allocation = allocator.AllocateConstantBuffer( sizeof(PerInstanceConstants));
+
+	if (allocation.mCpuAddress == nullptr) return false;
+
+	auto* constants = static_cast<PerInstanceConstants*>(allocation.mCpuAddress);
+
+	XMStoreFloat4x4(&constants->world,XMMatrixTranspose(instance.mTransform));
+
+	commandList->SetGraphicsRootConstantBufferView(RootParameter::PerInstance, allocation.mGpuAddress);
+
+	return true;
+}
+
 void SimplestApp::AppMainLoop()
 {
 	float fov = XMConvertToRadians(60.0f);
@@ -399,16 +498,24 @@ void SimplestApp::AppMainLoop()
 		XMStoreFloat4x4(static_cast<XMFLOAT4X4*>(vpAllocation.mCpuAddress), XMMatrixTranspose(vp));
 		list->SetGraphicsRootConstantBufferView(0, vpAllocation.mGpuAddress);
 
-		for (auto& instance : mInstances)
-		{
-			if (instance.mMeshDataIndex >= 0 && instance.mMeshDataIndex < numMeshes)
-			{
-				auto allocation = cbvAllocator->AllocateConstantBuffer(sizeof(XMFLOAT4X4));
-				XMMATRIX world = instance.mTransform;
-				XMStoreFloat4x4(static_cast<XMFLOAT4X4*>(allocation.mCpuAddress), XMMatrixTranspose(world));
-				list->SetGraphicsRootConstantBufferView(1,allocation.mGpuAddress);
+		list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-				mMeshes[instance.mMeshDataIndex].DrawMesh(list, mDeviceManager.get());
+		for (const DuckyMeshInstance& instance : mInstances)
+		{
+			if (instance.mMeshDataIndex < 0 || instance.mMeshDataIndex >= static_cast<int>(mMeshes.size())) continue;
+			
+			const DuckyMeshData& mesh = mMeshes[instance.mMeshDataIndex];
+
+			BindInstanceConstants(list, *cbvAllocator,instance);
+
+			for (const DuckyPrimitive& primitive : mesh.GetPrimitives())
+			{
+				const DuckyMaterial& material = mesh.GetMaterial(primitive.GetMaterialIndex());
+
+				BindMaterial(list,*cbvAllocator,material);
+
+				primitive.BindGeometry(list);
+				primitive.Draw(list);
 			}
 		}
 

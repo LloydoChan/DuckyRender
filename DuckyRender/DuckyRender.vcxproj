@@ -178,6 +178,7 @@
     <ClInclude Include="DuckyCompiler.h" />
     <ClInclude Include="DuckyDescriptor.h" />
     <ClInclude Include="DuckyGraphicsContext.h" />
+    <ClInclude Include="DuckyMaterial.h" />
     <ClInclude Include="DuckyMesh.h" />
     <ClInclude Include="DuckySwapChain.h" />
     <ClInclude Include="DuckyTools.h" />
