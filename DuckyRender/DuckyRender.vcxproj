@@ -146,6 +146,7 @@
     <ClCompile Include="D3DDeviceManager.cpp" />
     <ClCompile Include="DuckyApp.cpp" />
     <ClCompile Include="DuckyCompiler.cpp" />
+    <ClCompile Include="DuckyDescriptor.cpp" />
     <ClCompile Include="DuckyGraphicsContext.cpp" />
     <ClCompile Include="DuckyMesh.cpp" />
     <ClCompile Include="DuckySwapChain.cpp" />

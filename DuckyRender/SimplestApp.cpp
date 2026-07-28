@@ -48,32 +48,51 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 		mMeshes.emplace_back(std::move(nextMesh));
 	}
 
+	// work out number of bytes for matrices needed
+	UINT64 neededCapacity = numInstances * AlignConstantBufferSize(sizeof(XMMATRIX));
 	mDuckyContext = std::make_unique<DuckyGraphicsContext>();
-	if(!mDuckyContext->Init(mDeviceManager.get(), &mLogFile)) return false;
+	if(!mDuckyContext->Init(mDeviceManager.get(), neededCapacity, &mLogFile)) return false;
 
-	RootSignatureDesc DrawSig = {};
+	RootSignatureDesc drawSig = {};
 
-	D3D12_DESCRIPTOR_RANGE descTables[2]{};
 	D3D12_ROOT_PARAMETER rootParams[2]{};
-	
-	rootParams[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
-	rootParams[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
-	descTables[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_CBV;
-	descTables[1].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+	// Root parameter 0:
+	// Direct root CBV at b0 for the vertex shader.
+	rootParams[0].ParameterType =
+		D3D12_ROOT_PARAMETER_TYPE_CBV;
 
-	for (UINT inputCounter = 0; inputCounter < 2; inputCounter++)
-	{
-		descTables[inputCounter].NumDescriptors = 1;
-		descTables[inputCounter].BaseShaderRegister = 0;
-		descTables[inputCounter].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+	rootParams[0].Descriptor.ShaderRegister = 0;
+	rootParams[0].Descriptor.RegisterSpace = 0;
 
-		rootParams[inputCounter].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-		
-		rootParams[inputCounter].DescriptorTable.pDescriptorRanges = &descTables[inputCounter];
-		rootParams[inputCounter].DescriptorTable.NumDescriptorRanges = 1;
-		DrawSig.parameters.emplace_back(rootParams[inputCounter]);
-	}
+	rootParams[0].ShaderVisibility =
+		D3D12_SHADER_VISIBILITY_VERTEX;
+
+	// Root parameter 1:
+	// SRV descriptor table at t0 for the pixel shader.
+	D3D12_DESCRIPTOR_RANGE srvRange = {};
+
+	srvRange.RangeType =
+		D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+
+	srvRange.NumDescriptors = 1;
+	srvRange.BaseShaderRegister = 0;
+	srvRange.RegisterSpace = 0;
+	srvRange.OffsetInDescriptorsFromTableStart =
+		D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+
+	rootParams[1].ParameterType =
+		D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+
+	rootParams[1].DescriptorTable.NumDescriptorRanges = 1;
+	rootParams[1].DescriptorTable.pDescriptorRanges =
+		&srvRange;
+
+	rootParams[1].ShaderVisibility =
+		D3D12_SHADER_VISIBILITY_PIXEL;
+
+	drawSig.parameters.emplace_back(rootParams[0]);
+	drawSig.parameters.emplace_back(rootParams[1]);
 
 	D3D12_STATIC_SAMPLER_DESC samplerDesc = {};
 
@@ -87,9 +106,9 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 	samplerDesc.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 	samplerDesc.ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
 
-	DrawSig.staticSamplers.emplace_back(samplerDesc);
+	drawSig.staticSamplers.emplace_back(samplerDesc);
 
-	mPipeline = mDeviceManager->CreatePSO(L"BasicVertTransformation.hlsl", L"main", L"BasicColorPixelShader.hlsl", L"main", DrawSig);
+	mPipeline = mDeviceManager->CreatePSO(L"BasicVertTransformation.hlsl", L"main", L"BasicColorPixelShader.hlsl", L"main", drawSig);
 	if (mPipeline.rootSig == nullptr || mPipeline.pipeLineState == nullptr) return false;
 
 	mWholeScreenViewPortScissor.scissor.left = 0;
@@ -329,7 +348,6 @@ void SimplestApp::AppMainLoop()
 
 		UINT currentFrame = mDeviceManager->GetCurrentFrameIndex();
 
-		
 		auto currentTime = Clock::now();
 
 		float deltaTime = std::chrono::duration<float>(
@@ -352,6 +370,7 @@ void SimplestApp::AppMainLoop()
 		float clearColor[] = { 0.f, 0.f, 0.f, 1.f };
 
 		if (!mDuckyContext->BeginFrame(currentFrame, mFence.Get(), mPipeline.pipeLineState.Get(), mFenceEvent, &mLogFile)) break;
+		ConstantBufferAllocator* cbvAllocator = mDuckyContext->GetBufferAllocator(currentFrame);
 		D3D12_RESOURCE_BARRIER barrier = mDeviceManager->GetBarrier();
 		list->ResourceBarrier(1, &barrier);
 		list->SetPipelineState(mPipeline.pipeLineState.Get());
@@ -369,18 +388,22 @@ void SimplestApp::AppMainLoop()
 		list->SetGraphicsRootSignature(mPipeline.rootSig.Get());
 		list->SetDescriptorHeaps(1, &heapPtr);
 
-		list->SetGraphicsRootDescriptorTable(0, mMatrixBuffer[currentFrame].descHandle);
 		size_t numMeshes = mMeshes.size();
 		static int currentInstance = 0;
 		static int frameCnt = 0;
 		auto instance = mInstances[currentInstance];
 		for (auto& instance : mInstances)
 		{
-			if (instance.mMeshDataIndex == 1 && instance.mMeshDataIndex < numMeshes)
+			if (instance.mMeshDataIndex >= 0 && instance.mMeshDataIndex < numMeshes)
 			{
+				auto allocation = cbvAllocator->AllocateConstantBuffer(sizeof(XMFLOAT4X4));
+
 				XMMATRIX world = instance.mTransform;
 				XMMATRIX wvp = world * view * projection;
-				XMStoreFloat4x4(mMappedTransform[currentFrame], XMMatrixTranspose(wvp));
+
+				XMStoreFloat4x4(static_cast<XMFLOAT4X4*>(allocation.mCpuAddress),XMMatrixTranspose(world * view * projection));
+				list->SetGraphicsRootConstantBufferView(0,allocation.mGpuAddress);
+
 				mMeshes[instance.mMeshDataIndex].DrawMesh(list, mDeviceManager.get());
 			}
 		}

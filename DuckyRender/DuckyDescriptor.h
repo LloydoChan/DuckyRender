@@ -1,21 +1,30 @@
 #pragma once
-
+#include <wrl/client.h>
 #include <d3d12.h>
+
+using Microsoft::WRL::ComPtr;
 
 const UINT INVALID_INDEX = 2000;
 
-struct DescriptorAllocation
+struct ConstantBufferAllocation;
+
+struct ConstantBufferAllocator
 {
-    UINT32 index = INVALID_INDEX;
-    D3D12_CPU_DESCRIPTOR_HANDLE cpu{};
-    D3D12_GPU_DESCRIPTOR_HANDLE gpu{};
+    ComPtr<ID3D12Resource> mResourceBuffer;
+    unsigned char* mMappedData = nullptr;
+
+    D3D12_GPU_VIRTUAL_ADDRESS mGpuBaseAddress = 0;
+    UINT64 mCapacity = 0;
+    UINT64 mCurrentOffset = 0;
+
+    ConstantBufferAllocation AllocateConstantBuffer(UINT64 size);
+
+    void Reset() { mCurrentOffset = 0; }
+    bool Init(ID3D12Device* device, UINT64 capacityBytes);
 };
 
-class DescriptorAllocator
+struct ConstantBufferAllocation
 {
-public:
-    DescriptorAllocation Allocate();
-    void FreeDeferred(
-        DescriptorAllocation allocation,
-        UINT64 fenceValue);
+    void* mCpuAddress = nullptr;
+    D3D12_GPU_VIRTUAL_ADDRESS mGpuAddress = 0;
 };

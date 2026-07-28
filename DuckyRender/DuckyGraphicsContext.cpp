@@ -2,15 +2,18 @@
 #include "D3DDeviceManager.h"
 #include "DuckyTools.h"
 
-bool DuckyGraphicsContext::Init(D3DDeviceManager* DeviceManager, std::wofstream* LogFile)
+bool DuckyGraphicsContext::Init(D3DDeviceManager* DeviceManager, UINT64 CBVCapacity, std::wofstream* LogFile)
 {
 	for (auto& frame : mFrames)
 	{
-		frame.allocator = DeviceManager->CreateCommandAllocator();
-		if (frame.allocator == nullptr) return false;
+		frame.mCmdAllocator = DeviceManager->CreateCommandAllocator();
+		if (frame.mCmdAllocator == nullptr) return false;
+
+		frame.mBufferAllocator.Init(DeviceManager->GetDevice(), CBVCapacity);
+		if (frame.mBufferAllocator.mResourceBuffer.Get() == nullptr) return false;
 	}
 
-	HRESULT hResult = DeviceManager->GetDevice()->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, mFrames[0].allocator.Get(), nullptr, IID_PPV_ARGS(&mCommandList));
+	HRESULT hResult = DeviceManager->GetDevice()->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, mFrames[0].mCmdAllocator.Get(), nullptr, IID_PPV_ARGS(&mCommandList));
 	if (FAILED(hResult) && !OutputErrorFromHResult(hResult, "problem creating command list: ", *LogFile)) return false;
 	
 	hResult = mCommandList->Close();
@@ -31,11 +34,13 @@ bool DuckyGraphicsContext::BeginFrame(UINT CurrentFrame, ID3D12Fence* Fence, ID3
 		if(WaitForSingleObject(event, INFINITE) != WAIT_OBJECT_0) return false;
 	}
 
-	hResult = context.allocator.Get()->Reset();
+	hResult = context.mCmdAllocator.Get()->Reset();
 	if (FAILED(hResult) && !OutputErrorFromHResult(hResult, "problem resetting Command Allocator", *LogFile)) return false;
 
-	hResult = mCommandList->Reset(context.allocator.Get(), PipelineState);
+	hResult = mCommandList->Reset(context.mCmdAllocator.Get(), PipelineState);
 	if (FAILED(hResult) && !OutputErrorFromHResult(hResult, "problem resetting Command List", *LogFile)) return false;
+
+	context.mBufferAllocator.Reset();
 
 	return true;
 }
