@@ -80,6 +80,7 @@ class D3DDeviceManager
 		std::vector<D3D12_INPUT_ELEMENT_DESC> CreateInputLayout(ShaderCompilationOutput& shaderCompData);
 
 		size_t InitTexture(const wchar_t* Filepath, UINT DescriptorHeapIndex);
+		size_t InitFallbackTexture(const wchar_t* Name, const XMFLOAT4& InputColor, UINT DescriptorHeapIndex);
 
 		ID3D12CommandQueue* GetCommandQueue() { return mCommandQueue.Get(); }
 		DescriptorHeapResource* GetTexture(size_t HashedInput);
@@ -117,6 +118,7 @@ class D3DDeviceManager
 	private:
 		// only want to call this from the DeviceManager itself
 		DescriptorHeapResource CreateTexture(const wchar_t* Filepath, ID3D12DescriptorHeap* descHeap);
+		DescriptorHeapResource CreateFallbackTexture(const wchar_t* Name, const XMFLOAT4& Color, ID3D12DescriptorHeap* descHeap);
 		std::unordered_map<size_t,DescriptorHeapResource> mTextures;
 
 		ComPtr<ID3D12Device> mDevice;

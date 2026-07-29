@@ -3,7 +3,12 @@
 #include <DirectXMath.h>
 #include <fstream>
 
+using namespace DirectX;
+
 class D3DDeviceManager;
+
+const XMFLOAT4 BaseColorFallback{ 1.f, 1.f, 1.f, 1.f };
+const XMFLOAT4 NormalFallback{ 0.5f, 0.5f, 1.f, 1.f };
 
 class DuckyApp
 {
@@ -31,4 +36,7 @@ protected:
 	UINT mClientHeight = 0;
 
 	bool mMinimized = false;
+
+	size_t mBaseColorFallbackHandle = 0;
+	size_t mNormalColorFallbackHandle = 0;
 };

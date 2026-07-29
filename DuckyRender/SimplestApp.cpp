@@ -86,6 +86,10 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 								  numInstances * AlignConstantBufferSize(sizeof(PerInstanceConstants)) +
 								  totalPrimitiveDraws * AlignConstantBufferSize(sizeof(MaterialConstants));
 
+	// init fallback textures
+	mBaseColorFallbackHandle = mDeviceManager->InitFallbackTexture(L"BaseColorFallback", BaseColorFallback, mCbvSrvUavHandle);
+	//mNormalColorFallbackHandle = mDeviceManager->InitFallbackTexture(L"NormalFallback", NormalFallback, mCbvSrvUavHandle);
+
 	mDuckyContext = std::make_unique<DuckyGraphicsContext>();
 	if(!mDuckyContext->Init(mDeviceManager.get(), neededCapacity, &mLogFile)) return false;
 
@@ -98,7 +102,7 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 	rootParams[RootParameter::PerFrame].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
 	rootParams[RootParameter::PerFrame].Descriptor.ShaderRegister = 0;
 	rootParams[RootParameter::PerFrame].Descriptor.RegisterSpace = 0;
-	rootParams[RootParameter::PerFrame].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
+	rootParams[RootParameter::PerFrame].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
 
 	// Root parameter 1:
 	// Direct root CBV at b0 for the vertex shader.
@@ -107,11 +111,11 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 	rootParams[RootParameter::PerInstance].Descriptor.RegisterSpace = 0;
 	rootParams[RootParameter::PerInstance].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
 
-	// Root parameter 1:
+	// Root parameter 2:
 	// SRV descriptor table at t0 for the pixel shader.
 	D3D12_DESCRIPTOR_RANGE srvRange = {};
 
-	srvRange.RangeType =D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+	srvRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
 	srvRange.NumDescriptors = 1;
 	srvRange.BaseShaderRegister = 0;
 	srvRange.RegisterSpace = 0;
@@ -357,23 +361,18 @@ bool SimplestApp::BindMaterial( ID3D12GraphicsCommandList* commandList, Constant
 
 	commandList->SetGraphicsRootConstantBufferView(RootParameter::PerMaterial, allocation.mGpuAddress);
 
-	BindTexture( commandList, RootParameter::BaseColorTexture, material.mBaseColorTexture);
-	BindTexture(commandList, RootParameter::NormalTexture, material.mNormalTexture);
-	BindTexture(commandList, RootParameter::MetallicRoughnessTexture, material.mMetallicRoughnessTexture);
+	BindTexture( commandList, RootParameter::BaseColorTexture, material.mBaseColorTexture, mBaseColorFallbackHandle);
+	BindTexture(commandList, RootParameter::NormalTexture, material.mNormalTexture, mNormalColorFallbackHandle);
+	BindTexture(commandList, RootParameter::MetallicRoughnessTexture, material.mMetallicRoughnessTexture, mBaseColorFallbackHandle);
 
 	return true;
 }
 
-void SimplestApp::BindTexture(ID3D12GraphicsCommandList* commandList, UINT rootParameter, size_t textureHandle)
+void SimplestApp::BindTexture(ID3D12GraphicsCommandList* commandList, UINT rootParameter, size_t textureHandle, size_t fallBackHandle)
 {
 	DescriptorHeapResource* texture = mDeviceManager->GetTexture(textureHandle);
-
-	if (texture == nullptr)
-	{
-		// TODO
-		// Bind an appropriate fallback descriptor here.
-		return;
-	}
+	if (texture == nullptr) texture = mDeviceManager->GetTexture(fallBackHandle); // if texture not found find fallback
+	if (texture == nullptr) return; // if still not found...
 
 	commandList->SetGraphicsRootDescriptorTable(rootParameter,texture->descHandle);
 }
@@ -387,8 +386,12 @@ bool SimplestApp::BindInstanceConstants( ID3D12GraphicsCommandList* commandList,
 	auto* constants = static_cast<PerInstanceConstants*>(allocation.mCpuAddress);
 
 	XMStoreFloat4x4(&constants->world,XMMatrixTranspose(instance.mTransform));
-
 	commandList->SetGraphicsRootConstantBufferView(RootParameter::PerInstance, allocation.mGpuAddress);
+
+	/*const DuckyMeshData& meshData = mMeshes[instance.mMeshDataIndex];
+	const DuckyMaterial& materialData = meshData.GetMaterial(meshData.GetPrimitives()[0].GetMaterialIndex());
+
+	const MaterialConstants& matConstants = materialData.constants;*/
 
 	return true;
 }
@@ -494,9 +497,13 @@ void SimplestApp::AppMainLoop()
 		
 		// per frame matrix buffer setting
 		XMMATRIX vp = view * projection;
-		auto vpAllocation = cbvAllocator->AllocateConstantBuffer(sizeof(XMFLOAT4X4));
-		XMStoreFloat4x4(static_cast<XMFLOAT4X4*>(vpAllocation.mCpuAddress), XMMatrixTranspose(vp));
-		list->SetGraphicsRootConstantBufferView(0, vpAllocation.mGpuAddress);
+		ConstantBufferAllocation constantAllocation = cbvAllocator->AllocateConstantBuffer(sizeof(PerFrameConstants));
+		PerFrameConstants* asFrameConstants = reinterpret_cast<PerFrameConstants*>(constantAllocation.mCpuAddress);
+		XMStoreFloat4x4(static_cast<XMFLOAT4X4*>(&asFrameConstants->mViewProjection), XMMatrixTranspose(vp));
+		XMStoreFloat4(static_cast<XMFLOAT4*>(&asFrameConstants->mCameraPosition), eye);
+		asFrameConstants->mLightColor = XMFLOAT4(1.f, 1.f, 1.f, 1.f);
+		asFrameConstants->mLightDirection = XMFLOAT4(-0.4f, -1.0f, 0.2f, 0.f);
+		list->SetGraphicsRootConstantBufferView(0, constantAllocation.mGpuAddress);
 
 		list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 

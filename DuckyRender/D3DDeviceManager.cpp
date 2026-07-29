@@ -120,11 +120,15 @@ std::vector<D3D12_INPUT_ELEMENT_DESC> D3DDeviceManager::CreateInputLayout(Shader
 			currentDesc.SemanticName = "TEXCOORD";
 			currentDesc.Format = DXGI_FORMAT_R32G32_FLOAT;
 		}
-
-		if (std::strcmp(paramDesc.SemanticName, "NORMAL") == 0)
+		else if (std::strcmp(paramDesc.SemanticName, "NORMAL") == 0)
 		{
 			currentDesc.SemanticName = "NORMAL";
 			currentDesc.Format = DXGI_FORMAT_R32G32B32_FLOAT;
+		}
+		else if (std::strcmp(paramDesc.SemanticName, "TANGENT") == 0)
+		{
+			currentDesc.SemanticName = "TANGENT";
+			currentDesc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
 		}
 
 		Elems.push_back(currentDesc);
@@ -147,6 +151,22 @@ size_t D3DDeviceManager::InitTexture(const wchar_t* Filepath, UINT DescriptorHea
 		return quickHash;
 	}
 	
+	return quickHash;
+}
+
+size_t D3DDeviceManager::InitFallbackTexture(const wchar_t* Name, const XMFLOAT4& InputColor, UINT DescriptorHeapIndex)
+{
+	std::size_t quickHash = std::hash<std::wstring>{}(Name);
+	ID3D12DescriptorHeap* dscHeap = mDescriptorHeaps[DescriptorHeapIndex].Get();
+
+	if (!mTextures.contains(quickHash))
+	{
+		DescriptorHeapResource newResource = CreateFallbackTexture(Name, InputColor, dscHeap);
+		if (newResource.buffer == nullptr) return INVALID_HANDLE;
+		mTextures[quickHash] = newResource;
+		return quickHash;
+	}
+
 	return quickHash;
 }
 
@@ -475,6 +495,63 @@ DescriptorHeapResource D3DDeviceManager::CreateTexture(const wchar_t* Filepath, 
 	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
 	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
 	srvDesc.Texture2D.MipLevels = metaData.mipLevels;
+
+	UINT IncrementOffset = mDescriptorHandleIndex * mDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+	D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle = descHeap->GetCPUDescriptorHandleForHeapStart();
+	cpuHandle.ptr += IncrementOffset;
+	mDevice->CreateShaderResourceView(newTexture.buffer.Get(), &srvDesc, cpuHandle);
+
+	D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle = descHeap->GetGPUDescriptorHandleForHeapStart();
+	gpuHandle.ptr += IncrementOffset;
+	newTexture.heapOffset = mDescriptorHandleIndex++;
+	newTexture.descHandle = gpuHandle;
+	return newTexture;
+}
+
+DescriptorHeapResource D3DDeviceManager::CreateFallbackTexture(const wchar_t* Name, const XMFLOAT4& Color, ID3D12DescriptorHeap* descHeap)
+{
+	DescriptorHeapResource newTexture;
+
+	D3D12_HEAP_PROPERTIES heapprop = {};
+	heapprop.Type = D3D12_HEAP_TYPE_CUSTOM;
+	heapprop.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_WRITE_BACK;
+	heapprop.MemoryPoolPreference = D3D12_MEMORY_POOL_L0;
+	heapprop.CreationNodeMask = 0;
+	heapprop.VisibleNodeMask = 0;
+
+	D3D12_RESOURCE_DESC resDesc = {};
+
+	resDesc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
+	resDesc.Width = 4;
+	resDesc.Height =1;
+	resDesc.DepthOrArraySize = 1;
+	resDesc.SampleDesc.Count = 1;
+	resDesc.SampleDesc.Quality = 0;
+	resDesc.MipLevels = 1;
+	resDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE1D;
+	resDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+	resDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
+
+
+	HRESULT hResult = mDevice->CreateCommittedResource(&heapprop,
+		D3D12_HEAP_FLAG_NONE,
+		&resDesc,
+		D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
+		nullptr,
+		IID_PPV_ARGS(&newTexture.buffer));
+
+	if (FAILED(hResult) && !OutputErrorFromHResult(hResult, "couldn't create texture ", *mLogFilePtr)) return newTexture;
+
+	hResult = newTexture.buffer->WriteToSubresource(0, nullptr, &Color, sizeof(XMFLOAT4), sizeof(XMFLOAT4));
+
+	if (FAILED(hResult) && !OutputErrorFromHResult(hResult, "couldn't write to subresource ", *mLogFilePtr)) return newTexture;
+
+	// create the resource view
+	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+	srvDesc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
+	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE1D;
+	srvDesc.Texture2D.MipLevels = 1;
 
 	UINT IncrementOffset = mDescriptorHandleIndex * mDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 	D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle = descHeap->GetCPUDescriptorHandleForHeapStart();
