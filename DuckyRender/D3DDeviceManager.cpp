@@ -3,6 +3,7 @@
 #include <vector>
 #include <D3dx12.h>
 #include <d3d12shader.h>
+#include <filesystem>
 
 #include "D3DDeviceManager.h"
 #include "DuckyTools.h"
@@ -446,10 +447,17 @@ DescriptorHeapResource D3DDeviceManager::CreateTexture(const wchar_t* Filepath, 
 
 	DescriptorHeapResource newTexture;
 
-	HRESULT hResult = LoadFromWICFile(Filepath, WIC_FLAGS_NONE, &metaData, imageData);
+	HRESULT hResult;
+
+	const std::filesystem::path path(Filepath);
+
+	if (path.extension() == L".dds") hResult = LoadFromDDSFile(Filepath, DDS_FLAGS_NONE, &metaData, imageData);
+	else hResult = LoadFromWICFile( Filepath, WIC_FLAGS_NONE, &metaData,imageData);
+
 	if (FAILED(hResult) && !OutputErrorFromHResult(hResult, "couldn't load Texture ", *mLogFilePtr)) return newTexture;
 
-	auto img = imageData.GetImage(0, 0, 0);
+	auto img = imageData.GetImages();
+	size_t imgCount = imageData.GetImageCount();
 	
 	D3D12_HEAP_PROPERTIES heapprop = {};
 	heapprop.Type = D3D12_HEAP_TYPE_CUSTOM;
@@ -481,11 +489,17 @@ DescriptorHeapResource D3DDeviceManager::CreateTexture(const wchar_t* Filepath, 
 
 	if (FAILED(hResult) && !OutputErrorFromHResult(hResult, "couldn't create texture ", *mLogFilePtr)) return newTexture;
 
-	hResult = newTexture.buffer->WriteToSubresource(0,
-		nullptr,
-		img->pixels,
-		img->rowPitch,
-		img->slicePitch);
+	for (size_t subresourceIndex = 0; subresourceIndex < imgCount; ++subresourceIndex)
+	{
+		const Image& image = img[subresourceIndex];
+
+		hResult = newTexture.buffer->WriteToSubresource(subresourceIndex,
+			nullptr,
+			img[subresourceIndex].pixels,
+			img[subresourceIndex].rowPitch,
+			img[subresourceIndex].slicePitch);
+	}
+
 
 	if (FAILED(hResult) && !OutputErrorFromHResult(hResult, "couldn't write to subresource ", *mLogFilePtr)) return newTexture;
 
@@ -495,6 +509,7 @@ DescriptorHeapResource D3DDeviceManager::CreateTexture(const wchar_t* Filepath, 
 	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
 	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
 	srvDesc.Texture2D.MipLevels = metaData.mipLevels;
+	srvDesc.Texture2D.MostDetailedMip = 0;
 
 	UINT IncrementOffset = mDescriptorHandleIndex * mDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 	D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle = descHeap->GetCPUDescriptorHandleForHeapStart();
