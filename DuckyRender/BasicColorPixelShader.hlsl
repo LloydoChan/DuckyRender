@@ -79,7 +79,7 @@ float4 main(Input input) : SV_TARGET
     float3 V = normalize(cameraPosition.xyz - input.worldPos);
     // create tangent space
     float3 N = normalize(input.normal);
-    float3 T = normalize(input.tangent).xyz;
+    float3 T = normalize(input.tangent.xyz);
     
     T = normalize(T - N * dot(N, T));
     
@@ -101,7 +101,7 @@ float4 main(Input input) : SV_TARGET
     
     float3 H = normalize(V + L);
     float NDotL = saturate(dot(N, L));
-    float3 baseColor = tex.Sample(smp, input.uv).rgb;
+    float3 baseColor = BaseColorFactor * tex.Sample(smp, input.uv);
     
     float3 litColor = baseColor * lightColor.rgb * NDotL;
     
@@ -111,8 +111,8 @@ float4 main(Input input) : SV_TARGET
 
     float3 F0 = lerp(0.04f, baseColor, metallic);
     float3 F  = FresnelSchlick(VdotH, F0);
-    float D   = DistributionGGX(N, H, roughness);
-    float G   = GeometrySmith(N, V, L,roughness);
+    float  D  = DistributionGGX(N, H, roughness);
+    float  G  = GeometrySmith(N, V, L,roughness);
 
     float3 specular = D * G * F / max(4.0f * NdotV * NDotL, 0.0001f);
     float3 kS = F;
@@ -125,7 +125,7 @@ float4 main(Input input) : SV_TARGET
     float3 color = (diffuse + specular) * radiance * NDotL;
     
     // hack ambient term
-    color += baseColor * float3(0.05f, 0.05f, 0.05f);
+    //color += baseColor * float3(0.05f, 0.05f, 0.05f);
    
     // gamma
     color = color / (color + 1.0f);

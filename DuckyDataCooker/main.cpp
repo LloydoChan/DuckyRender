@@ -21,6 +21,18 @@ struct PrimitiveOutput
 	unsigned char* mIndexData = nullptr;
 };
 
+enum class TextureType
+{
+	BASE_COLOR = 0,
+	NORMAL = 1,
+	METALLIC_ROUGHNESS = 2,
+};
+
+using TexturePair = std::pair<TextureType, std::string>;
+std::map<TextureType, std::string> CompressionTypes = { TexturePair {TextureType::BASE_COLOR, "BC7_UNORM_SRGB"},
+														TexturePair {TextureType::NORMAL, "BC7_UNORM"}, //normals are linear
+														TexturePair {TextureType::METALLIC_ROUGHNESS, "BC7_UNORM"}}; // so are roughness textures
+
 const float stdMax = std::numeric_limits<float>::max();
 const float stdMin = std::numeric_limits<float>::lowest();
 
@@ -32,10 +44,11 @@ struct AABB
 
 size_t totalMeshes = 0;
 
-bool ConvertToDds(const std::string& texconvPath, const std::string& inputJpg, const std::string& outputDir) {
+bool ConvertToDds(TextureType Type, const std::string& texconvPath, const std::string& inputJpg, const std::string& outputDir) {
 	
+	std::string conversionFormat = CompressionTypes[Type];
 	// Example command: texconv.exe -f BC1_UNORM -y input.jpg -o C:/output
-	std::string cmd = texconvPath + " -f BC1_UNORM -y \"" + inputJpg + "\" -o \"" + outputDir + "\"";
+	std::string cmd = texconvPath + " -f " + conversionFormat +"  -y \"" + inputJpg + "\" -o \"" + outputDir + "\"";
 
 	int result = std::system(cmd.c_str());
 
@@ -176,7 +189,7 @@ void WriteOutNodeData(const tinygltf::Node& Node, const tinygltf::Model& Model, 
 	}
 }
 
-void WriteOutTextureData(int index, tinygltf::Model Model, stringstream& DataToFlushOut, string& InputPath, string& OutputPath)
+void WriteOutTextureData(int index, tinygltf::Model Model, stringstream& DataToFlushOut, TextureType Type, string& InputPath, string& OutputPath)
 {
 	static std::set<string> alreadySeen;
 
@@ -195,7 +208,7 @@ void WriteOutTextureData(int index, tinygltf::Model Model, stringstream& DataToF
 		DataToFlushOut.write((char*)&newFileName[0], newFileNameLength);
 		if (alreadySeen.contains(textureName)) return;
 		alreadySeen.insert(textureName);
-		ConvertToDds("texConv.exe", conversionName, newFileName);
+		ConvertToDds(Type, "texConv.exe", conversionName, newFileName);
 	}
 }
 
@@ -217,15 +230,15 @@ void WriteOutMeshData(const tinygltf::Node& Node, const tinygltf::Model& Model, 
 			int primTextureIndex = primMaterial.pbrMetallicRoughness.baseColorTexture.index;
 
 			DataToFlushOut.write((char*)&primTextureIndex, sizeof(int));
-			WriteOutTextureData(primTextureIndex, Model, DataToFlushOut, InputPath, OutputPath);
+			WriteOutTextureData(primTextureIndex, Model, DataToFlushOut, TextureType::BASE_COLOR, InputPath, OutputPath);
 
 			int normTextureIndex = primMaterial.normalTexture.index;
 			DataToFlushOut.write((char*)&normTextureIndex, sizeof(int));
-			WriteOutTextureData(normTextureIndex, Model, DataToFlushOut, InputPath, OutputPath);
+			WriteOutTextureData(normTextureIndex, Model, DataToFlushOut, TextureType::NORMAL, InputPath, OutputPath);
 
 			int metallicIndex = primMaterial.pbrMetallicRoughness.metallicRoughnessTexture.index;
 			DataToFlushOut.write((char*)&metallicIndex, sizeof(int));
-			WriteOutTextureData(metallicIndex, Model, DataToFlushOut, InputPath, OutputPath);
+			WriteOutTextureData(metallicIndex, Model, DataToFlushOut, TextureType::METALLIC_ROUGHNESS, InputPath, OutputPath);
 
 			const tinygltf::PbrMetallicRoughness& pbrValues = primMaterial.pbrMetallicRoughness;
 			float roughness = static_cast<float>(pbrValues.roughnessFactor);
