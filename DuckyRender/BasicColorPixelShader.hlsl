@@ -35,5 +35,13 @@ SamplerState smp : register(s0);
 
 float4 main(Input input) : SV_TARGET
 {
-    return float4(tex.Sample(smp, input.uv));
+    float3 N = normalize(input.normal);
+    float3 L = normalize(-lightDirection);
+    
+    float NDotL = saturate(dot(N, L));
+    float3 baseColor = tex.Sample(smp, input.uv).rgb;
+    
+    float3 litColor = baseColor * lightColor.rgb * NDotL;
+    
+    return float4(float3(NDotL, NDotL, NDotL), 1.f);
 }
