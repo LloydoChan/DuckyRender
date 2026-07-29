@@ -4,6 +4,7 @@
 #include <sstream>
 #include <filesystem>
 #include <DirectXMath.h>
+#include <set>
 #include "tiny_gltf.h"
 
 using namespace std;
@@ -159,6 +160,8 @@ void WriteOutNodeData(const tinygltf::Node& Node, const tinygltf::Model& Model, 
 
 void WriteOutTextureData(int index, tinygltf::Model Model, stringstream& DataToFlushOut, string& InputPath, string& OutputPath)
 {
+	static std::set<string> alreadySeen;
+
 	if (index != -1)
 	{
 		const tinygltf::Texture tex = Model.textures[index];
@@ -168,11 +171,13 @@ void WriteOutTextureData(int index, tinygltf::Model Model, stringstream& DataToF
 		size_t dotPos = textureName.find_last_of('.');
 		string newFileName = OutputPath + "//Textures//";
 
-		ConvertToDds("texConv.exe", conversionName, newFileName);
 		newFileName = OutputPath + "//" + textureName.substr(0, dotPos) + ".dds";
 		size_t newFileNameLength = newFileName.length();
 		DataToFlushOut.write((char*)&newFileNameLength, sizeof(size_t));
 		DataToFlushOut.write((char*)&newFileName[0], newFileNameLength);
+		if (alreadySeen.contains(textureName)) return;
+		alreadySeen.insert(textureName);
+		ConvertToDds("texConv.exe", conversionName, newFileName);
 	}
 }
 
@@ -268,7 +273,7 @@ int main(int argc, char** argv)
 	
 	string outputPath = "..//Assets//CookedAssets//";
 	string outputSuffix = "//CookedData.Ducky";
-	std::filesystem::create_directories(outputPath + asset);
+	std::filesystem::create_directories(outputPath + asset + "//Textures");
 	ofstream outputFile(outputPath + asset + outputSuffix, std::ios::binary);
 	if (!outputFile) return 1;
 	stringstream dataToFlushOut;
