@@ -18,11 +18,11 @@ struct MaterialConstants
     float mRoughnessFactor = 1.0f;
     float mMetallicFactor = 1.0f;
 
+    float mNormalScale = 1.0f;
     unsigned int mBaseColorTexture = 0;
     unsigned int mNormalTexture = 0;
     unsigned int mMetallicRoughnessTexture = 0;
 
-    float mNormalScale = 1.0f;
 
     XMFLOAT2 padding{};
 };
