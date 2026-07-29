@@ -20,6 +20,15 @@ bool DuckyApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* WindowNa
 			debugLayer->EnableDebugLayer();
 			debugLayer->Release();
 		}
+
+		if (wcscmp(argv[i], L"-input") == 0) {
+			// get the folder name
+			std::wstring path = L"..//Assets//CookedAssets//";
+			std::wstring asset(argv[i + 1]);
+			std::wstring suffix = L"//CookedData.Ducky";
+
+			mInputFilePath = path + asset + suffix;
+		}
 	}
 	LocalFree(argv);
 

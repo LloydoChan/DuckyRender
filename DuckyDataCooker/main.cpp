@@ -2,6 +2,7 @@
 #include <iomanip>
 #include <fstream>
 #include <sstream>
+#include <filesystem>
 #include <DirectXMath.h>
 #include "tiny_gltf.h"
 
@@ -20,6 +21,17 @@ struct PrimitiveOutput
 };
 
 size_t totalMeshes = 0;
+
+bool ConvertToDds(const std::string& texconvPath, const std::string& inputJpg, const std::string& outputDir) {
+	
+	// Example command: texconv.exe -f BC1_UNORM -y input.jpg -o C:/output
+	std::string cmd = texconvPath + " -f BC1_UNORM -y \"" + inputJpg + "\" -o \"" + outputDir + "\"";
+
+	int result = std::system(cmd.c_str());
+
+	if (result == 0) { std::cout << "Conversion successful!\n"; return true; }
+	else { std::cerr << "Conversion failed with code: " << result << "\n"; return false; }
+}
 
 void DebugMatrix(XMMATRIX& nextTransform)
 {
@@ -145,20 +157,26 @@ void WriteOutNodeData(const tinygltf::Node& Node, const tinygltf::Model& Model, 
 	}
 }
 
-void WriteOutTextureData(int index, tinygltf::Model Model, stringstream& DataToFlushOut)
+void WriteOutTextureData(int index, tinygltf::Model Model, stringstream& DataToFlushOut, string& InputPath, string& OutputPath)
 {
 	if (index != -1)
 	{
 		const tinygltf::Texture tex = Model.textures[index];
 		const tinygltf::Image img = Model.images[tex.source];
-		std::string albedoName = img.uri;
-		size_t albedoNameLength = albedoName.length();
-		DataToFlushOut.write((char*)&albedoNameLength, sizeof(size_t));
-		DataToFlushOut.write((char*)&albedoName[0], albedoNameLength);
+		std::string textureName = img.uri;
+		std::string conversionName = InputPath + "//" + textureName;
+		size_t dotPos = textureName.find_last_of('.');
+		string newFileName = OutputPath + "//Textures//";
+
+		ConvertToDds("texConv.exe", conversionName, newFileName);
+		newFileName = OutputPath + "//" + textureName.substr(0, dotPos) + ".dds";
+		size_t newFileNameLength = newFileName.length();
+		DataToFlushOut.write((char*)&newFileNameLength, sizeof(size_t));
+		DataToFlushOut.write((char*)&newFileName[0], newFileNameLength);
 	}
 }
 
-void WriteOutMeshData(const tinygltf::Node& Node, const tinygltf::Model& Model, stringstream& DataToFlushOut)
+void WriteOutMeshData(const tinygltf::Node& Node, const tinygltf::Model& Model, stringstream& DataToFlushOut, string& InputPath, string& OutputPath)
 {
 	// first write out Node info, get transforms and mesh indices of all nodes...
 	//top node
@@ -176,22 +194,21 @@ void WriteOutMeshData(const tinygltf::Node& Node, const tinygltf::Model& Model, 
 			int primTextureIndex = primMaterial.pbrMetallicRoughness.baseColorTexture.index;
 
 			DataToFlushOut.write((char*)&primTextureIndex, sizeof(int));
-			WriteOutTextureData(primTextureIndex, Model, DataToFlushOut);
+			WriteOutTextureData(primTextureIndex, Model, DataToFlushOut, InputPath, OutputPath);
 
 			int normTextureIndex = primMaterial.normalTexture.index;
 			DataToFlushOut.write((char*)&normTextureIndex, sizeof(int));
-			WriteOutTextureData(normTextureIndex, Model, DataToFlushOut);
+			WriteOutTextureData(normTextureIndex, Model, DataToFlushOut, InputPath, OutputPath);
 
 			int metallicIndex = primMaterial.pbrMetallicRoughness.metallicRoughnessTexture.index;
 			DataToFlushOut.write((char*)&metallicIndex, sizeof(int));
-			WriteOutTextureData(metallicIndex, Model, DataToFlushOut);
+			WriteOutTextureData(metallicIndex, Model, DataToFlushOut, InputPath, OutputPath);
 
 			const tinygltf::PbrMetallicRoughness& pbrValues = primMaterial.pbrMetallicRoughness;
 			float roughness = static_cast<float>(pbrValues.roughnessFactor);
 			DataToFlushOut.write((char*)&roughness, sizeof(float));
 			float metal = static_cast<float>(pbrValues.metallicFactor);
 			DataToFlushOut.write((char*)&metal, sizeof(float));
-
 			
 			std::vector<std::string> names{ "POSITION", "TEXCOORD_0", "TEXCOORD_1", "NORMAL", "TANGENT", "COLOR_0"};
 			FindPrimitiveData(primitive, Model,names, DataToFlushOut);
@@ -236,7 +253,12 @@ int main(int argc, char** argv)
 		return 1;
 	}
 
-	bool success = loader.LoadASCIIFromFile(&model, &error, &warning, argv[1]);
+	string path = "..//Assets//InputAssets//";
+	string asset(argv[1]);
+	string suffix = "//scene.gltf";
+
+	string TextureInputPath = path + asset;
+	bool success = loader.LoadASCIIFromFile(&model, &error, &warning, path + asset + suffix);
 
 	if (!success)
 	{
@@ -244,7 +266,11 @@ int main(int argc, char** argv)
 		return 1;
 	}
 	
-	ofstream outputFile("models//CookedData.Ducky", std::ios::binary);
+	string outputPath = "..//Assets//CookedAssets//";
+	string outputSuffix = "//CookedData.Ducky";
+	std::filesystem::create_directories(outputPath + asset);
+	ofstream outputFile(outputPath + asset + outputSuffix, std::ios::binary);
+	if (!outputFile) return 1;
 	stringstream dataToFlushOut;
 
 	const tinygltf::Scene& scene = model.scenes[model.defaultScene];
@@ -257,9 +283,12 @@ int main(int argc, char** argv)
 	XMMATRIX Transform = XMMatrixIdentity();
 	WriteOutNodeData(rootNode, model, dataToFlushOut, Transform);
 
+	string textureOutputPath = outputPath + asset;
+
 	size_t numMeshes = model.meshes.size();
 	dataToFlushOut.write((char*)&numMeshes, sizeof(size_t));
-	WriteOutMeshData(model.nodes[scene.nodes[0]], model, dataToFlushOut);
+	std::filesystem::create_directories(textureOutputPath);
+	WriteOutMeshData(model.nodes[scene.nodes[0]], model, dataToFlushOut, TextureInputPath, textureOutputPath);
 
 	outputFile << dataToFlushOut.rdbuf();
 	size_t s = outputFile.tellp();
