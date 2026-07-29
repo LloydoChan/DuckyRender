@@ -29,11 +29,13 @@ class SimplestApp : public DuckyApp
 		virtual bool Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* WindowName) override;
 		virtual LRESULT WindowProcedure(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam);
 		virtual void HandleInput(UINT msg, WPARAM wParam, LPARAM lParam);
-		void UpdateMovementAndRotation(XMVECTOR& ViewVector, XMVECTOR& ScaledMovement, float DeltaTime);
+		void UpdateMovementAndRotation(XMVECTOR& ViewVector, float& ScaledMovement, float DeltaTime);
 		bool BindMaterial(ID3D12GraphicsCommandList* commandList, ConstantBufferAllocator& allocator, const DuckyMaterial& material);
 		void BindTexture(ID3D12GraphicsCommandList* commandList, UINT rootParameter, size_t textureHandle, size_t fallBackHandle);
 		bool BindInstanceConstants(ID3D12GraphicsCommandList* commandList, ConstantBufferAllocator& allocator, const DuckyMeshInstance& instance);
 		virtual void AppMainLoop();
+
+		void WorkOutGlobalBoundingBoxCenter();
 
 		bool Resize(UINT WindowWidth, UINT WindowHeight);
 
@@ -41,6 +43,8 @@ class SimplestApp : public DuckyApp
 		bool mKeys[256] = {};
 		LONG mMouseDeltaX = 0;
 		LONG mMouseDeltaY = 0;
+		bool mRightButtonDown = false;
+		int  mScrollAmount = 0;
 
 		ID3D12CommandQueue* mQueue = nullptr;
 
@@ -61,4 +65,6 @@ class SimplestApp : public DuckyApp
 		std::unique_ptr<DuckyGraphicsContext> mDuckyContext;
 
 		std::vector<DuckyMeshInstance> mInstances;
+
+		AABB mGlobalAABB;
 };

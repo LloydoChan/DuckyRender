@@ -21,6 +21,15 @@ struct PrimitiveOutput
 	unsigned char* mIndexData = nullptr;
 };
 
+const float stdMax = std::numeric_limits<float>::max();
+const float stdMin = std::numeric_limits<float>::lowest();
+
+struct AABB
+{
+	XMFLOAT4 mMin { stdMax, stdMax, stdMax, stdMax };
+	XMFLOAT4 mMax{ stdMin, stdMin, stdMin, stdMin };
+};
+
 size_t totalMeshes = 0;
 
 bool ConvertToDds(const std::string& texconvPath, const std::string& inputJpg, const std::string& outputDir) {
@@ -58,6 +67,8 @@ void FindPrimitiveData(const tinygltf::Primitive& Primitive, const tinygltf::Mod
 
 	unsigned int byteStride = 0;
 
+	// get min / max bounding box points for primitive, transformed
+
 	for (const auto& attribute : AttributeNames)
 	{
 		auto itr = Primitive.attributes.find(attribute);
@@ -93,12 +104,26 @@ void FindPrimitiveData(const tinygltf::Primitive& Primitive, const tinygltf::Mod
 	{
 		for (int accessor = 0; accessor < accessors.size(); accessor++)
 		{
+			const unsigned char* start = startPoints[accessor];
+			int stride = strides[accessor];
 			DataToFlushOut.write(reinterpret_cast<const char*>(startPoints[accessor]), strides[accessor]);
 			startPoints[accessor] += strides[accessor];
 		}
 	}
+
+	AABB localBoundingBox;
+	localBoundingBox.mMin.x = static_cast<float>(accessors[0].minValues[0]);
+	localBoundingBox.mMin.y = static_cast<float>(accessors[0].minValues[1]);
+	localBoundingBox.mMin.z = static_cast<float>(accessors[0].minValues[2]);
+	localBoundingBox.mMin.w = 1.f;
+
+	localBoundingBox.mMax.x = static_cast<float>(accessors[0].maxValues[0]);
+	localBoundingBox.mMax.y = static_cast<float>(accessors[0].maxValues[1]);
+	localBoundingBox.mMax.z = static_cast<float>(accessors[0].maxValues[2]);
+	localBoundingBox.mMax.w = 1.f;
 	
-	size_t pos = DataToFlushOut.tellp();
+	// write out localBoundingBox
+	DataToFlushOut.write(reinterpret_cast<const char*>(&localBoundingBox), sizeof(AABB));
 }
 
 void CountMeshNodes(const tinygltf::Node& Node, const tinygltf::Model& Model, size_t& numMeshNodes)
@@ -130,15 +155,7 @@ void WriteOutNodeData(const tinygltf::Node& Node, const tinygltf::Model& Model, 
 
 		transform = nextTransform * transform;
 	}
-	else if (Node.translation.size() > 0 || Node.scale.size() > 0 || Node.rotation.size() > 0)
-	{
-		cout << "huh" << endl;
-	}
-
-	if (Node.light != -1)
-	{
-		cout << "light!" << endl;
-	}
+	
 
 	streampos p = 0;
 	if (Node.mesh != -1)
@@ -149,6 +166,7 @@ void WriteOutNodeData(const tinygltf::Node& Node, const tinygltf::Model& Model, 
 		int nodeMesh = Node.mesh;
 		DataToFlushOut.write((char*)&nodeMesh, sizeof(int));
 		DataToFlushOut.write((char*)&storedWorld, sizeof(XMFLOAT4X4));
+
 	}
 
 	for (auto childNode : Node.children)
@@ -181,7 +199,7 @@ void WriteOutTextureData(int index, tinygltf::Model Model, stringstream& DataToF
 	}
 }
 
-void WriteOutMeshData(const tinygltf::Node& Node, const tinygltf::Model& Model, stringstream& DataToFlushOut, string& InputPath, string& OutputPath)
+void WriteOutMeshData(const tinygltf::Node& Node, const tinygltf::Model& Model, stringstream& DataToFlushOut, AABB& GlobalBoundingBox, string& InputPath, string& OutputPath)
 {
 	// first write out Node info, get transforms and mesh indices of all nodes...
 	//top node
@@ -243,6 +261,8 @@ void WriteOutMeshData(const tinygltf::Node& Node, const tinygltf::Model& Model, 
 			}
 		}
 	}
+
+	//DataToFlushOut.write((char*)&GlobalBoundingBox, sizeof(AABB));
 }
 
 int main(int argc, char** argv)
@@ -293,7 +313,8 @@ int main(int argc, char** argv)
 	size_t numMeshes = model.meshes.size();
 	dataToFlushOut.write((char*)&numMeshes, sizeof(size_t));
 	std::filesystem::create_directories(textureOutputPath);
-	WriteOutMeshData(model.nodes[scene.nodes[0]], model, dataToFlushOut, TextureInputPath, textureOutputPath);
+	AABB globalBoundingBox;
+	WriteOutMeshData(model.nodes[scene.nodes[0]], model, dataToFlushOut, globalBoundingBox, TextureInputPath, textureOutputPath);
 
 	outputFile << dataToFlushOut.rdbuf();
 	size_t s = outputFile.tellp();

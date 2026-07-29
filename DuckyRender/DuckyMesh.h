@@ -32,27 +32,34 @@ struct BufferInfo
 	std::vector<std::byte> Data;
 };
 
+struct AABB
+{
+	XMFLOAT4 min{ (std::numeric_limits<float>::max)(), (std::numeric_limits<float>::max)(), (std::numeric_limits<float>::max)(), (std::numeric_limits<float>::max)() };
+	XMFLOAT4 max{ std::numeric_limits<float>::lowest(), std::numeric_limits<float>::lowest(), std::numeric_limits<float>::lowest(), std::numeric_limits<float>::lowest() };
+};
+
 struct PrimitiveLoadData
 {
 	BufferInfo vertexBuffer;
 	BufferInfo indexBuffer;
 	DuckyMaterial material;
+	AABB boundingBox;
 };
+
 
 class DuckyPrimitive
 {
 public:
 	DuckyPrimitive() {};
 	bool InitPrimitive(D3DDeviceManager* DeviceManager,
-		BufferInfo& VertexBufferInfo,
-		BufferInfo& IndexBufferInfo,
+		PrimitiveLoadData& LoadData,
 		UINT MaterialIndex);
 
 	void BindGeometry(ID3D12GraphicsCommandList* commandList) const;
 	void Draw(ID3D12GraphicsCommandList* commandList) const;
 
 	uint32_t GetMaterialIndex() const { return mMaterialIndex; }
-
+	const AABB& GetBoundingBox() const { return mPrimitiveAABB; }
 private:
 	GpuBuffer mVertices;
 	GpuBuffer mIndices;
@@ -63,6 +70,8 @@ private:
 	UINT mNumIndices = 0;
 
 	UINT mMaterialIndex = 0;
+
+	AABB mPrimitiveAABB;
 
 	bool InitBuffer(D3DDeviceManager* DeviceManager, BufferInfo& BufferInfo, ComPtr<ID3D12Resource>& Data);
 };

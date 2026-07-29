@@ -72,6 +72,11 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 		mMeshes.emplace_back(std::move(nextMesh));
 	}
 
+	WorkOutGlobalBoundingBoxCenter();
+
+	// global AABB
+	//DuckyFile.read(reinterpret_cast<char*>(&mSceneBB), sizeof(AABB));
+
 	size_t totalPrimitiveDraws = 0;
 
 	for (const DuckyMeshInstance& instance :mInstances)
@@ -88,7 +93,7 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 
 	// init fallback textures
 	mBaseColorFallbackHandle = mDeviceManager->InitFallbackTexture(L"BaseColorFallback", BaseColorFallback, mCbvSrvUavHandle);
-	//mNormalColorFallbackHandle = mDeviceManager->InitFallbackTexture(L"NormalFallback", NormalFallback, mCbvSrvUavHandle);
+	mNormalColorFallbackHandle = mDeviceManager->InitFallbackTexture(L"NormalFallback", NormalFallback, mCbvSrvUavHandle);
 
 	mDuckyContext = std::make_unique<DuckyGraphicsContext>();
 	if(!mDuckyContext->Init(mDeviceManager.get(), neededCapacity, &mLogFile)) return false;
@@ -233,7 +238,24 @@ LRESULT SimplestApp::WindowProcedure(HWND hwnd, UINT msg, WPARAM wparam, LPARAM 
 
 void SimplestApp::HandleInput(UINT msg, WPARAM wParam, LPARAM lParam)
 {
-	if (msg == WM_INPUT)
+	if (msg == WM_MOUSEWHEEL)
+	{
+		// Extract the scroll delta amount
+		int wheelDelta = GET_WHEEL_DELTA_WPARAM(wParam);
+
+		// Map the value to the number of notches clicked
+		int scrollNotches = wheelDelta / WHEEL_DELTA;
+
+		mScrollAmount = scrollNotches;
+	}
+
+	if (msg == WM_RBUTTONDOWN) mRightButtonDown = true;
+
+	if (msg == WM_RBUTTONUP) mRightButtonDown = false;
+
+	if (msg == WM_MOUSELEAVE) mRightButtonDown = false;
+
+	if (msg == WM_INPUT && mRightButtonDown)
 	{
 		UINT dataSize = 0;
 
@@ -259,8 +281,9 @@ void SimplestApp::HandleInput(UINT msg, WPARAM wParam, LPARAM lParam)
 		const RAWINPUT* rawInput =
 			reinterpret_cast<const RAWINPUT*>(data.data());
 
-		if (rawInput->header.dwType == RIM_TYPEMOUSE)
-		{
+		
+		if(rawInput->header.dwType == RIM_TYPEMOUSE)
+		{ 
 			mMouseDeltaX += rawInput->data.mouse.lLastX;
 			mMouseDeltaY += rawInput->data.mouse.lLastY;
 		}
@@ -289,30 +312,31 @@ void SimplestApp::HandleInput(UINT msg, WPARAM wParam, LPARAM lParam)
 	}
 }
 
-void SimplestApp::UpdateMovementAndRotation(XMVECTOR& ViewVector, XMVECTOR& ScaledMovement, float DeltaTime)
+void SimplestApp::UpdateMovementAndRotation(XMVECTOR& ViewVector, float& ScaledMovement, float DeltaTime)
 {
 	LONG localMouseDeltaXCopy = mMouseDeltaX;
 	LONG localMouseDeltaYCopy = mMouseDeltaY;
 
 	static const XMVECTOR up = XMVectorSet(0.f, 1.f, 0.f, 0.f);
-	XMVECTOR rightVector = XMVector3Cross(ViewVector, up);
 
-	XMVECTOR movement = XMVectorZero();
-
+	ViewVector = XMVector3Normalize(ViewVector);
+	
 	if (localMouseDeltaXCopy != 0)
 	{
-		float angle = XMConvertToRadians(static_cast<float>(mMouseDeltaX) * ROTATIONAL_SPEED_YAW * DeltaTime);
-		XMVECTOR quat = XMQuaternionRotationAxis(up, angle);
+		float yaw = XMConvertToRadians(static_cast<float>(mMouseDeltaX) * ROTATIONAL_SPEED_YAW * DeltaTime);
+		XMVECTOR quat = XMQuaternionRotationAxis(up, yaw);
 		ViewVector = XMVector3Rotate(ViewVector, quat);
 		ViewVector = XMVector3Normalize(ViewVector);
 	}
 
 	XMVECTOR localDeltaYCopy = XMVector3Normalize(XMVector3Cross(up, ViewVector));
+	XMVECTOR rightVector = XMVector3Cross(ViewVector, up);
+	rightVector = XMVector3Normalize(rightVector);
 
 	if (localMouseDeltaYCopy != 0)
 	{
-		float angle = XMConvertToRadians(static_cast<float>(mMouseDeltaY) * ROTATIONAL_SPEED_PITCH * DeltaTime);
-		XMVECTOR quat = XMQuaternionRotationAxis(rightVector, -angle);
+		float pitch = XMConvertToRadians(static_cast<float>(mMouseDeltaY) * ROTATIONAL_SPEED_PITCH * DeltaTime);
+		XMVECTOR quat = XMQuaternionRotationAxis(rightVector, -pitch);
 		XMVECTOR possibleViewVector = XMVector3Rotate(ViewVector, quat);
 		possibleViewVector = XMVector3Normalize(possibleViewVector);
 
@@ -326,29 +350,27 @@ void SimplestApp::UpdateMovementAndRotation(XMVECTOR& ViewVector, XMVECTOR& Scal
 		}
 	}
 
-	rightVector = XMVector3Normalize(XMVector3Cross(up, ViewVector));
-
-	if (mKeys['W'])
+	if (mKeys['W'] )
 	{
-		movement = XMVectorAdd(movement, ViewVector);
+		ScaledMovement -= MOVEMENT_SPEED * DeltaTime;
+	}
+
+	if (mScrollAmount > 0)
+	{
+		ScaledMovement -= MOVEMENT_SPEED * DeltaTime;
 	}
 
 	if (mKeys['S'])
 	{
-		movement = XMVectorSubtract(movement, ViewVector);
+		ScaledMovement += MOVEMENT_SPEED * DeltaTime;
 	}
-
-	if (mKeys['A'])
+	
+	if (mScrollAmount < 0)
 	{
-		movement = XMVectorSubtract(movement, rightVector);
+		ScaledMovement += MOVEMENT_SPEED * DeltaTime;
 	}
 
-	if (mKeys['D'])
-	{
-		movement = XMVectorAdd(movement, rightVector);
-	}
-
-	ScaledMovement = XMVectorScale(movement, MOVEMENT_SPEED * DeltaTime);
+	if (ScaledMovement < 0.5f) ScaledMovement = 0.5f;
 }
 
 bool SimplestApp::BindMaterial( ID3D12GraphicsCommandList* commandList, ConstantBufferAllocator& allocator, const DuckyMaterial& material)
@@ -385,13 +407,13 @@ bool SimplestApp::BindInstanceConstants( ID3D12GraphicsCommandList* commandList,
 
 	auto* constants = static_cast<PerInstanceConstants*>(allocation.mCpuAddress);
 
-	XMStoreFloat4x4(&constants->world,XMMatrixTranspose(instance.mTransform));
+	XMStoreFloat4x4(&constants->world, XMMatrixTranspose(instance.mTransform));
 	commandList->SetGraphicsRootConstantBufferView(RootParameter::PerInstance, allocation.mGpuAddress);
 
-	/*const DuckyMeshData& meshData = mMeshes[instance.mMeshDataIndex];
+	const DuckyMeshData& meshData = mMeshes[instance.mMeshDataIndex];
 	const DuckyMaterial& materialData = meshData.GetMaterial(meshData.GetPrimitives()[0].GetMaterialIndex());
 
-	const MaterialConstants& matConstants = materialData.constants;*/
+	const MaterialConstants& matConstants = materialData.constants;
 
 	return true;
 }
@@ -410,8 +432,32 @@ void SimplestApp::AppMainLoop()
 
 	float angle = 0.f;
 
-	XMVECTOR eye = XMVectorSet(0.f, 50.f, -50.f, 1.f);
-	XMVECTOR at = XMVectorSet(0.f, 0.f, 0.f, 1.f);
+	float lengthX = mGlobalAABB.max.x - mGlobalAABB.min.x;
+	float lengthY = mGlobalAABB.max.y - mGlobalAABB.min.y;
+	float lengthZ = mGlobalAABB.max.z - mGlobalAABB.min.z;
+
+	float xDiff = 0.f, zDiff = 0.f;
+	float viewLength = 0.f;
+
+	if (lengthX < lengthZ)
+	{
+		xDiff = 2.f * lengthX;
+		viewLength = xDiff;
+	}
+	else
+	{
+		zDiff = 2.f * lengthZ;
+		viewLength = zDiff;
+	}
+
+	float sceneMidPoint[3] = { mGlobalAABB.min.x + lengthX * 0.5f,
+							   mGlobalAABB.min.y + lengthY * 0.5f,
+							   mGlobalAABB.min.z + lengthZ * 0.5f };
+
+
+
+	XMVECTOR at = XMVectorSet(sceneMidPoint[0], sceneMidPoint[1], sceneMidPoint[2], 1.f);
+	XMVECTOR eye = XMVectorSet(sceneMidPoint[0] + xDiff, sceneMidPoint[1] + viewLength, sceneMidPoint[2] + zDiff, 1.f);
 	const XMVECTOR up = XMVectorSet(0.f, 1.f, 0.f, 0.f);
 
 	auto previousTime = Clock::now();
@@ -459,16 +505,17 @@ void SimplestApp::AppMainLoop()
 		previousTime = currentTime;
 
 		XMVECTOR movement = XMVectorZero();
-		XMVECTOR viewVector = XMVectorSubtract(at, eye);
 
-		UpdateMovementAndRotation(viewVector, movement, deltaTime);
+		XMVECTOR viewVector = XMVector4Normalize(XMVectorSubtract(eye, at));
 
-		eye = XMVectorAdd(eye, movement);
-		at = XMVectorAdd(eye, viewVector);
+		UpdateMovementAndRotation(viewVector, viewLength, deltaTime);
+
+		eye = XMVectorAdd(at, XMVectorScale(viewVector, viewLength));
 
 		XMMATRIX view = XMMatrixLookAtLH(eye, at, up);
 
 		mMouseDeltaX = mMouseDeltaY = 0;
+		mScrollAmount = 0;
 
 		float clearColor[] = { 0.f, 0.f, 0.f, 1.f };
 
@@ -548,6 +595,47 @@ void SimplestApp::AppMainLoop()
 	CloseHandle(mFenceEvent);
 	mFenceEvent = nullptr;
 	UnregisterClass(mLpszClassName, mHInstance);
+}
+
+void SimplestApp::WorkOutGlobalBoundingBoxCenter()
+{
+	for (const auto& instance : mInstances)
+	{
+		const DuckyMeshData& data = mMeshes[instance.mMeshDataIndex];
+		for (const auto& primitive : data.GetPrimitives())
+		{
+			const AABB& box = primitive.GetBoundingBox();
+
+			for (int x = 0; x < 2; ++x)
+			{
+				for (int y = 0; y < 2; ++y)
+				{
+					for (int z = 0; z < 2; ++z)
+					{
+						const XMVECTOR localCorner = XMVectorSet(
+							x ? box.max.x : box.min.x,
+							y ? box.max.y : box.min.y,
+							z ? box.max.z : box.min.z,
+							1.0f);
+
+						const XMVECTOR worldCorner = XMVector3TransformCoord( localCorner, instance.mTransform);
+
+						XMFLOAT3 corner;
+						XMStoreFloat3(&corner, worldCorner);
+
+						mGlobalAABB.min.x = (std::min)(mGlobalAABB.min.x, corner.x);
+						mGlobalAABB.min.y = (std::min)(mGlobalAABB.min.y, corner.y);
+						mGlobalAABB.min.z = (std::min)(mGlobalAABB.min.z, corner.z);
+
+						mGlobalAABB.max.x = (std::max)(mGlobalAABB.max.x, corner.x);
+						mGlobalAABB.max.y = (std::max)(mGlobalAABB.max.y, corner.y);
+						mGlobalAABB.max.z = (std::max)(mGlobalAABB.max.z, corner.z);
+					}
+				}
+			}
+		}
+
+	}
 }
 
 bool SimplestApp::Resize(UINT WindowWidth, UINT WindowHeight)

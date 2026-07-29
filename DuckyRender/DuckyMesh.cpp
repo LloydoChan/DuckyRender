@@ -4,20 +4,19 @@
 
 
 bool DuckyPrimitive::InitPrimitive(D3DDeviceManager* DeviceManager,
-								   BufferInfo& VertexBufferInfo,
-								   BufferInfo& IndexBufferInfo,
+								   PrimitiveLoadData& LoadData,
 								   UINT MaterialIndex)
 {
-	if(!InitBuffer(DeviceManager, VertexBufferInfo, mVertices.resource)) return false;
+	if(!InitBuffer(DeviceManager, LoadData.vertexBuffer, mVertices.resource)) return false;
 	mVertexView.BufferLocation = mVertices.resource->GetGPUVirtualAddress();
-	mVertexView.SizeInBytes = VertexBufferInfo.BufferSize;
-	mVertexView.StrideInBytes = VertexBufferInfo.Stride;
+	mVertexView.SizeInBytes = LoadData.vertexBuffer.BufferSize;
+	mVertexView.StrideInBytes = LoadData.vertexBuffer.Stride;
 
-	if(!InitBuffer(DeviceManager, IndexBufferInfo, mIndices.resource)) return false;
+	if(!InitBuffer(DeviceManager, LoadData.indexBuffer, mIndices.resource)) return false;
 	mIndexView.BufferLocation = mIndices.resource->GetGPUVirtualAddress();
 
 
-	switch (IndexBufferInfo.Stride)
+	switch (LoadData.indexBuffer.Stride)
 	{
 		case 2:
 			mIndexView.Format = DXGI_FORMAT_R16_UINT;
@@ -29,14 +28,16 @@ bool DuckyPrimitive::InitPrimitive(D3DDeviceManager* DeviceManager,
 			return false;
 	}
 
-	mIndexView.SizeInBytes = IndexBufferInfo.BufferSize;
+	mIndexView.SizeInBytes = LoadData.indexBuffer.BufferSize;
 
-	if (VertexBufferInfo.Stride == 0 || IndexBufferInfo.Stride == 0) return false;
+	if (LoadData.vertexBuffer.Stride == 0 || LoadData.indexBuffer.Stride == 0) return false;
 
-	mNumVertices = VertexBufferInfo.BufferSize / VertexBufferInfo.Stride;
-	mNumIndices = IndexBufferInfo.BufferSize / IndexBufferInfo.Stride;
+	mNumVertices = LoadData.vertexBuffer.BufferSize / LoadData.vertexBuffer.Stride;
+	mNumIndices = LoadData.indexBuffer.BufferSize / LoadData.indexBuffer.Stride;
 
 	mMaterialIndex = MaterialIndex;
+
+	mPrimitiveAABB = LoadData.boundingBox;
 
 	return true;
 }
@@ -97,7 +98,7 @@ bool DuckyMeshData::Init(D3DDeviceManager* DeviceManager, std::ifstream& InFile,
 
 		DuckyPrimitive primitive;
 
-		if (!primitive.InitPrimitive(DeviceManager, loadData.vertexBuffer, loadData.indexBuffer, materialIndex)) return false;
+		if (!primitive.InitPrimitive(DeviceManager, loadData, materialIndex)) return false;
 
 		mPrimitives.emplace_back(std::move(primitive));
 	}
@@ -121,6 +122,10 @@ bool DuckyMeshData::ReadPrimitive(D3DDeviceManager* deviceManager, std::ifstream
 	output.material.constants.mMetallicRoughnessTexture = output.material.mMetallicRoughnessTexture != INVALID_HANDLE;
 
 	if (!ReadBufferInfo(inputFile, output.vertexBuffer))return false;
+
+	// read AABB data
+	inputFile.read(reinterpret_cast<char*>(&output.boundingBox), sizeof(AABB));
+
 	if (!ReadBufferInfo(inputFile,output.indexBuffer))return false;
 
 	return true;
