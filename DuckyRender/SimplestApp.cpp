@@ -29,7 +29,7 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 	mCbvSrvUavHandle = mDeviceManager->CreateDescriptorHeap(D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
 	std::ifstream DuckyFile;
-	DuckyFile.open("CookedData.Ducky", std::ios::binary);
+	DuckyFile.open("CookedCar.Ducky", std::ios::binary);
 	if (!DuckyFile)
 	{
 		std::error_code ec(errno, std::generic_category());
@@ -519,7 +519,7 @@ void SimplestApp::AppMainLoop()
 			{
 				const DuckyMaterial& material = mesh.GetMaterial(primitive.GetMaterialIndex());
 
-				BindMaterial(list,*cbvAllocator,material);
+				BindMaterial(list, *cbvAllocator, material);
 
 				primitive.BindGeometry(list);
 				primitive.Draw(list);

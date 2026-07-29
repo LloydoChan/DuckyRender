@@ -528,7 +528,7 @@ DescriptorHeapResource D3DDeviceManager::CreateFallbackTexture(const wchar_t* Na
 	resDesc.SampleDesc.Count = 1;
 	resDesc.SampleDesc.Quality = 0;
 	resDesc.MipLevels = 1;
-	resDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE1D;
+	resDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
 	resDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
 	resDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
 
@@ -542,7 +542,7 @@ DescriptorHeapResource D3DDeviceManager::CreateFallbackTexture(const wchar_t* Na
 
 	if (FAILED(hResult) && !OutputErrorFromHResult(hResult, "couldn't create texture ", *mLogFilePtr)) return newTexture;
 
-	hResult = newTexture.buffer->WriteToSubresource(0, nullptr, &Color, sizeof(XMFLOAT4), sizeof(XMFLOAT4));
+	hResult = newTexture.buffer->WriteToSubresource(0, nullptr, &Color, 1, 1);
 
 	if (FAILED(hResult) && !OutputErrorFromHResult(hResult, "couldn't write to subresource ", *mLogFilePtr)) return newTexture;
 
@@ -550,8 +550,10 @@ DescriptorHeapResource D3DDeviceManager::CreateFallbackTexture(const wchar_t* Na
 	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
 	srvDesc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
 	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE1D;
+	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
 	srvDesc.Texture2D.MipLevels = 1;
+	srvDesc.Texture2D.MostDetailedMip = 0;
+	srvDesc.Texture2D.ResourceMinLODClamp = 0.f;
 
 	UINT IncrementOffset = mDescriptorHandleIndex * mDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 	D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle = descHeap->GetCPUDescriptorHandleForHeapStart();

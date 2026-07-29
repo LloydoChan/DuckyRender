@@ -30,7 +30,9 @@ Output main( float4 pos : POSITION, float2 uv : TEXCOORD, float3 normal : NORMAL
     result.svpos    = mul(worldPos, viewProj);
     
     result.normal =  normalize(mul(normal, (float3x3)instanceTransform));
-    result.tangent = normalize(mul(tangent, instanceTransform));
+    float3 tangentWs = normalize(mul(tangent.xyz, (float3x3)instanceTransform));
+    
+    result.tangent = float4(tangentWs, tangent.w);
     
     result.uv = uv;
     
