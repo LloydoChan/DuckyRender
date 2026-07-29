@@ -74,6 +74,10 @@
     <IncludePath>C:\DirectX-Headers-main\include\directx;C:\Users\Lloyd\.nuget\packages\directxtex_desktop_win10\2021.1.10.2\include</IncludePath>
     <LibraryPath>C:\Users\Lloyd\.nuget\packages\directxtex_desktop_win10\2021.1.10.2\native\lib\x64\Debug;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <IncludePath>C:\DirectX-Headers-main\include\directx;C:\Users\Lloyd\.nuget\packages\directxtex_desktop_win10\2021.1.10.2\include;$(IncludePath)</IncludePath>
+    <LibraryPath>C:\Users\Lloyd\.nuget\packages\directxtex_desktop_win10\2021.1.10.2\native\lib\x64\Release;$(LibraryPath)</LibraryPath>
+  </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
@@ -135,7 +139,7 @@
       <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <Link>
-      <SubSystem>Console</SubSystem>
+      <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
     <Manifest>
