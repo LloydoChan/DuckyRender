@@ -314,6 +314,11 @@ void SimplestApp::HandleInput(UINT msg, WPARAM wParam, LPARAM lParam)
 		if (msg == WM_KEYDOWN || msg == WM_SYSKEYDOWN)
 		{
 			mKeys[keyValue] = true;
+
+			if (keyValue == 0x56)
+			{
+				mVisualizationMode = (mVisualizationMode + 1) % MaterialVisualization::VIS_MAX;
+			}
 		}
 	}
 }
@@ -559,6 +564,7 @@ void SimplestApp::AppMainLoop()
 		XMStoreFloat4(static_cast<XMFLOAT4*>(&asFrameConstants->mCameraPosition), eye);
 		asFrameConstants->mLightColor = XMFLOAT4(1.f, 1.f, 1.f, 1.f);
 		asFrameConstants->mLightDirection = XMFLOAT4(-0.4f, -1.0f, 0.2f, 0.f);
+		asFrameConstants->mVisualisationMode = mVisualizationMode;
 		list->SetGraphicsRootConstantBufferView(0, constantAllocation.mGpuAddress);
 
 		list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);

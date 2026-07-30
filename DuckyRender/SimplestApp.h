@@ -4,6 +4,15 @@
 #include "DuckyMesh.h"
 #include "DuckyGraphicsContext.h"
 
+namespace MaterialVisualization
+{
+	static const unsigned int DEPTH = 1;
+	static const unsigned int ROUGHNESS = 2;
+	static const unsigned int METAL = 3;
+	static const unsigned int NORMAL = 4;
+	static const unsigned int VIS_MAX = 5;
+};
+
 struct DrawRecord
 {
 	const DuckyMeshInstance* mInstanceIndex;
@@ -19,9 +28,11 @@ struct PerFrameConstants
 	XMFLOAT4 mLightDirection;
 	XMFLOAT4 mLightColor;
 
-// put this in here to pad out entire struct to 32 bytes
+	unsigned int mVisualisationMode = 0;
+
+// put this in here to pad out entire struct to 128 bytes
 private:
-	XMFLOAT4 mDummyPadding;
+	XMFLOAT3 mDummyPadding;
 };
 
 struct PerInstanceConstants
@@ -78,6 +89,7 @@ class SimplestApp : public DuckyApp
 
 		std::unique_ptr<DuckyGraphicsContext> mDuckyContext;
 
+		unsigned int mVisualizationMode = 0;
 
 		AABB mGlobalAABB;
 };

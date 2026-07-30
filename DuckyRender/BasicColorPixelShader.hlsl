@@ -9,6 +9,9 @@ struct Input
 };
 
 static const uint DEPTH = 1;
+static const uint ROUGHNESS = 2;
+static const uint METAL = 3;
+static const uint NORMAL = 4;
 
 cbuffer PerFrameConstants : register(b0)
 {
@@ -163,6 +166,15 @@ float4 main(Input input) : SV_TARGET
    
     if (visualisationMode == DEPTH)
         return float4(input.svpos.z.xxx, 1.f);
+    
+    if (visualisationMode == ROUGHNESS)
+        return float4(roughness.xxx, 1.f);
+    
+    if (visualisationMode == NORMAL)
+        return float4(N, 1.f);
+    
+    if (visualisationMode == METAL)
+        return float4(metallic.xxx, 1.f);
     
     return float4(color, baseColorSample.a);
 }
