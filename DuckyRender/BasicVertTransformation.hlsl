@@ -5,6 +5,7 @@ struct Output
     float3 normal : NORMAL_WS;
     float4 tangent : TANGENT_WS;
     float2 uv : TEXCOORD;
+    float4 col : COLOR;
 };
 
 cbuffer cbuff0 : register(b0)
@@ -21,11 +22,11 @@ cbuffer cbuff1 : register(b1)
     matrix instanceTransform;
 };
 
-Output main( float4 pos : POSITION, float2 uv : TEXCOORD, float3 normal : NORMAL, float4 tangent : TANGENT) 
+Output main(float3 pos : POSITION, float3 normal : NORMAL, float4 tangent : TANGENT, float2 uv : TEXCOORD, float4 col : COLOR) 
 {
     Output result;
     
-    float4 worldPos = mul(pos, instanceTransform);
+    float4 worldPos = mul(float4(pos, 1.0f), instanceTransform);
     result.worldPos = worldPos.xyz;
     result.svpos    = mul(worldPos, viewProj);
     
@@ -35,6 +36,8 @@ Output main( float4 pos : POSITION, float2 uv : TEXCOORD, float3 normal : NORMAL
     result.tangent = float4(tangentWs, tangent.w);
     
     result.uv = uv;
+    
+    result.col = col;
     
 	return result;
 }

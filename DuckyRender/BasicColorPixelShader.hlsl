@@ -1,10 +1,11 @@
 struct Input
 {
-    float4 svpos : SV_Position;
+    float4 svpos    : SV_Position;
     float3 worldPos : POSITIONT_WS;
-    float3 normal : NORMAL_WS;
-    float4 tangent : TANGENT_WS;
-    float2 uv : TEXCOORD;
+    float3 normal   : NORMAL_WS;
+    float4 tangent  : TANGENT_WS;
+    float2 uv       : TEXCOORD;
+    float4 col : COLOR;
 };
 
 cbuffer PerFrameConstants : register(b0)
@@ -110,7 +111,13 @@ float4 main(Input input) : SV_TARGET
     
     float3 H = normalize(V + L);
     float NDotL = saturate(dot(N, L));
-    float3 baseColor = BaseColorFactor * tex.Sample(smp, input.uv);
+    float3 baseColor = BaseColorFactor * input.col;
+    
+    if (HasBaseColorTexture == 1)
+    {
+        baseColor = BaseColorFactor * tex.Sample(smp, input.uv);
+    }
+       
     
     float3 litColor = baseColor * lightColor.rgb * NDotL;
     

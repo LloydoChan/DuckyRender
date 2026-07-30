@@ -132,6 +132,11 @@ std::vector<D3D12_INPUT_ELEMENT_DESC> D3DDeviceManager::CreateInputLayout(Shader
 			currentDesc.SemanticName = "TANGENT";
 			currentDesc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
 		}
+		else if (std::strcmp(paramDesc.SemanticName, "COLOR") == 0)
+		{
+			currentDesc.SemanticName = "COLOR";
+			currentDesc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
+		}
 
 		Elems.push_back(currentDesc);
 	}

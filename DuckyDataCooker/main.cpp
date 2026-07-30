@@ -10,6 +10,29 @@
 using namespace std;
 using namespace DirectX;
 
+
+struct CookedVertex
+{
+	XMFLOAT3 position {0.f,0.f,0.f};
+	XMFLOAT3 normal   {0.f, 1.f, 0.f};
+	XMFLOAT4 tangent  {1.f, 0.f, 0.f, 1.f};
+	XMFLOAT2 texcoord0{0.f, 0.f};
+	XMFLOAT4 color0   {1.f,1.f,1.f,1.f};
+};
+
+struct BufferPointerStruct
+{
+	const tinygltf::Accessor*   outAccessor = nullptr;
+	const tinygltf::BufferView* outBufferView = nullptr;
+	const tinygltf::Buffer*     outBuffer = nullptr;
+};
+
+struct BufferStartAndStride
+{
+	const unsigned char* start = nullptr;
+	size_t stride = 0;
+};
+
 struct MeshOutput
 {
 	unsigned int mNumPrimitives;
@@ -70,69 +93,92 @@ void DebugMatrix(XMMATRIX& nextTransform)
 		<< std::setw(10) << debugMatrix._44 << std::endl;
 }
 
-void FindPrimitiveData(const tinygltf::Primitive& Primitive, const tinygltf::Model& Model, const vector<string>& AttributeNames, stringstream& DataToFlushOut)
+bool GetBufferView(const tinygltf::Primitive& Primitive, const tinygltf::Model& Model, const char* AttributeName, BufferPointerStruct& ReturnValues)
+{ 
+	const auto& attrib = Primitive.attributes.find(AttributeName);
+
+	if (attrib == Primitive.attributes.end()) return false;
+
+	ReturnValues.outAccessor   = &Model.accessors[attrib->second];
+	ReturnValues.outBufferView = &Model.bufferViews[ReturnValues.outAccessor->bufferView];
+	ReturnValues.outBuffer     = &Model.buffers[ReturnValues.outBufferView->buffer];
+
+	return true;
+}
+
+void InitStartAndStride(BufferPointerStruct& PointerInfo, BufferStartAndStride& StartAndStride)
 {
-	vector<tinygltf::Accessor> accessors;
-	vector<tinygltf::BufferView> bufferViews;
-	vector<tinygltf::Buffer> buffers;
-	vector<const unsigned char*> startPoints;
-	vector<int> strides;
+	StartAndStride.start = PointerInfo.outBuffer->data.data() + PointerInfo.outBufferView->byteOffset + PointerInfo.outAccessor->byteOffset;
+	StartAndStride.stride = static_cast<size_t>(PointerInfo.outAccessor->ByteStride(*PointerInfo.outBufferView));
+}
 
-	unsigned int byteStride = 0;
+void MemCpyOverToCookedVertex(BufferStartAndStride& StartAndStride, void* Elem, size_t ElemSize)
+{
+	memcpy(Elem, (void*)StartAndStride.start, ElemSize);
+	StartAndStride.start += StartAndStride.stride;
+}
 
-	// get min / max bounding box points for primitive, transformed
+void FindPrimitiveData(const tinygltf::Primitive& Primitive, const tinygltf::Model& Model, stringstream& DataToFlushOut)
+{
 
-	for (const auto& attribute : AttributeNames)
+	BufferPointerStruct posBuffer;
+	GetBufferView(Primitive, Model, "POSITION", posBuffer);
+
+	BufferPointerStruct normBuffer;
+	bool bHasNormals = GetBufferView(Primitive, Model, "NORMAL", normBuffer);
+
+	BufferPointerStruct tangentBuffer;
+	bool bHasTangents = GetBufferView(Primitive, Model, "TANGENT", tangentBuffer);
+
+	BufferPointerStruct uvBuffer;
+	bool bHasUVs = GetBufferView(Primitive, Model, "TEXCOORD_0", uvBuffer);
+
+	BufferPointerStruct colorBuffer;
+	bool bHasCols = GetBufferView(Primitive, Model, "COLOR_0", colorBuffer);
+
+	size_t Count = posBuffer.outAccessor->count;
+	
+	//entire size
+	size_t BufferInfoSize = sizeof(CookedVertex) * Count;
+	unsigned int float4Inc = sizeof(CookedVertex);
+
+	BufferStartAndStride posInfo;
+	InitStartAndStride(posBuffer, posInfo);
+	
+	BufferStartAndStride normInfo, tangentInfo, uvInfo, colorInfo;
+	if (bHasNormals)   InitStartAndStride(normBuffer, normInfo);
+	if (bHasTangents)  InitStartAndStride(tangentBuffer, tangentInfo);
+	if (bHasUVs)       InitStartAndStride(uvBuffer, uvInfo);
+	if (bHasCols)      InitStartAndStride(colorBuffer, colorInfo);
+	
+
+	//TODO this is temp
+	DataToFlushOut.write((const char*)&float4Inc, sizeof(unsigned int));
+	DataToFlushOut.write((const char*)&BufferInfoSize, sizeof(size_t));
+
+	for (int elem = 0; elem < Count; elem++)
 	{
-		auto itr = Primitive.attributes.find(attribute);
-		if (itr == Primitive.attributes.end())
-		{
-			cout << "couldn't find for attribute name " << attribute << endl;
-			continue;
-		}
-		const tinygltf::Accessor& accessor = Model.accessors[itr->second];
-		const tinygltf::BufferView& bufferView = Model.bufferViews[accessor.bufferView];
-		const tinygltf::Buffer& buffer = Model.buffers[bufferView.buffer];
+		CookedVertex cookedVertex{};
 
-		accessors.emplace_back(std::move(accessor));
-		bufferViews.emplace_back(std::move(bufferView));
-		buffers.emplace_back(std::move(buffer));
+		MemCpyOverToCookedVertex(posInfo, (void*)&cookedVertex.position, sizeof(cookedVertex.position));
+		if (bHasNormals)	MemCpyOverToCookedVertex(normInfo, (void*)&cookedVertex.normal,		sizeof(cookedVertex.normal));
+		if (bHasTangents)	MemCpyOverToCookedVertex(tangentInfo, (void*)&cookedVertex.tangent, sizeof(cookedVertex.tangent));
+		if (bHasUVs)		MemCpyOverToCookedVertex(uvInfo, (void*)&cookedVertex.texcoord0,	sizeof(cookedVertex.texcoord0));
+		if (bHasCols)		MemCpyOverToCookedVertex(colorInfo, (void*)&cookedVertex.color0,	sizeof(cookedVertex.color0));
 
-		const unsigned char* bufferStart = &buffer.data[accessor.byteOffset + bufferView.byteOffset];
-		startPoints.push_back(bufferStart);
-		int stride = accessor.ByteStride(bufferView);
-		strides.emplace_back(stride);
-		byteStride += stride;
+		DataToFlushOut.write((const char*)&cookedVertex, sizeof(CookedVertex));
 	}
 
-	if (accessors.size() == 0) {
-		cout << "no data?" << endl;
-		return;
-	}
-
-	size_t overallDataSize = accessors[0].count * byteStride;
-	DataToFlushOut.write((char*)&byteStride, sizeof(unsigned int));
-	DataToFlushOut.write((char*)&overallDataSize, sizeof(size_t));
-	for (int elem = 0; elem < accessors[0].count; elem++)
-	{
-		for (int accessor = 0; accessor < accessors.size(); accessor++)
-		{
-			const unsigned char* start = startPoints[accessor];
-			int stride = strides[accessor];
-			DataToFlushOut.write(reinterpret_cast<const char*>(startPoints[accessor]), strides[accessor]);
-			startPoints[accessor] += strides[accessor];
-		}
-	}
-
+	// get min / max bounding box points for primitive
 	AABB localBoundingBox;
-	localBoundingBox.mMin.x = static_cast<float>(accessors[0].minValues[0]);
-	localBoundingBox.mMin.y = static_cast<float>(accessors[0].minValues[1]);
-	localBoundingBox.mMin.z = static_cast<float>(accessors[0].minValues[2]);
+	localBoundingBox.mMin.x = static_cast<float>(posBuffer.outAccessor->minValues[0]);
+	localBoundingBox.mMin.y = static_cast<float>(posBuffer.outAccessor->minValues[1]);
+	localBoundingBox.mMin.z = static_cast<float>(posBuffer.outAccessor->minValues[2]);
 	localBoundingBox.mMin.w = 1.f;
 
-	localBoundingBox.mMax.x = static_cast<float>(accessors[0].maxValues[0]);
-	localBoundingBox.mMax.y = static_cast<float>(accessors[0].maxValues[1]);
-	localBoundingBox.mMax.z = static_cast<float>(accessors[0].maxValues[2]);
+	localBoundingBox.mMax.x = static_cast<float>(posBuffer.outAccessor->maxValues[0]);
+	localBoundingBox.mMax.y = static_cast<float>(posBuffer.outAccessor->maxValues[1]);
+	localBoundingBox.mMax.z = static_cast<float>(posBuffer.outAccessor->maxValues[2]);
 	localBoundingBox.mMax.w = 1.f;
 	
 	// write out localBoundingBox
@@ -277,8 +323,7 @@ void WriteOutMeshData(const tinygltf::Node& Node,
 			float metal = static_cast<float>(pbrValues.metallicFactor);
 			DataToFlushOut.write((char*)&metal, sizeof(float));
 			
-			std::vector<std::string> names{ "POSITION", "TEXCOORD_0", "NORMAL", "TANGENT", "COLOR_0"};
-			FindPrimitiveData(primitive, Model,names, DataToFlushOut);
+			FindPrimitiveData(primitive, Model, DataToFlushOut);
 			
 			if (primitive.indices >= 0)
 			{
