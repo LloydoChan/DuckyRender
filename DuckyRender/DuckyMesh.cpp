@@ -117,9 +117,10 @@ bool DuckyMeshData::ReadPrimitive(D3DDeviceManager* deviceManager, std::ifstream
 
 	if (!inputFile) return false;
 
-	output.material.constants.mBaseColorTexture			= output.material.mBaseColorTexture != INVALID_HANDLE;
-	output.material.constants.mNormalTexture			= output.material.mNormalTexture != INVALID_HANDLE;
-	output.material.constants.mMetallicRoughnessTexture = output.material.mMetallicRoughnessTexture != INVALID_HANDLE;
+	output.material.constants.mHasBaseColorTexture				= output.material.mBaseColorTexture != NO_TEXTURE;
+	output.material.constants.mHasNormalTexture					= output.material.mNormalTexture != NO_TEXTURE;
+	output.material.constants.mHasMetallicRoughnessTexture		= output.material.mMetallicRoughnessTexture != NO_TEXTURE;
+
 
 	if (!ReadBufferInfo(inputFile, output.vertexBuffer))return false;
 
@@ -139,7 +140,7 @@ size_t DuckyMeshData::ReadTexture(D3DDeviceManager* deviceManager, std::ifstream
 
 	if (!inputFile) return INVALID_HANDLE;
 
-	if (textureCheck == -1) return INVALID_HANDLE;
+	if (textureCheck == -1) return NO_TEXTURE;
 
 	size_t textureNameLength = 0;
 

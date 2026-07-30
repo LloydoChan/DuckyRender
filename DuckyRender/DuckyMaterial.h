@@ -5,8 +5,7 @@
 
 using namespace DirectX;
 
-constexpr size_t InvalidTextureHandle =
-(std::numeric_limits<size_t>::max)();
+const size_t INVALID_HANDLE = (std::numeric_limits<size_t>::max)();
 
 struct MaterialConstants
 {
@@ -17,11 +16,11 @@ struct MaterialConstants
 
     float mRoughnessFactor = 1.0f;
     float mMetallicFactor = 1.0f;
-
     float mNormalScale = 1.0f;
-    unsigned int mBaseColorTexture = 0;
-    unsigned int mNormalTexture = 0;
-    unsigned int mMetallicRoughnessTexture = 0;
+
+    unsigned int mHasBaseColorTexture = 0;
+    unsigned int mHasNormalTexture = 0;
+    unsigned int mHasMetallicRoughnessTexture = 0;
 
 
     XMFLOAT2 padding{};
@@ -31,7 +30,7 @@ struct DuckyMaterial
 {
     MaterialConstants constants{};
 
-    size_t mBaseColorTexture = InvalidTextureHandle;
-    size_t mNormalTexture    = InvalidTextureHandle;
-    size_t mMetallicRoughnessTexture = InvalidTextureHandle;
+    size_t mBaseColorTexture         = INVALID_HANDLE;
+    size_t mNormalTexture            = INVALID_HANDLE;
+    size_t mMetallicRoughnessTexture = INVALID_HANDLE;
 };

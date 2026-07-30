@@ -410,11 +410,6 @@ bool SimplestApp::BindInstanceConstants( ID3D12GraphicsCommandList* commandList,
 	XMStoreFloat4x4(&constants->world, XMMatrixTranspose(instance.mTransform));
 	commandList->SetGraphicsRootConstantBufferView(RootParameter::PerInstance, allocation.mGpuAddress);
 
-	const DuckyMeshData& meshData = mMeshes[instance.mMeshDataIndex];
-	const DuckyMaterial& materialData = meshData.GetMaterial(meshData.GetPrimitives()[0].GetMaterialIndex());
-
-	const MaterialConstants& matConstants = materialData.constants;
-
 	return true;
 }
 

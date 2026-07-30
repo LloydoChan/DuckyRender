@@ -23,10 +23,11 @@ cbuffer InstanceMaterial : register(b2)
     float RoughnessFactor;
     float MetallicFactor;
     float NormalScale;
+    
     uint  HasBaseColorTexture;
-
-    uint    HasNormalTexture;
-    uint    HasMetallicRoughnessTexture;
+    uint  HasNormalTexture;
+    uint  HasMetallicRoughnessTexture;
+    
     float2 padding;
 };
 
@@ -87,16 +88,24 @@ float4 main(Input input) : SV_TARGET
     
     float3 L = normalize(-lightDirection.xyz);
     
-    float3 NormalMapSample = NormalMapTexture.Sample(smp, input.uv).rgb * 2.f - 1.f;
-    float3x3 TangentToWorld = float3x3(T, B, N);
+    if (HasNormalTexture == 1)
+    {
+        float3 NormalMapSample = NormalMapTexture.Sample(smp, input.uv).rgb * 2.f - 1.f;
+        float3x3 TangentToWorld = float3x3(T, B, N);
+        N = normalize(mul(NormalMapSample, TangentToWorld)).rgb;
+    }
     
-    N = normalize(mul(NormalMapSample, TangentToWorld)).rgb;
+    float roughness = RoughnessFactor;
+    float metallic = MetallicFactor;
     
-    // roughness
-    float4 metallicRoughnessSample = MetallicRoughnessTexture.Sample(smp, input.uv);
-    float roughness = saturate(RoughnessFactor * metallicRoughnessSample.g);
-    float metallic = saturate( MetallicFactor * metallicRoughnessSample.b);
-
+    if (HasMetallicRoughnessTexture == 1)
+    {
+         // roughness
+        float4 metallicRoughnessSample = MetallicRoughnessTexture.Sample(smp, input.uv);
+        roughness = saturate(RoughnessFactor * metallicRoughnessSample.g);
+        metallic = saturate(MetallicFactor * metallicRoughnessSample.b);
+    }
+    
     roughness = max(roughness, 0.045f);
     
     float3 H = normalize(V + L);
@@ -131,6 +140,6 @@ float4 main(Input input) : SV_TARGET
     color = color / (color + 1.0f);
     color = pow(saturate(color), 1.0f / 2.2f);
 
-    return float4(color, 1.f);
+    return float4(specular, 1.f);
 
 }

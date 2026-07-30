@@ -7,6 +7,7 @@
 
 #include "D3DDeviceManager.h"
 #include "DuckyTools.h"
+#include "DuckyMaterial.h"
 
 #pragma comment(lib, "d3d12.lib")
 #pragma comment(lib, "dxgi.lib")

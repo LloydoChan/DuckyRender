@@ -13,7 +13,7 @@
 
 using namespace DirectX;
 using Microsoft::WRL::ComPtr;
-const size_t INVALID_HANDLE = (std::numeric_limits<size_t>::max)();
+const size_t NO_TEXTURE     = 6666;
 
 struct RootSignatureDesc
 {
