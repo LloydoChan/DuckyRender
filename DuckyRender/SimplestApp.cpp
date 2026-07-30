@@ -1,6 +1,7 @@
 #include "SimplestApp.h"
 #include "D3DDeviceManager.h"
 #include <vector>
+#include "DuckyPipelineStates.h"
 #include <errno.h>
 #include "DuckyTools.h"
 
@@ -48,8 +49,6 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 		return false;
 	}
 
-	mInstances.reserve(numInstances);
-
 	for (size_t instanceIndex = 0; instanceIndex < numInstances; ++instanceIndex)
 	{
 		DuckyMeshInstance instance;
@@ -69,10 +68,10 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 	{
 		DuckyMeshData nextMesh;
 		if(!nextMesh.Init(mDeviceManager.get(), DuckyFile, mCbvSrvUavHandle)) return false;
-		mMeshes.emplace_back(std::move(nextMesh));
+		mOpaqueMeshes.emplace_back(std::move(nextMesh));
 	}
 
-	if (mMeshes.empty()) return false;
+	if (mOpaqueMeshes.empty()) return false;
 
 	WorkOutGlobalBoundingBoxCenter();
 
@@ -80,9 +79,9 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 
 	for (const DuckyMeshInstance& instance :mInstances)
 	{
-		if (instance.mMeshDataIndex < 0 || instance.mMeshDataIndex >= static_cast<int>(mMeshes.size())) continue;
+		if (instance.mMeshDataIndex < 0 || instance.mMeshDataIndex >= static_cast<int>(mOpaqueMeshes.size())) continue;
 
-		totalPrimitiveDraws += mMeshes[instance.mMeshDataIndex].GetPrimitiveCount();
+		totalPrimitiveDraws += mOpaqueMeshes[instance.mMeshDataIndex].GetPrimitiveCount();
 	}
 
 	// work out number of bytes for matrices needed - instances plus the world proj matrix
@@ -170,8 +169,13 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 
 	drawSig.staticSamplers.emplace_back(samplerDesc);
 
-	mPipeline = mDeviceManager->CreatePSO(L"BasicVertTransformation.hlsl", L"main", L"BasicColorPixelShader.hlsl", L"main", drawSig);
-	if (mPipeline.rootSig == nullptr || mPipeline.pipeLineState == nullptr) return false;
+	auto opaqueState = MakeOpaquePipelineState();
+	auto transparantState = MakeTransparentPipelineState();
+	mOpaquePipeline = mDeviceManager->CreatePSO(L"BasicVertTransformation.hlsl", L"main", L"BasicColorPixelShader.hlsl", L"main", drawSig, opaqueState);
+	if (mOpaquePipeline.rootSig == nullptr || mOpaquePipeline.pipeLineState == nullptr) return false;
+
+	mTransparentPipeline = mDeviceManager->CreatePSO(L"BasicVertTransformation.hlsl", L"main", L"BasicColorPixelShader.hlsl", L"main", drawSig, transparantState);
+	if (mTransparentPipeline.rootSig == nullptr || mTransparentPipeline.pipeLineState == nullptr) return false;
 
 	mWholeScreenViewPortScissor.scissor.left = 0;
 	mWholeScreenViewPortScissor.scissor.right = WindowWidth;
@@ -513,11 +517,11 @@ void SimplestApp::AppMainLoop()
 
 		float clearColor[] = { 0.5f, 0.8f, 0.9f, 1.f };
 
-		if (!mDuckyContext->BeginFrame(currentFrame, mFence.Get(), mPipeline.pipeLineState.Get(), mFenceEvent, &mLogFile)) break;
+		if (!mDuckyContext->BeginFrame(currentFrame, mFence.Get(), mOpaquePipeline.pipeLineState.Get(), mFenceEvent, &mLogFile)) break;
 		ConstantBufferAllocator* cbvAllocator = mDuckyContext->GetBufferAllocator(currentFrame);
 		D3D12_RESOURCE_BARRIER barrier = mDeviceManager->GetBarrier();
 		list->ResourceBarrier(1, &barrier);
-		list->SetPipelineState(mPipeline.pipeLineState.Get());
+		list->SetPipelineState(mOpaquePipeline.pipeLineState.Get());
 
 		D3D12_CPU_DESCRIPTOR_HANDLE rtvHeap = mDeviceManager->IncrementAndReturnRTVHeaps();
 		D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = mDeviceManager->GetDepthStencilBufferHeap()->GetCPUDescriptorHandleForHeapStart();
@@ -529,10 +533,10 @@ void SimplestApp::AppMainLoop()
 		list->RSSetViewports(1, &mWholeScreenViewPortScissor.viewport);
 		list->RSSetScissorRects(1, &mWholeScreenViewPortScissor.scissor);
 
-		list->SetGraphicsRootSignature(mPipeline.rootSig.Get());
+		list->SetGraphicsRootSignature(mOpaquePipeline.rootSig.Get());
 		list->SetDescriptorHeaps(1, &heapPtr);
 
-		size_t numMeshes = mMeshes.size();
+		size_t numMeshes = mOpaqueMeshes.size();
 		static int currentInstance = 0;
 		static int frameCnt = 0;
 		
@@ -550,9 +554,9 @@ void SimplestApp::AppMainLoop()
 
 		for (const DuckyMeshInstance& instance : mInstances)
 		{
-			if (instance.mMeshDataIndex < 0 || instance.mMeshDataIndex >= static_cast<int>(mMeshes.size())) continue;
+			if (instance.mMeshDataIndex < 0 || instance.mMeshDataIndex >= static_cast<int>(mOpaqueMeshes.size())) continue;
 			
-			const DuckyMeshData& mesh = mMeshes[instance.mMeshDataIndex];
+			const DuckyMeshData& mesh = mOpaqueMeshes[instance.mMeshDataIndex];
 
 			BindInstanceConstants(list, *cbvAllocator,instance);
 
@@ -594,7 +598,7 @@ void SimplestApp::WorkOutGlobalBoundingBoxCenter()
 {
 	for (const auto& instance : mInstances)
 	{
-		const DuckyMeshData& data = mMeshes[instance.mMeshDataIndex];
+		const DuckyMeshData& data = mOpaqueMeshes[instance.mMeshDataIndex];
 		for (const auto& primitive : data.GetPrimitives())
 		{
 			const AABB& box = primitive.GetBoundingBox();

@@ -260,7 +260,12 @@ DescriptorHeapResource D3DDeviceManager::CreateConstantBuffer(size_t bufferSize,
 	return constantBuffer;
 }
 
-PipelineAndRootSig D3DDeviceManager::CreatePSO(LPCWSTR vertexShader, LPCWSTR vertexEntry, LPCWSTR pixelShader, LPCWSTR pixelEntry, RootSignatureDesc& NewRootSigDesc)
+PipelineAndRootSig D3DDeviceManager::CreatePSO(LPCWSTR vertexShader, 
+												LPCWSTR vertexEntry, 
+												LPCWSTR pixelShader, 
+												LPCWSTR pixelEntry, 
+												RootSignatureDesc& NewRootSigDesc, 
+												D3D12_GRAPHICS_PIPELINE_STATE_DESC& PipelineDesc)
 {
 	PipelineAndRootSig newPipeline;
 	
@@ -291,67 +296,26 @@ PipelineAndRootSig D3DDeviceManager::CreatePSO(LPCWSTR vertexShader, LPCWSTR ver
 	rootSigBlob->Release();
 	if (FAILED(hResult) && !OutputErrorFromHResult(hResult, "couldn't create root sig ", *mLogFilePtr)) return newPipeline;
 
-	D3D12_DEPTH_STENCIL_DESC depthStencilDesc{};
+	PipelineDesc.pRootSignature = newPipeline.rootSig.Get();
 
-	depthStencilDesc.DepthEnable = TRUE;
-	depthStencilDesc.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
-	depthStencilDesc.DepthFunc = D3D12_COMPARISON_FUNC_LESS;
-
-	depthStencilDesc.StencilEnable = FALSE;
-	depthStencilDesc.StencilReadMask = D3D12_DEFAULT_STENCIL_READ_MASK;
-	depthStencilDesc.StencilWriteMask = D3D12_DEFAULT_STENCIL_WRITE_MASK;
-
-	D3D12_GRAPHICS_PIPELINE_STATE_DESC gPipeline = {};
-
-	gPipeline.DepthStencilState = depthStencilDesc;
-	gPipeline.DSVFormat = DXGI_FORMAT_D32_FLOAT;
-
-	gPipeline.pRootSignature = newPipeline.rootSig.Get();
-
-	gPipeline.VS.pShaderBytecode = vertexShaderOutput.shaderBlob.Get()->GetBufferPointer();
-	gPipeline.VS.BytecodeLength = vertexShaderOutput.shaderBlob.Get()->GetBufferSize();
-	gPipeline.PS.pShaderBytecode = pixelShaderOutput.shaderBlob.Get()->GetBufferPointer();
-	gPipeline.PS.BytecodeLength = pixelShaderOutput.shaderBlob.Get()->GetBufferSize();
-
-	gPipeline.SampleMask = D3D12_DEFAULT_SAMPLE_MASK;
-	gPipeline.RasterizerState.MultisampleEnable = false;
-
-	gPipeline.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
-	gPipeline.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
-	gPipeline.RasterizerState.DepthClipEnable = true;
-
-	gPipeline.BlendState.AlphaToCoverageEnable = false;
-	gPipeline.BlendState.IndependentBlendEnable = false;
-
-	D3D12_RENDER_TARGET_BLEND_DESC renderTargetBlendDesc = {};
-	renderTargetBlendDesc.BlendEnable = TRUE;
-	renderTargetBlendDesc.LogicOpEnable = FALSE;
-
-	renderTargetBlendDesc.SrcBlend = D3D12_BLEND_SRC_ALPHA;
-	renderTargetBlendDesc.DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
-	renderTargetBlendDesc.BlendOp = D3D12_BLEND_OP_ADD;
-
-	renderTargetBlendDesc.SrcBlendAlpha = D3D12_BLEND_ONE;
-	renderTargetBlendDesc.DestBlendAlpha = D3D12_BLEND_INV_SRC_ALPHA;
-	renderTargetBlendDesc.BlendOpAlpha = D3D12_BLEND_OP_ADD;
-
-	renderTargetBlendDesc.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
-
-	gPipeline.BlendState.RenderTarget[0] = renderTargetBlendDesc;
+	PipelineDesc.VS.pShaderBytecode = vertexShaderOutput.shaderBlob.Get()->GetBufferPointer();
+	PipelineDesc.VS.BytecodeLength = vertexShaderOutput.shaderBlob.Get()->GetBufferSize();
+	PipelineDesc.PS.pShaderBytecode = pixelShaderOutput.shaderBlob.Get()->GetBufferPointer();
+	PipelineDesc.PS.BytecodeLength = pixelShaderOutput.shaderBlob.Get()->GetBufferSize();
 
 	std::vector<D3D12_INPUT_ELEMENT_DESC> elems = CreateInputLayout(vertexShaderOutput);
 	
-	gPipeline.InputLayout.pInputElementDescs = elems.data();
-	gPipeline.InputLayout.NumElements = elems.size();
-	gPipeline.IBStripCutValue = D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED;
+	PipelineDesc.InputLayout.pInputElementDescs = elems.data();
+	PipelineDesc.InputLayout.NumElements = elems.size();
+	PipelineDesc.IBStripCutValue = D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED;
 
-	gPipeline.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-	gPipeline.NumRenderTargets = 1;
-	gPipeline.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
-	gPipeline.SampleDesc.Count = 1;
-	gPipeline.SampleDesc.Quality = 0;
+	PipelineDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+	PipelineDesc.NumRenderTargets = 1;
+	PipelineDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
+	PipelineDesc.SampleDesc.Count = 1;
+	PipelineDesc.SampleDesc.Quality = 0;
 
-	hResult = mDevice->CreateGraphicsPipelineState(&gPipeline, IID_PPV_ARGS(&newPipeline.pipeLineState));
+	hResult = mDevice->CreateGraphicsPipelineState(&PipelineDesc, IID_PPV_ARGS(&newPipeline.pipeLineState));
 
 	if (FAILED(hResult)) 
 		OutputErrorFromHResult(hResult, "couldn't create graphics pipeline ", *mLogFilePtr);

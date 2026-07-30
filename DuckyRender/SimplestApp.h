@@ -53,12 +53,13 @@ class SimplestApp : public DuckyApp
 		ComPtr<ID3D12Fence> mFence;
 
 		DescriptorHeapResource mTextureBuffer;
-		PipelineAndRootSig mPipeline;
+		PipelineAndRootSig mOpaquePipeline;
+		PipelineAndRootSig mTransparentPipeline;
 
 		DescriptorHeapResource mMatrixBuffer[2];
 		XMFLOAT4X4* mMappedTransform[2] = {};
 
-		std::vector<DuckyMeshData> mMeshes;
+		std::vector<DuckyMeshData> mOpaqueMeshes;
 
 		int mCbvSrvUavHandle = -1;
 
