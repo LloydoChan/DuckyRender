@@ -140,6 +140,6 @@ float4 main(Input input) : SV_TARGET
     color = color / (color + 1.0f);
     color = pow(saturate(color), 1.0f / 2.2f);
 
-    return float4(specular, 1.f);
+    return float4(color, 1.f);
 
 }

@@ -143,7 +143,7 @@ void CountMeshNodes(const tinygltf::Node& Node, const tinygltf::Model& Model, si
 {
 	if (Node.mesh != -1) numMeshNodes++;
 
-	for (auto childNode : Node.children)
+	for (const auto& childNode : Node.children)
 	{
 		const tinygltf::Node& nextNode = Model.nodes[childNode];
 		CountMeshNodes(nextNode, Model, numMeshNodes);
@@ -182,7 +182,7 @@ void WriteOutNodeData(const tinygltf::Node& Node, const tinygltf::Model& Model, 
 
 	}
 
-	for (auto childNode : Node.children)
+	for (const auto& childNode : Node.children)
 	{
 		const tinygltf::Node& nextNode = Model.nodes[childNode];
 		WriteOutNodeData(nextNode, Model, DataToFlushOut, transform);
@@ -190,7 +190,7 @@ void WriteOutNodeData(const tinygltf::Node& Node, const tinygltf::Model& Model, 
 }
 
 void WriteOutTextureData(int index, 
-						 tinygltf::Model Model, 
+						 const tinygltf::Model& Model, 
 						 stringstream& DataToFlushOut, 
 						 TextureType Type, 
 						 const std::filesystem::path& InputPath, 
@@ -241,7 +241,7 @@ void WriteOutMeshData(const tinygltf::Node& Node,
 	//top node
 
 	// now write out Mesh Data
-	for (auto& mesh : Model.meshes)
+	for (const auto& mesh : Model.meshes)
 	{
 		size_t numPrims = mesh.primitives.size();
 		DataToFlushOut.write((char*)&numPrims, sizeof(size_t));
@@ -249,7 +249,7 @@ void WriteOutMeshData(const tinygltf::Node& Node,
 		for (const auto& primitive : mesh.primitives)
 		{
 			// get texture info for this primitive
-			const tinygltf::Material primMaterial = Model.materials[primitive.material];
+			const tinygltf::Material& primMaterial = Model.materials[primitive.material];
 			int primTextureIndex = primMaterial.pbrMetallicRoughness.baseColorTexture.index;
 
 			DataToFlushOut.write((char*)&primTextureIndex, sizeof(int));
@@ -264,12 +264,20 @@ void WriteOutMeshData(const tinygltf::Node& Node,
 			WriteOutTextureData(metallicIndex, Model, DataToFlushOut, TextureType::METALLIC_ROUGHNESS, InputPath, OutputPath);
 
 			const tinygltf::PbrMetallicRoughness& pbrValues = primMaterial.pbrMetallicRoughness;
+			const std::vector<double>& baseColorValues = primMaterial.pbrMetallicRoughness.baseColorFactor;
+			XMFLOAT4 baseColor ((float)baseColorValues[0], (float)baseColorValues[1], (float)baseColorValues[2], (float)baseColorValues[3]);
+			DataToFlushOut.write((char*)&baseColor, sizeof(float) * 4);
+
+			float normalScale = (float)primMaterial.normalTexture.scale;
+			DataToFlushOut.write((char*)&normalScale, sizeof(float));
+
 			float roughness = static_cast<float>(pbrValues.roughnessFactor);
 			DataToFlushOut.write((char*)&roughness, sizeof(float));
+
 			float metal = static_cast<float>(pbrValues.metallicFactor);
 			DataToFlushOut.write((char*)&metal, sizeof(float));
 			
-			std::vector<std::string> names{ "POSITION", "TEXCOORD_0", "TEXCOORD_1", "NORMAL", "TANGENT", "COLOR_0"};
+			std::vector<std::string> names{ "POSITION", "TEXCOORD_0", "NORMAL", "TANGENT", "COLOR_0"};
 			FindPrimitiveData(primitive, Model,names, DataToFlushOut);
 			
 			if (primitive.indices >= 0)
