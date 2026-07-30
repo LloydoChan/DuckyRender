@@ -189,7 +189,12 @@ void WriteOutNodeData(const tinygltf::Node& Node, const tinygltf::Model& Model, 
 	}
 }
 
-void WriteOutTextureData(int index, tinygltf::Model Model, stringstream& DataToFlushOut, TextureType Type, string& InputPath, string& OutputPath)
+void WriteOutTextureData(int index, 
+						 tinygltf::Model Model, 
+						 stringstream& DataToFlushOut, 
+						 TextureType Type, 
+						 const std::filesystem::path& InputPath, 
+						 const std::filesystem::path& OutputPath)
 {
 	static std::set<string> alreadySeen;
 
@@ -197,22 +202,40 @@ void WriteOutTextureData(int index, tinygltf::Model Model, stringstream& DataToF
 	{
 		const tinygltf::Texture tex = Model.textures[index];
 		const tinygltf::Image img = Model.images[tex.source];
-		std::string textureName = img.uri;
-		std::string conversionName = InputPath + "//" + textureName;
-		size_t dotPos = textureName.find_last_of('.');
-		string newFileName = OutputPath + "//Textures//";
 
-		newFileName = OutputPath + "//" + textureName.substr(0, dotPos) + ".dds";
-		size_t newFileNameLength = newFileName.length();
-		DataToFlushOut.write((char*)&newFileNameLength, sizeof(size_t));
-		DataToFlushOut.write((char*)&newFileName[0], newFileNameLength);
+		std::string textureName = img.uri;
+
+
+		const std::filesystem::path expectedDdsPath =
+			OutputPath /
+			std::filesystem::path(textureName).filename()
+			.replace_extension(".dds");
+
+		string outputDirStr = OutputPath.string();
+		string expectedDDSPathStr = expectedDdsPath.string();
+		size_t expectedDDSPathLength = expectedDDSPathStr.length();
+
+		DataToFlushOut.write((char*)&expectedDDSPathLength, sizeof(size_t));
+		DataToFlushOut.write((char*)&expectedDDSPathStr[0], expectedDDSPathLength);
+
 		if (alreadySeen.contains(textureName)) return;
 		alreadySeen.insert(textureName);
-		ConvertToDds(Type, "texConv.exe", conversionName, newFileName);
+
+		const std::filesystem::path expectedInputPath =
+			InputPath / textureName;
+
+		ConvertToDds(Type, "texConv.exe", expectedInputPath.string(), outputDirStr);
+
+		cout << expectedDDSPathStr << endl;
 	}
 }
 
-void WriteOutMeshData(const tinygltf::Node& Node, const tinygltf::Model& Model, stringstream& DataToFlushOut, AABB& GlobalBoundingBox, string& InputPath, string& OutputPath)
+void WriteOutMeshData(const tinygltf::Node& Node, 
+					  const tinygltf::Model& Model, 
+					  stringstream& DataToFlushOut, 
+					  AABB& GlobalBoundingBox, 
+					  const std::filesystem::path& InputPath, 
+					  const std::filesystem::path& OutputPath)
 {
 	// first write out Node info, get transforms and mesh indices of all nodes...
 	//top node
@@ -258,7 +281,11 @@ void WriteOutMeshData(const tinygltf::Node& Node, const tinygltf::Model& Model, 
 				unsigned int stride = 0;
 				std::cout << "found index data " << accessor.count << " indices " << std::endl;
 
-				if (accessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE) stride = 1;
+				if (accessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE)
+				{
+					cout << "yikes! dx12 accepts 16 bit indices as smallest" << endl;
+					return;
+				}
 				else if (accessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT) stride = 2;
 				else if (accessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT)   stride = 4;
 
@@ -271,6 +298,21 @@ void WriteOutMeshData(const tinygltf::Node& Node, const tinygltf::Model& Model, 
 				DataToFlushOut.write((char*)&size, sizeof(size_t));
 				DataToFlushOut.write((char*)start, size);
 
+			}
+			else
+			{
+				// if there are no indices, generate our own in a sequence, makes it easier for rendering engine to handle
+				std::cout << " No index Data, generating own" << std::endl;
+				auto itr = primitive.attributes.find("POSITION");
+				const tinygltf::Accessor& accessor = Model.accessors[itr->second];
+				unsigned int stride = sizeof(unsigned int);
+				size_t indexBufferSize = accessor.count * stride;
+				DataToFlushOut.write((char*)&stride, sizeof(unsigned int));
+				DataToFlushOut.write((char*)&indexBufferSize, sizeof(size_t));
+				for (unsigned int i = 0; i < accessor.count; i++)
+				{
+					DataToFlushOut.write((char*)&i, sizeof(unsigned int));
+				}
 			}
 		}
 	}
@@ -295,7 +337,6 @@ int main(int argc, char** argv)
 	string asset(argv[1]);
 	string suffix = "//scene.gltf";
 
-	string TextureInputPath = path + asset;
 	bool success = loader.LoadASCIIFromFile(&model, &error, &warning, path + asset + suffix);
 
 	if (!success)
@@ -303,11 +344,12 @@ int main(int argc, char** argv)
 		std::cout << "Error: " << error.c_str();
 		return 1;
 	}
-	
+
 	string outputPath = "..//Assets//CookedAssets//";
 	string outputSuffix = "//CookedData.Ducky";
-	std::filesystem::create_directories(outputPath + asset + "//Textures");
+
 	ofstream outputFile(outputPath + asset + outputSuffix, std::ios::binary);
+
 	if (!outputFile) return 1;
 	stringstream dataToFlushOut;
 
@@ -323,11 +365,15 @@ int main(int argc, char** argv)
 
 	string textureOutputPath = outputPath + asset;
 
+	const std::filesystem::path outputDirectory = std::filesystem::path("..") / "Assets"  / "CookedAssets" / asset;
+	std::filesystem::create_directories(outputDirectory);
+	const std::filesystem::path inputPath = std::filesystem::path("..") / "Assets" / "InputAssets" / asset;
+
 	size_t numMeshes = model.meshes.size();
 	dataToFlushOut.write((char*)&numMeshes, sizeof(size_t));
 	std::filesystem::create_directories(textureOutputPath);
 	AABB globalBoundingBox;
-	WriteOutMeshData(model.nodes[scene.nodes[0]], model, dataToFlushOut, globalBoundingBox, TextureInputPath, textureOutputPath);
+	WriteOutMeshData(model.nodes[scene.nodes[0]], model, dataToFlushOut, globalBoundingBox, inputPath, outputDirectory);
 
 	outputFile << dataToFlushOut.rdbuf();
 	size_t s = outputFile.tellp();
