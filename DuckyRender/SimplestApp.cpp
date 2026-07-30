@@ -68,10 +68,12 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 	{
 		DuckyMeshData nextMesh;
 		if(!nextMesh.Init(mDeviceManager.get(), DuckyFile, mCbvSrvUavHandle)) return false;
-		mOpaqueMeshes.emplace_back(std::move(nextMesh));
+		mMeshes.emplace_back(std::move(nextMesh));
 	}
 
-	if (mOpaqueMeshes.empty()) return false;
+	CreateDrawRecords();
+
+	if (mMeshes.empty()) return false;
 
 	WorkOutGlobalBoundingBoxCenter();
 
@@ -79,9 +81,9 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 
 	for (const DuckyMeshInstance& instance :mInstances)
 	{
-		if (instance.mMeshDataIndex < 0 || instance.mMeshDataIndex >= static_cast<int>(mOpaqueMeshes.size())) continue;
+		if (instance.mMeshDataIndex < 0 || instance.mMeshDataIndex >= static_cast<int>(mMeshes.size())) continue;
 
-		totalPrimitiveDraws += mOpaqueMeshes[instance.mMeshDataIndex].GetPrimitiveCount();
+		totalPrimitiveDraws += mMeshes[instance.mMeshDataIndex].GetPrimitiveCount();
 	}
 
 	// work out number of bytes for matrices needed - instances plus the world proj matrix
@@ -536,7 +538,7 @@ void SimplestApp::AppMainLoop()
 		list->SetGraphicsRootSignature(mOpaquePipeline.rootSig.Get());
 		list->SetDescriptorHeaps(1, &heapPtr);
 
-		size_t numMeshes = mOpaqueMeshes.size();
+		size_t numMeshes = mMeshes.size();
 		static int currentInstance = 0;
 		static int frameCnt = 0;
 		
@@ -552,22 +554,22 @@ void SimplestApp::AppMainLoop()
 
 		list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-		for (const DuckyMeshInstance& instance : mInstances)
+		for (const DrawRecord& draw : mOpaqueDraws)
 		{
-			if (instance.mMeshDataIndex < 0 || instance.mMeshDataIndex >= static_cast<int>(mOpaqueMeshes.size())) continue;
-			
-			const DuckyMeshData& mesh = mOpaqueMeshes[instance.mMeshDataIndex];
+			BindInstanceConstants(list, *cbvAllocator, *draw.mInstanceIndex);
+			BindMaterial(list, *cbvAllocator, *draw.mMaterialIndex);
+			draw.mPrimitiveIndex->BindGeometry(list);
+			draw.mPrimitiveIndex->Draw(list);
+		}
 
-			BindInstanceConstants(list, *cbvAllocator,instance);
+		list->SetPipelineState(mTransparentPipeline.pipeLineState.Get());
 
-			for (const DuckyPrimitive& primitive : mesh.GetPrimitives())
-			{
-				const DuckyMaterial& material = mesh.GetMaterial(primitive.GetMaterialIndex());
-				BindMaterial(list, *cbvAllocator, material);
-
-				primitive.BindGeometry(list);
-				primitive.Draw(list);
-			}
+		for (const DrawRecord& draw : mBlendedDraws)
+		{
+			BindInstanceConstants(list, *cbvAllocator, *draw.mInstanceIndex);
+			BindMaterial(list, *cbvAllocator, *draw.mMaterialIndex);
+			draw.mPrimitiveIndex->BindGeometry(list);
+			draw.mPrimitiveIndex->Draw(list);
 		}
 
 		barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
@@ -598,7 +600,7 @@ void SimplestApp::WorkOutGlobalBoundingBoxCenter()
 {
 	for (const auto& instance : mInstances)
 	{
-		const DuckyMeshData& data = mOpaqueMeshes[instance.mMeshDataIndex];
+		const DuckyMeshData& data = mMeshes[instance.mMeshDataIndex];
 		for (const auto& primitive : data.GetPrimitives())
 		{
 			const AABB& box = primitive.GetBoundingBox();
@@ -630,6 +632,27 @@ void SimplestApp::WorkOutGlobalBoundingBoxCenter()
 					}
 				}
 			}
+		}
+
+	}
+}
+
+void SimplestApp::CreateDrawRecords()
+{
+	for (const auto& instance : mInstances)
+	{
+		const DuckyMeshInstance* instancePtr = &instance;
+		const DuckyMeshData&	 meshData = mMeshes[instancePtr->mMeshDataIndex];
+		
+		for (const auto& primitive : meshData.GetPrimitives())
+		{
+			const DuckyPrimitive* primPtr = &primitive;
+			const DuckyMaterial*  matPtr =   &meshData.GetMaterial(primPtr->GetMaterialIndex());
+
+			DrawRecord newRecord{ instancePtr, primPtr, matPtr };
+
+			if (matPtr->constants.alphaMode == AlphaMode::Opaque) mOpaqueDraws.push_back(newRecord);
+			else mBlendedDraws.push_back(newRecord);
 		}
 
 	}

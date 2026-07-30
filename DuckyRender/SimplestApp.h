@@ -4,6 +4,13 @@
 #include "DuckyMesh.h"
 #include "DuckyGraphicsContext.h"
 
+struct DrawRecord
+{
+	const DuckyMeshInstance* mInstanceIndex;
+	const DuckyPrimitive*    mPrimitiveIndex;
+	const DuckyMaterial*     mMaterialIndex;
+};
+
 struct PerFrameConstants
 {
 	XMFLOAT4X4 mViewProjection;
@@ -36,6 +43,7 @@ class SimplestApp : public DuckyApp
 		virtual void AppMainLoop();
 
 		void WorkOutGlobalBoundingBoxCenter();
+		void CreateDrawRecords();
 
 		bool Resize(UINT WindowWidth, UINT WindowHeight);
 
@@ -53,19 +61,23 @@ class SimplestApp : public DuckyApp
 		ComPtr<ID3D12Fence> mFence;
 
 		DescriptorHeapResource mTextureBuffer;
-		PipelineAndRootSig mOpaquePipeline;
-		PipelineAndRootSig mTransparentPipeline;
 
 		DescriptorHeapResource mMatrixBuffer[2];
 		XMFLOAT4X4* mMappedTransform[2] = {};
 
-		std::vector<DuckyMeshData> mOpaqueMeshes;
+		std::vector<DuckyMeshData> mMeshes;
+		std::vector<DuckyMeshInstance> mInstances;
+
+		PipelineAndRootSig mOpaquePipeline;
+		std::vector<DrawRecord> mOpaqueDraws;
+
+		PipelineAndRootSig mTransparentPipeline;
+		std::vector<DrawRecord> mBlendedDraws;
 
 		int mCbvSrvUavHandle = -1;
 
 		std::unique_ptr<DuckyGraphicsContext> mDuckyContext;
 
-		std::vector<DuckyMeshInstance> mInstances;
 
 		AABB mGlobalAABB;
 };
