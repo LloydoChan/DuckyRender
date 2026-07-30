@@ -20,7 +20,8 @@ namespace RootParameter
 	constexpr UINT BaseColorTexture = 3;
 	constexpr UINT NormalTexture = 4;
 	constexpr UINT MetallicRoughnessTexture = 5;
-	constexpr UINT Count = 6;
+	constexpr UINT EmissiveTexture = 6;
+	constexpr UINT Count = 7;
 
 }
 
@@ -131,9 +132,9 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 	rootParams[RootParameter::PerMaterial].Descriptor.RegisterSpace = 0;
 	rootParams[RootParameter::PerMaterial].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
-	D3D12_DESCRIPTOR_RANGE textureRanges[3]{};
+	D3D12_DESCRIPTOR_RANGE textureRanges[4]{};
 
-	for (UINT index = 0; index < 3; ++index)
+	for (UINT index = 0; index < 4; ++index)
 	{
 		textureRanges[index].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
 		textureRanges[index].NumDescriptors = 1;
@@ -142,7 +143,7 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 		textureRanges[index].OffsetInDescriptorsFromTableStart =D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
 	}
 
-	for (UINT index = 0; index < 3; ++index)
+	for (UINT index = 0; index < 4; ++index)
 	{
 		const UINT rootIndex = RootParameter::BaseColorTexture + index;
 		rootParams[rootIndex].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
@@ -388,9 +389,17 @@ bool SimplestApp::BindMaterial( ID3D12GraphicsCommandList* commandList, Constant
 
 	commandList->SetGraphicsRootConstantBufferView(RootParameter::PerMaterial, allocation.mGpuAddress);
 
-	BindTexture( commandList, RootParameter::BaseColorTexture, material.mBaseColorTexture, mBaseColorFallbackHandle);
-	BindTexture(commandList, RootParameter::NormalTexture, material.mNormalTexture, mNormalColorFallbackHandle);
-	BindTexture(commandList, RootParameter::MetallicRoughnessTexture, material.mMetallicRoughnessTexture, mBaseColorFallbackHandle);
+	if (material.constants.mHasBaseColorTexture)
+		BindTexture( commandList, RootParameter::BaseColorTexture, material.mBaseColorTexture, mBaseColorFallbackHandle);
+
+	if (material.constants.mHasNormalTexture)
+		BindTexture(commandList, RootParameter::NormalTexture, material.mNormalTexture, mNormalColorFallbackHandle);
+
+	if(material.constants.mHasMetallicRoughnessTexture)
+		BindTexture(commandList, RootParameter::MetallicRoughnessTexture, material.mMetallicRoughnessTexture, mBaseColorFallbackHandle);
+
+	if (material.constants.mHasEmissiveTexture)
+		BindTexture(commandList, RootParameter::EmissiveTexture, material.mEmissive, mBaseColorFallbackHandle);
 
 	return true;
 }

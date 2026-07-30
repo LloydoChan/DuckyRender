@@ -8,6 +8,8 @@ struct Input
     float4 col : COLOR;
 };
 
+static const uint DEPTH = 1;
+
 cbuffer PerFrameConstants : register(b0)
 {
     matrix viewProj;
@@ -15,6 +17,8 @@ cbuffer PerFrameConstants : register(b0)
     float4 cameraPosition;
     float4 lightDirection;
     float4 lightColor;
+    
+    uint visualisationMode;
 };
 
 cbuffer InstanceMaterial : register(b2)
@@ -28,11 +32,13 @@ cbuffer InstanceMaterial : register(b2)
     uint  HasBaseColorTexture;
     uint  HasNormalTexture;
     uint  HasMetallicRoughnessTexture;
+    uint  HasEmissiveTexture;
 };
 
 Texture2D<float4> tex : register(t0);
 Texture2D<float4> NormalMapTexture : register(t1);
 Texture2D<float4> MetallicRoughnessTexture : register(t2);
+Texture2D<float4> EmissiveTexture : register(t3);
 
 SamplerState smp : register(s0);
 
@@ -105,6 +111,13 @@ float4 main(Input input) : SV_TARGET
         metallic = saturate(MetallicFactor * metallicRoughnessSample.b);
     }
     
+    float3 emissive = float3(0.f, 0.f, 0.f);
+
+    if (HasEmissiveTexture == 1)
+    {
+        emissive = EmissiveTexture.Sample(smp, input.uv).rgb; 
+    }
+    
     roughness = max(roughness, 0.045f);
     
     float3 H = normalize(V + L);
@@ -136,7 +149,7 @@ float4 main(Input input) : SV_TARGET
 
     float3 radiance = lightColor;
 
-    float3 color = (diffuse + specular) * radiance * NDotL;
+    float3 color = (diffuse + specular) * radiance * NDotL + emissive;
     
     // hack ambient term
     //color += baseColor * float3(0.05f, 0.05f, 0.05f);
@@ -145,6 +158,11 @@ float4 main(Input input) : SV_TARGET
     color = color / (color + 1.0f);
     color = pow(saturate(color), 1.0f / 2.2f);
 
+    float depthVal = input.svpos.z;
+ 
+   
+    if (visualisationMode == DEPTH)
+        return float4(input.svpos.z.xxx, 1.f);
+    
     return float4(color, baseColorSample.a);
-
 }

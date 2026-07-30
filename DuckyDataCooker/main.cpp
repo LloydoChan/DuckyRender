@@ -49,12 +49,14 @@ enum class TextureType
 	BASE_COLOR = 0,
 	NORMAL = 1,
 	METALLIC_ROUGHNESS = 2,
+	EMISSIVE = 3,
 };
 
 using TexturePair = std::pair<TextureType, std::string>;
 std::map<TextureType, std::string> CompressionTypes = { TexturePair {TextureType::BASE_COLOR, "BC7_UNORM_SRGB"},
 														TexturePair {TextureType::NORMAL, "BC7_UNORM"}, //normals are linear
-														TexturePair {TextureType::METALLIC_ROUGHNESS, "BC7_UNORM"}}; // so are roughness textures
+														TexturePair {TextureType::METALLIC_ROUGHNESS, "BC7_UNORM"}, // so are roughness textures
+														TexturePair {TextureType::EMISSIVE, "BC7_UNORM_SRGB"}};
 
 const float stdMax = std::numeric_limits<float>::max();
 const float stdMin = std::numeric_limits<float>::lowest();
@@ -253,11 +255,11 @@ void WriteOutTextureData(int index,
 
 
 		const std::filesystem::path expectedDdsPath =
-			OutputPath /
+			OutputPath / "Textures" /
 			std::filesystem::path(textureName).filename()
 			.replace_extension(".dds");
 
-		string outputDirStr = OutputPath.string();
+		string outputDirStr = OutputPath.string() + "/Textures/";
 		string expectedDDSPathStr = expectedDdsPath.string();
 		size_t expectedDDSPathLength = expectedDDSPathStr.length();
 
@@ -271,8 +273,6 @@ void WriteOutTextureData(int index,
 			InputPath / textureName;
 
 		ConvertToDds(Type, "texConv.exe", expectedInputPath.string(), outputDirStr);
-
-		cout << expectedDDSPathStr << endl;
 	}
 }
 
@@ -316,6 +316,10 @@ void WriteOutMeshData(const tinygltf::Node& Node,
 			DataToFlushOut.write((char*)&metallicIndex, sizeof(int));
 			WriteOutTextureData(metallicIndex, Model, DataToFlushOut, TextureType::METALLIC_ROUGHNESS, InputPath, OutputPath);
 
+			int emissiveIndex = primMaterial.emissiveTexture.index;
+			DataToFlushOut.write((char*)&emissiveIndex, sizeof(int));
+			WriteOutTextureData(emissiveIndex, Model, DataToFlushOut, TextureType::EMISSIVE, InputPath, OutputPath);
+
 			const tinygltf::PbrMetallicRoughness& pbrValues = primMaterial.pbrMetallicRoughness;
 			const std::vector<double>& baseColorValues = primMaterial.pbrMetallicRoughness.baseColorFactor;
 			XMFLOAT4 baseColor ((float)baseColorValues[0], (float)baseColorValues[1], (float)baseColorValues[2], (float)baseColorValues[3]);
@@ -333,6 +337,9 @@ void WriteOutMeshData(const tinygltf::Node& Node,
 			// alpha info
 			unsigned int blendMode = DetermineAlphaMode(primMaterial.alphaMode);
 			DataToFlushOut.write((char*)&blendMode, sizeof(unsigned int));
+
+			if (blendMode == 1) 
+				cout << "mask!" << endl;
 
 			float alphaCutoff = static_cast<float>(primMaterial.alphaCutoff);
 			DataToFlushOut.write((char*)&alphaCutoff, sizeof(float));

@@ -28,6 +28,7 @@ struct MaterialConstants
     unsigned int mHasBaseColorTexture = 0;
     unsigned int mHasNormalTexture = 0;
     unsigned int mHasMetallicRoughnessTexture = 0;
+    unsigned int mHasEmissiveTexture = 0;
 
     AlphaMode alphaMode;
     float alphaCutoff;
@@ -41,4 +42,5 @@ struct DuckyMaterial
     size_t mBaseColorTexture         = INVALID_HANDLE;
     size_t mNormalTexture            = INVALID_HANDLE;
     size_t mMetallicRoughnessTexture = INVALID_HANDLE;
+    size_t mEmissive                 = INVALID_HANDLE;
 };

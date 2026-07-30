@@ -38,10 +38,6 @@ D3D12_GRAPHICS_PIPELINE_STATE_DESC MakeOpaquePipelineState()
     return result;
 }
 
-D3D12_GRAPHICS_PIPELINE_STATE_DESC MakeMaskedPipelineState()
-{
-    return D3D12_GRAPHICS_PIPELINE_STATE_DESC();
-}
 
 D3D12_GRAPHICS_PIPELINE_STATE_DESC MakeTransparentPipelineState()
 {
