@@ -63,7 +63,8 @@ D3D12_GRAPHICS_PIPELINE_STATE_DESC MakeTransparentPipelineState()
 
     D3D12_DEPTH_STENCIL_DESC depthStencilDesc{};
 
-    newState.DepthStencilState.DepthEnable    = FALSE;
+    newState.DepthStencilState.DepthEnable    = TRUE;
+    newState.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS;
     newState.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
     newState.DepthStencilState.StencilEnable  = FALSE;
 

@@ -109,13 +109,13 @@ float4 main(Input input) : SV_TARGET
     
     float3 H = normalize(V + L);
     float NDotL = saturate(dot(N, L));
-    float3 baseColor = BaseColorFactor * input.col;
+    float4 baseColorSample = BaseColorFactor * input.col;
     
     if (HasBaseColorTexture == 1)
     {
-        baseColor = BaseColorFactor * tex.Sample(smp, input.uv);
+        baseColorSample = BaseColorFactor * tex.Sample(smp, input.uv);
     }
-       
+    float3 baseColor = baseColorSample.rgb;
     
     float3 litColor = baseColor * lightColor.rgb * NDotL;
     
@@ -145,6 +145,6 @@ float4 main(Input input) : SV_TARGET
     color = color / (color + 1.0f);
     color = pow(saturate(color), 1.0f / 2.2f);
 
-    return float4(color, 1.f);
+    return float4(color, baseColorSample.a);
 
 }
