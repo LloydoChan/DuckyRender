@@ -72,10 +72,9 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 		mMeshes.emplace_back(std::move(nextMesh));
 	}
 
-	WorkOutGlobalBoundingBoxCenter();
+	if (mMeshes.empty()) return false;
 
-	// global AABB
-	//DuckyFile.read(reinterpret_cast<char*>(&mSceneBB), sizeof(AABB));
+	WorkOutGlobalBoundingBoxCenter();
 
 	size_t totalPrimitiveDraws = 0;
 
@@ -512,7 +511,7 @@ void SimplestApp::AppMainLoop()
 		mMouseDeltaX = mMouseDeltaY = 0;
 		mScrollAmount = 0;
 
-		float clearColor[] = { 0.f, 0.f, 0.f, 1.f };
+		float clearColor[] = { 0.5f, 0.8f, 0.9f, 1.f };
 
 		if (!mDuckyContext->BeginFrame(currentFrame, mFence.Get(), mPipeline.pipeLineState.Get(), mFenceEvent, &mLogFile)) break;
 		ConstantBufferAllocator* cbvAllocator = mDuckyContext->GetBufferAllocator(currentFrame);
@@ -560,7 +559,6 @@ void SimplestApp::AppMainLoop()
 			for (const DuckyPrimitive& primitive : mesh.GetPrimitives())
 			{
 				const DuckyMaterial& material = mesh.GetMaterial(primitive.GetMaterialIndex());
-
 				BindMaterial(list, *cbvAllocator, material);
 
 				primitive.BindGeometry(list);

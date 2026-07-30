@@ -140,7 +140,7 @@ void FindPrimitiveData(const tinygltf::Primitive& Primitive, const tinygltf::Mod
 	
 	//entire size
 	size_t BufferInfoSize = sizeof(CookedVertex) * Count;
-	unsigned int float4Inc = sizeof(CookedVertex);
+	unsigned int CookedVertexSize = sizeof(CookedVertex);
 
 	BufferStartAndStride posInfo;
 	InitStartAndStride(posBuffer, posInfo);
@@ -153,7 +153,7 @@ void FindPrimitiveData(const tinygltf::Primitive& Primitive, const tinygltf::Mod
 	
 
 	//TODO this is temp
-	DataToFlushOut.write((const char*)&float4Inc, sizeof(unsigned int));
+	DataToFlushOut.write((const char*)&CookedVertexSize, sizeof(unsigned int));
 	DataToFlushOut.write((const char*)&BufferInfoSize, sizeof(size_t));
 
 	for (int elem = 0; elem < Count; elem++)
@@ -276,6 +276,13 @@ void WriteOutTextureData(int index,
 	}
 }
 
+unsigned int DetermineAlphaMode(const std::string& str)
+{
+	if (str == "OPAQUE") return 0;
+	else if (str == "MASK") return 1;
+	else if (str == "BLEND") return 2;
+}
+
 void WriteOutMeshData(const tinygltf::Node& Node, 
 					  const tinygltf::Model& Model, 
 					  stringstream& DataToFlushOut, 
@@ -322,6 +329,16 @@ void WriteOutMeshData(const tinygltf::Node& Node,
 
 			float metal = static_cast<float>(pbrValues.metallicFactor);
 			DataToFlushOut.write((char*)&metal, sizeof(float));
+
+			// alpha info
+			unsigned int blendMode = DetermineAlphaMode(primMaterial.alphaMode);
+			DataToFlushOut.write((char*)&blendMode, sizeof(unsigned int));
+
+			float alphaCutoff = static_cast<float>(primMaterial.alphaCutoff);
+			DataToFlushOut.write((char*)&alphaCutoff, sizeof(float));
+
+			DataToFlushOut.write((char*)&primMaterial.doubleSided, sizeof(unsigned int));
+
 			
 			FindPrimitiveData(primitive, Model, DataToFlushOut);
 			

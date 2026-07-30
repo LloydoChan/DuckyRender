@@ -28,8 +28,6 @@ cbuffer InstanceMaterial : register(b2)
     uint  HasBaseColorTexture;
     uint  HasNormalTexture;
     uint  HasMetallicRoughnessTexture;
-    
-    float2 padding;
 };
 
 Texture2D<float4> tex : register(t0);

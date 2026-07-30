@@ -324,8 +324,17 @@ PipelineAndRootSig D3DDeviceManager::CreatePSO(LPCWSTR vertexShader, LPCWSTR ver
 	gPipeline.BlendState.IndependentBlendEnable = false;
 
 	D3D12_RENDER_TARGET_BLEND_DESC renderTargetBlendDesc = {};
-	renderTargetBlendDesc.BlendEnable = false;
-	renderTargetBlendDesc.LogicOpEnable = false;
+	renderTargetBlendDesc.BlendEnable = TRUE;
+	renderTargetBlendDesc.LogicOpEnable = FALSE;
+
+	renderTargetBlendDesc.SrcBlend = D3D12_BLEND_SRC_ALPHA;
+	renderTargetBlendDesc.DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
+	renderTargetBlendDesc.BlendOp = D3D12_BLEND_OP_ADD;
+
+	renderTargetBlendDesc.SrcBlendAlpha = D3D12_BLEND_ONE;
+	renderTargetBlendDesc.DestBlendAlpha = D3D12_BLEND_INV_SRC_ALPHA;
+	renderTargetBlendDesc.BlendOpAlpha = D3D12_BLEND_OP_ADD;
+
 	renderTargetBlendDesc.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
 
 	gPipeline.BlendState.RenderTarget[0] = renderTargetBlendDesc;

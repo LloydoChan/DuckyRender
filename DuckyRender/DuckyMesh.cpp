@@ -117,6 +117,10 @@ bool DuckyMeshData::ReadPrimitive(D3DDeviceManager* deviceManager, std::ifstream
 	inputFile.read(reinterpret_cast<char*>(&output.material.constants.mRoughnessFactor),sizeof(float));
 	inputFile.read(reinterpret_cast<char*>(&output.material.constants.mMetallicFactor),sizeof(float));
 
+	inputFile.read(reinterpret_cast<char*>(&output.material.constants.alphaMode), sizeof(unsigned int));
+	inputFile.read(reinterpret_cast<char*>(&output.material.constants.alphaCutoff), sizeof(float));
+	inputFile.read(reinterpret_cast<char*>(&output.material.constants.doubleSided), sizeof(unsigned int));
+
 	if (!inputFile) return false;
 
 	output.material.constants.mHasBaseColorTexture				= output.material.mBaseColorTexture != NO_TEXTURE;
