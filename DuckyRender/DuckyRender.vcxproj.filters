@@ -73,7 +73,7 @@
       <Filter>Source Files\Core</Filter>
     </ClCompile>
     <ClCompile Include="DuckyPipelineStates.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\Core</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

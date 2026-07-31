@@ -133,7 +133,13 @@ bool DuckyMeshData::ReadPrimitive(D3DDeviceManager* deviceManager, std::ifstream
 	if (!ReadBufferInfo(inputFile, output.vertexBuffer))return false;
 
 	// read AABB data
-	inputFile.read(reinterpret_cast<char*>(&output.boundingBox), sizeof(AABB));
+	XMFLOAT4 min{};
+	XMFLOAT4 max{};
+	inputFile.read(reinterpret_cast<char*>(&min), sizeof(XMFLOAT4));
+	inputFile.read(reinterpret_cast<char*>(&max), sizeof(XMFLOAT4));
+
+	output.boundingBox.SetMin(min);
+	output.boundingBox.SetMax(max);
 
 	if (!ReadBufferInfo(inputFile,output.indexBuffer))return false;
 
@@ -179,4 +185,17 @@ bool DuckyMeshData::ReadBufferInfo(std::ifstream& inputFile, BufferInfo& output)
 	inputFile.read(reinterpret_cast<char*>(output.Data.data()),static_cast<std::streamsize>(output.BufferSize));
 
 	return static_cast<bool>(inputFile);
+}
+
+AABB::AABB(const XMFLOAT4& Min, const XMFLOAT4& Max)
+{
+	mVertices[AABB_MIN] = Min;
+	mVertices[AABB_MAX] = Max;
+
+	mVertices[2] = {Min.x, Max.y, Max.z, 1.f};
+	mVertices[3] = {Min.x, Min.y, Max.z, 1.f};
+	mVertices[4] = {Max.x, Min.y, Min.z, 1.f};
+	mVertices[5] = {Max.x, Max.y, Min.z, 1.f};
+	mVertices[6] = {Min.x, Max.y, Min.z, 1.f};
+	mVertices[7] = {Max.x, Min.y, Max.z, 1.f};
 }

@@ -47,6 +47,23 @@ SamplerState smp : register(s0);
 
 static const float PI = 3.14159265359f;
 
+float3 PrimitiveIDToColour(uint primitiveID)
+{
+    uint hash = primitiveID;
+
+    hash ^= hash >> 16;
+    hash *= 0x7feb352d;
+    hash ^= hash >> 15;
+    hash *= 0x846ca68b;
+    hash ^= hash >> 16;
+
+    float red = float((hash >> 0) & 255) / 255.0f;
+    float green = float((hash >> 8) & 255) / 255.0f;
+    float blue = float((hash >> 16) & 255) / 255.0f;
+
+    return float3(red, green, blue);
+}
+
 float3 FresnelSchlick(float cosTheta, float3 F0)
 {
     return F0 + (1.0f - F0) * pow(saturate(1.0f - cosTheta), 5.0f);
@@ -83,7 +100,7 @@ float GeometrySmith(float3 N, float3 V, float3 L, float roughness)
     return GeometrySchlickGGX(NdotV, roughness) * GeometrySchlickGGX(NdotL, roughness);
 }
 
-float4 main(Input input) : SV_TARGET
+float4 main(Input input, uint primitiveID : SV_PrimitiveID) : SV_TARGET
 {
     float3 V = normalize(cameraPosition.xyz - input.worldPos);
     // create tangent space
@@ -175,6 +192,9 @@ float4 main(Input input) : SV_TARGET
     
     if (visualisationMode == METAL)
         return float4(metallic.xxx, 1.f);
+    
+   // float3 hashColor = PrimitiveIDToColour(primitiveID);
+    
     
     return float4(color, baseColorSample.a);
 }

@@ -14,6 +14,9 @@ using namespace DirectX;
 class D3DDeviceManager;
 struct ID3D12Resource;
 
+const unsigned int AABB_MIN = 0;
+const unsigned int AABB_MAX = 1;
+
 struct GpuBuffer
 {
 	ComPtr<ID3D12Resource> resource;
@@ -32,10 +35,20 @@ struct BufferInfo
 	std::vector<std::byte> Data;
 };
 
-struct AABB
+class AABB
 {
-	XMFLOAT4 min{ (std::numeric_limits<float>::max)(), (std::numeric_limits<float>::max)(), (std::numeric_limits<float>::max)(), (std::numeric_limits<float>::max)() };
-	XMFLOAT4 max{ std::numeric_limits<float>::lowest(), std::numeric_limits<float>::lowest(), std::numeric_limits<float>::lowest(), std::numeric_limits<float>::lowest() };
+	public:
+		AABB() {};
+		AABB(const XMFLOAT4& Min, const XMFLOAT4& Max);
+
+		const XMFLOAT4& GetMin() const { return mVertices[AABB_MIN]; }
+		const XMFLOAT4& GetMax() const { return mVertices[AABB_MAX]; }
+
+		void SetMin(const XMFLOAT4& newMin) { mVertices[AABB_MIN] = newMin; }
+		void SetMax(const XMFLOAT4& newMax) { mVertices[AABB_MAX] = newMax; }
+
+	private:
+		XMFLOAT4 mVertices[8] {};
 };
 
 struct PrimitiveLoadData
@@ -43,14 +56,14 @@ struct PrimitiveLoadData
 	BufferInfo vertexBuffer;
 	BufferInfo indexBuffer;
 	DuckyMaterial material;
-	AABB boundingBox;
+	AABB boundingBox{};
 };
 
 
 class DuckyPrimitive
 {
 public:
-	DuckyPrimitive() {};
+	DuckyPrimitive()  { };
 	bool InitPrimitive(D3DDeviceManager* DeviceManager,
 		PrimitiveLoadData& LoadData,
 		UINT MaterialIndex);

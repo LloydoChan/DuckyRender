@@ -472,9 +472,12 @@ void SimplestApp::AppMainLoop()
 
 	float angle = 0.f;
 
-	float lengthX = mGlobalAABB.max.x - mGlobalAABB.min.x;
-	float lengthY = mGlobalAABB.max.y - mGlobalAABB.min.y;
-	float lengthZ = mGlobalAABB.max.z - mGlobalAABB.min.z;
+	const XMFLOAT4& min = mGlobalAABB.GetMin();
+	const XMFLOAT4& max = mGlobalAABB.GetMax();
+
+	float lengthX = max.x - min.x;
+	float lengthY = max.y - min.y;
+	float lengthZ = max.z - min.z;
 
 	float xDiff = 0.f, zDiff = 0.f;
 	float viewLength = 0.f;
@@ -490,9 +493,9 @@ void SimplestApp::AppMainLoop()
 		viewLength = zDiff;
 	}
 
-	float sceneMidPoint[3] = { mGlobalAABB.min.x + lengthX * 0.5f,
-							   mGlobalAABB.min.y + lengthY * 0.5f,
-							   mGlobalAABB.min.z + lengthZ * 0.5f };
+	float sceneMidPoint[3] = { min.x + lengthX * 0.5f,
+							   min.y + lengthY * 0.5f,
+							   min.z + lengthZ * 0.5f };
 
 
 
@@ -663,10 +666,13 @@ void SimplestApp::WorkOutGlobalBoundingBoxCenter()
 				{
 					for (int z = 0; z < 2; ++z)
 					{
+						const XMFLOAT4& min = box.GetMin();
+						const XMFLOAT4& max = box.GetMax();
+
 						const XMVECTOR localCorner = XMVectorSet(
-							x ? box.max.x : box.min.x,
-							y ? box.max.y : box.min.y,
-							z ? box.max.z : box.min.z,
+							x ? max.x : min.x,
+							y ? max.y : min.y,
+							z ? max.z : min.z,
 							1.0f);
 
 						const XMVECTOR worldCorner = XMVector3TransformCoord( localCorner, instance.mTransform);
@@ -674,13 +680,12 @@ void SimplestApp::WorkOutGlobalBoundingBoxCenter()
 						XMFLOAT3 corner;
 						XMStoreFloat3(&corner, worldCorner);
 
-						mGlobalAABB.min.x = (std::min)(mGlobalAABB.min.x, corner.x);
-						mGlobalAABB.min.y = (std::min)(mGlobalAABB.min.y, corner.y);
-						mGlobalAABB.min.z = (std::min)(mGlobalAABB.min.z, corner.z);
+						XMFLOAT4 globalMin{ (std::min)(min.x, corner.x), (std::min)(min.y, corner.y), (std::min)(min.z, corner.z), 1.f };
+						XMFLOAT4 globalMax{ (std::max)(max.x, corner.x), (std::max)(max.y, corner.y), (std::max)(max.z, corner.z), 1.f };
 
-						mGlobalAABB.max.x = (std::max)(mGlobalAABB.max.x, corner.x);
-						mGlobalAABB.max.y = (std::max)(mGlobalAABB.max.y, corner.y);
-						mGlobalAABB.max.z = (std::max)(mGlobalAABB.max.z, corner.z);
+						mGlobalAABB.SetMin(globalMin);
+						mGlobalAABB.SetMax(globalMax);
+				
 					}
 				}
 			}
