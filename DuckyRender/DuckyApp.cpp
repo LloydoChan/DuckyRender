@@ -74,6 +74,26 @@ bool DuckyApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* WindowNa
 	mDeviceManager = std::make_unique<D3DDeviceManager>();
 	if (!mDeviceManager->Init(hwnd, WindowWidth, WindowHeight, &mLogFile)) return false;
 
+	SetWindowLongPtr(
+		hwnd,
+		GWL_STYLE,
+		WS_POPUP | WS_VISIBLE);
+
+	HMONITOR monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTOPRIMARY);
+
+	MONITORINFO mi = {};
+	mi.cbSize = sizeof(mi);
+	GetMonitorInfo(monitor, &mi);
+
+	SetWindowPos(
+		hwnd,
+		HWND_TOP,
+		mi.rcMonitor.left,
+		mi.rcMonitor.top,
+		mi.rcMonitor.right - mi.rcMonitor.left,
+		mi.rcMonitor.bottom - mi.rcMonitor.top,
+		SWP_FRAMECHANGED);
+
 	ShowWindow(hwnd, SW_SHOW);
 	return true;
 }

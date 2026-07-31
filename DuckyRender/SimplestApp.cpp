@@ -8,7 +8,7 @@
 #include <chrono>
 using Clock = std::chrono::steady_clock;
 
-const float MOVEMENT_SPEED = 15.f;
+const float MOVEMENT_SPEED = 1.f;
 const float ROTATIONAL_SPEED_YAW = 4.f * 3.141f;
 const float ROTATIONAL_SPEED_PITCH = 2.f * 3.141f;
 
@@ -259,9 +259,13 @@ void SimplestApp::HandleInput(UINT msg, WPARAM wParam, LPARAM lParam)
 
 	if (msg == WM_RBUTTONUP) mRightButtonDown = false;
 
+	if (msg == WM_LBUTTONDOWN) mLeftButtonDown = true;
+
+	if (msg == WM_LBUTTONUP) mLeftButtonDown = false;
+
 	if (msg == WM_MOUSELEAVE) mRightButtonDown = false;
 
-	if (msg == WM_INPUT && mRightButtonDown)
+	if (msg == WM_INPUT)
 	{
 		UINT dataSize = 0;
 
@@ -293,6 +297,7 @@ void SimplestApp::HandleInput(UINT msg, WPARAM wParam, LPARAM lParam)
 			mMouseDeltaX += rawInput->data.mouse.lLastX;
 			mMouseDeltaY += rawInput->data.mouse.lLastY;
 		}
+
 	}
 
 	if (msg == WM_KEYDOWN || msg == WM_SYSKEYDOWN  || msg == WM_KEYUP || msg == WM_SYSKEYUP)
@@ -314,16 +319,11 @@ void SimplestApp::HandleInput(UINT msg, WPARAM wParam, LPARAM lParam)
 		if (msg == WM_KEYDOWN || msg == WM_SYSKEYDOWN)
 		{
 			mKeys[keyValue] = true;
-
-			if (keyValue == 0x56)
-			{
-				mVisualizationMode = (mVisualizationMode + 1) % MaterialVisualization::VIS_MAX;
-			}
 		}
 	}
 }
 
-void SimplestApp::UpdateMovementAndRotation(XMVECTOR& ViewVector, float& ScaledMovement, float DeltaTime)
+void SimplestApp::UpdateMovementAndRotation(XMVECTOR& ViewVector, MovementStruct& movement, float DeltaTime)
 {
 	LONG localMouseDeltaXCopy = mMouseDeltaX;
 	LONG localMouseDeltaYCopy = mMouseDeltaY;
@@ -332,7 +332,7 @@ void SimplestApp::UpdateMovementAndRotation(XMVECTOR& ViewVector, float& ScaledM
 
 	ViewVector = XMVector3Normalize(ViewVector);
 	
-	if (localMouseDeltaXCopy != 0)
+	if (mLeftButtonDown && localMouseDeltaXCopy != 0)
 	{
 		float yaw = XMConvertToRadians(static_cast<float>(mMouseDeltaX) * ROTATIONAL_SPEED_YAW * DeltaTime);
 		XMVECTOR quat = XMQuaternionRotationAxis(up, yaw);
@@ -344,7 +344,7 @@ void SimplestApp::UpdateMovementAndRotation(XMVECTOR& ViewVector, float& ScaledM
 	XMVECTOR rightVector = XMVector3Cross(ViewVector, up);
 	rightVector = XMVector3Normalize(rightVector);
 
-	if (localMouseDeltaYCopy != 0)
+	if (mLeftButtonDown && localMouseDeltaYCopy != 0)
 	{
 		float pitch = XMConvertToRadians(static_cast<float>(mMouseDeltaY) * ROTATIONAL_SPEED_PITCH * DeltaTime);
 		XMVECTOR quat = XMQuaternionRotationAxis(rightVector, -pitch);
@@ -361,27 +361,52 @@ void SimplestApp::UpdateMovementAndRotation(XMVECTOR& ViewVector, float& ScaledM
 		}
 	}
 
-	if (mKeys['W'] )
+	if (mKeys['W'] || mScrollAmount > 0)
 	{
-		ScaledMovement -= MOVEMENT_SPEED * DeltaTime;
+		movement.zMovement -= MOVEMENT_SPEED * DeltaTime;
 	}
 
-	if (mScrollAmount > 0)
+	if (mKeys['S'] || mScrollAmount < 0)
 	{
-		ScaledMovement -= MOVEMENT_SPEED * DeltaTime;
-	}
-
-	if (mKeys['S'])
-	{
-		ScaledMovement += MOVEMENT_SPEED * DeltaTime;
+		movement.zMovement += MOVEMENT_SPEED * DeltaTime;
 	}
 	
-	if (mScrollAmount < 0)
+	if (mKeys['a'] || mKeys['A'])
 	{
-		ScaledMovement += MOVEMENT_SPEED * DeltaTime;
+		movement.xMovement += MOVEMENT_SPEED * DeltaTime;
 	}
 
-	if (ScaledMovement < 0.5f) ScaledMovement = 0.5f;
+	if (mKeys['d'] || mKeys['D'])
+	{
+		movement.xMovement -= MOVEMENT_SPEED * DeltaTime;
+	}
+
+	if (mKeys['q'] || mKeys['Q'])
+	{
+		movement.yMovement += MOVEMENT_SPEED * DeltaTime;
+	}
+
+	if (mKeys['e'] || mKeys['E'])
+	{
+		movement.yMovement -= MOVEMENT_SPEED * DeltaTime;
+	}
+
+	if (mRightButtonDown && localMouseDeltaYCopy != 0)
+	{
+		movement.yMovement = MOVEMENT_SPEED * DeltaTime * localMouseDeltaYCopy;
+	}
+
+	if (mRightButtonDown && localMouseDeltaXCopy != 0)
+	{
+		movement.xMovement = MOVEMENT_SPEED * DeltaTime * localMouseDeltaXCopy;
+	}
+
+	if (movement.zMovement < 0.2f) movement.zMovement = 0.2f;
+
+	if (mKeys['v'] || mKeys['V'])
+	{
+		mVisualizationMode = (mVisualizationMode + 1) % MaterialVisualization::VIS_MAX;
+	}
 }
 
 bool SimplestApp::BindMaterial( ID3D12GraphicsCommandList* commandList, ConstantBufferAllocator& allocator, const DuckyMaterial& material)
@@ -518,11 +543,22 @@ void SimplestApp::AppMainLoop()
 
 		previousTime = currentTime;
 
-		XMVECTOR movement = XMVectorZero();
-
 		XMVECTOR viewVector = XMVector4Normalize(XMVectorSubtract(eye, at));
 
-		UpdateMovementAndRotation(viewVector, viewLength, deltaTime);
+		MovementStruct movement{};
+
+		movement.zMovement = viewLength;
+		UpdateMovementAndRotation(viewVector, movement, deltaTime);
+		viewLength = movement.zMovement;
+
+		XMVECTOR right = XMVector3Cross(viewVector, up);
+		XMVECTOR relativeUp = XMVector3Cross(viewVector, right);
+		XMVECTOR delta{ movement.xMovement, movement.yMovement, 0.f };
+
+		right = XMVectorScale(right, movement.xMovement);
+		relativeUp = XMVectorScale(relativeUp, movement.yMovement);
+		at = XMVectorAdd(at, right);
+		at = XMVectorAdd(at, relativeUp);
 
 		eye = XMVectorAdd(at, XMVectorScale(viewVector, viewLength));
 
