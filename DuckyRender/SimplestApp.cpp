@@ -319,6 +319,11 @@ void SimplestApp::HandleInput(UINT msg, WPARAM wParam, LPARAM lParam)
 		if (msg == WM_KEYDOWN || msg == WM_SYSKEYDOWN)
 		{
 			mKeys[keyValue] = true;
+
+			if (mKeys['v'] || mKeys['V'])
+			{
+				mVisualizationMode = (mVisualizationMode + 1) % MaterialVisualization::VIS_MAX;
+			}
 		}
 	}
 }
@@ -403,10 +408,6 @@ void SimplestApp::UpdateMovementAndRotation(XMVECTOR& ViewVector, MovementStruct
 
 	if (movement.zMovement < 0.2f) movement.zMovement = 0.2f;
 
-	if (mKeys['v'] || mKeys['V'])
-	{
-		mVisualizationMode = (mVisualizationMode + 1) % MaterialVisualization::VIS_MAX;
-	}
 }
 
 bool SimplestApp::BindMaterial( ID3D12GraphicsCommandList* commandList, ConstantBufferAllocator& allocator, const DuckyMaterial& material)
