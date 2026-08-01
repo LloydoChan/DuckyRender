@@ -38,16 +38,22 @@ struct BufferInfo
 class AABB
 {
 	public:
-		AABB() {};
+		AABB();
 		AABB(const XMFLOAT4& Min, const XMFLOAT4& Max);
 
 		const XMFLOAT4& GetMin() const { return mVertices[AABB_MIN]; }
 		const XMFLOAT4& GetMax() const { return mVertices[AABB_MAX]; }
 
-		void SetMin(const XMFLOAT4& newMin) { mVertices[AABB_MIN] = newMin; }
-		void SetMax(const XMFLOAT4& newMax) { mVertices[AABB_MAX] = newMax; }
+		void SetNewMinMax(const XMFLOAT4& newMin, const XMFLOAT4& newMax) {
+			mVertices[AABB_MIN] = newMin;
+			mVertices[AABB_MAX] = newMax;
+			RegenerateBox(newMin, newMax);
+		}
+
+		XMFLOAT4 const * GetPointsAddress() const { return &mVertices[0]; }
 
 	private:
+		void RegenerateBox(const XMFLOAT4& newMin, const XMFLOAT4& newMax);
 		XMFLOAT4 mVertices[8] {};
 };
 

@@ -138,8 +138,7 @@ bool DuckyMeshData::ReadPrimitive(D3DDeviceManager* deviceManager, std::ifstream
 	inputFile.read(reinterpret_cast<char*>(&min), sizeof(XMFLOAT4));
 	inputFile.read(reinterpret_cast<char*>(&max), sizeof(XMFLOAT4));
 
-	output.boundingBox.SetMin(min);
-	output.boundingBox.SetMax(max);
+	output.boundingBox.SetNewMinMax(min, max);
 
 	if (!ReadBufferInfo(inputFile,output.indexBuffer))return false;
 
@@ -187,15 +186,26 @@ bool DuckyMeshData::ReadBufferInfo(std::ifstream& inputFile, BufferInfo& output)
 	return static_cast<bool>(inputFile);
 }
 
+AABB::AABB()
+{
+	mVertices[AABB_MIN] = {(std::numeric_limits<float>::max)(), (std::numeric_limits<float>::max)() , (std::numeric_limits<float>::max)() , 1.f};
+	mVertices[AABB_MAX] = {(std::numeric_limits<float>::min)(), (std::numeric_limits<float>::min)() , (std::numeric_limits<float>::min)() , 1.f};
+}
+
 AABB::AABB(const XMFLOAT4& Min, const XMFLOAT4& Max)
 {
 	mVertices[AABB_MIN] = Min;
 	mVertices[AABB_MAX] = Max;
 
-	mVertices[2] = {Min.x, Max.y, Max.z, 1.f};
-	mVertices[3] = {Min.x, Min.y, Max.z, 1.f};
-	mVertices[4] = {Max.x, Min.y, Min.z, 1.f};
-	mVertices[5] = {Max.x, Max.y, Min.z, 1.f};
-	mVertices[6] = {Min.x, Max.y, Min.z, 1.f};
-	mVertices[7] = {Max.x, Min.y, Max.z, 1.f};
+	RegenerateBox(Min, Max);
+}
+
+void AABB::RegenerateBox(const XMFLOAT4& Min, const XMFLOAT4& Max)
+{
+	mVertices[2] = { Min.x, Max.y, Max.z, 1.f };
+	mVertices[3] = { Min.x, Min.y, Max.z, 1.f };
+	mVertices[4] = { Max.x, Min.y, Min.z, 1.f };
+	mVertices[5] = { Max.x, Max.y, Min.z, 1.f };
+	mVertices[6] = { Min.x, Max.y, Min.z, 1.f };
+	mVertices[7] = { Max.x, Min.y, Max.z, 1.f };
 }

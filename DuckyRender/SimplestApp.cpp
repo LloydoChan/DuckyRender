@@ -3,6 +3,7 @@
 #include <vector>
 #include "DuckyPipelineStates.h"
 #include <errno.h>
+#include <algorithm>
 #include "DuckyTools.h"
 
 #include <chrono>
@@ -571,6 +572,9 @@ void SimplestApp::AppMainLoop()
 		mMouseDeltaX = mMouseDeltaY = 0;
 		mScrollAmount = 0;
 
+		SortDrawRecords(view, SortType::AscendingOrder);
+		SortDrawRecords(view, SortType::AscendingOrder, true);
+
 		float clearColor[] = { 0.5f, 0.8f, 0.9f, 1.f };
 
 		if (!mDuckyContext->BeginFrame(currentFrame, mFence.Get(), mOpaquePipeline.pipeLineState.Get(), mFenceEvent, &mLogFile)) break;
@@ -683,9 +687,7 @@ void SimplestApp::WorkOutGlobalBoundingBoxCenter()
 						XMFLOAT4 globalMin{ (std::min)(min.x, corner.x), (std::min)(min.y, corner.y), (std::min)(min.z, corner.z), 1.f };
 						XMFLOAT4 globalMax{ (std::max)(max.x, corner.x), (std::max)(max.y, corner.y), (std::max)(max.z, corner.z), 1.f };
 
-						mGlobalAABB.SetMin(globalMin);
-						mGlobalAABB.SetMax(globalMax);
-				
+						mGlobalAABB.SetNewMinMax(globalMin, globalMax);
 					}
 				}
 			}
@@ -739,4 +741,53 @@ bool SimplestApp::Resize(UINT WindowWidth, UINT WindowHeight)
 	mWholeScreenViewPortScissor.scissor.bottom = static_cast<LONG>(WindowHeight);
 
 	return true;
+}
+
+void SimplestApp::SortDrawRecords(const XMMATRIX& WorldView, SortType SortOrder, bool bAlphaPass)
+{
+	std::vector<DrawRecord>& recordsToSort = bAlphaPass ? mBlendedDraws : mOpaqueDraws;
+
+	struct SortRecord
+	{
+		DrawRecord record;
+		float minZ = (std::numeric_limits<float>::max)();
+	};
+
+	std::vector<SortRecord> sortedRecords;
+
+	for (const DrawRecord& record : recordsToSort)
+	{
+		XMMATRIX transform = record.mInstanceIndex->mTransform * WorldView;
+
+		const AABB& boundingBox = record.mPrimitiveIndex->GetBoundingBox();
+		XMFLOAT4 const * points = boundingBox.GetPointsAddress();
+
+		SortRecord newRecord;
+		newRecord.record = record;
+
+		for (int i = 0; i < 8; i++)
+		{
+			XMFLOAT4 point = points[i];
+			XMVECTOR vec = XMLoadFloat4(&point);
+			XMVECTOR resultPoint = XMVector4Transform(vec, transform);
+			XMStoreFloat4(&point, resultPoint);
+
+			if (point.z < newRecord.minZ)
+			{
+				newRecord.minZ = point.z;
+			}
+		}
+
+		sortedRecords.emplace_back(newRecord);
+	}
+
+	if (bAlphaPass) sort(sortedRecords.begin(), sortedRecords.end(), [](SortRecord& a, SortRecord& b) { return a.minZ > b.minZ;});
+	else sort(sortedRecords.begin(), sortedRecords.end(), [](SortRecord& a, SortRecord& b) { return a.minZ < b.minZ;});
+
+	recordsToSort.clear();
+
+	for (const auto& sortedRecord : sortedRecords)
+	{
+		recordsToSort.emplace_back(sortedRecord.record);
+	}
 }

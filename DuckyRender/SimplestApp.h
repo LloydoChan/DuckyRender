@@ -13,6 +13,12 @@ namespace MaterialVisualization
 	static const unsigned int VIS_MAX = 5;
 };
 
+enum class SortType
+{
+	AscendingOrder = 1,
+	DescendingOrder = 2
+};
+
 struct DrawRecord
 {
 	const DuckyMeshInstance* mInstanceIndex;
@@ -64,6 +70,8 @@ class SimplestApp : public DuckyApp
 		void CreateDrawRecords();
 
 		bool Resize(UINT WindowWidth, UINT WindowHeight);
+
+		void SortDrawRecords(const XMMATRIX& WorldView, SortType SortOrder, bool bAlphaPass = false);
 
 	private:
 		bool mKeys[256] = {};
