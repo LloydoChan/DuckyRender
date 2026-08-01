@@ -422,10 +422,10 @@ int main(int argc, char** argv)
 		return 1;
 	}
 
-	string outputPath = "..//Assets//CookedAssets//";
-	string outputSuffix = "//CookedData.Ducky";
+	const std::filesystem::path outputDirectory = std::filesystem::path("..") / "Assets" / "CookedAssets" / asset;
+	ofstream outputFile(outputDirectory.string() + "//CookedData.Ducky", std::ios::binary);
+	std::filesystem::create_directories(outputDirectory / "Textures");
 
-	ofstream outputFile(outputPath + asset + outputSuffix, std::ios::binary);
 
 	if (!outputFile) return 1;
 	stringstream dataToFlushOut;
@@ -440,10 +440,8 @@ int main(int argc, char** argv)
 	XMMATRIX Transform = XMMatrixIdentity();
 	WriteOutNodeData(rootNode, model, dataToFlushOut, Transform);
 
-	string textureOutputPath = outputPath + asset;
+	string textureOutputPath = outputDirectory.string();
 
-	const std::filesystem::path outputDirectory = std::filesystem::path("..") / "Assets"  / "CookedAssets" / asset;
-	std::filesystem::create_directories(outputDirectory);
 	const std::filesystem::path inputPath = std::filesystem::path("..") / "Assets" / "InputAssets" / asset;
 
 	size_t numMeshes = model.meshes.size();
