@@ -575,8 +575,8 @@ void SimplestApp::AppMainLoop()
 		mMouseDeltaX = mMouseDeltaY = 0;
 		mScrollAmount = 0;
 
-		SortDrawRecords(view, SortType::AscendingOrder);
-		SortDrawRecords(view, SortType::AscendingOrder, true);
+		SortDrawRecords(view);
+		SortDrawRecords(view, true);
 
 		float clearColor[] = { 0.5f, 0.8f, 0.9f, 1.f };
 
@@ -743,7 +743,7 @@ bool SimplestApp::Resize(UINT WindowWidth, UINT WindowHeight)
 	return true;
 }
 
-void SimplestApp::SortDrawRecords(const XMMATRIX& WorldView, SortType SortOrder, bool bAlphaPass)
+void SimplestApp::SortDrawRecords(const XMMATRIX& WorldView, bool bAlphaPass)
 {
 	std::vector<DrawRecord>& recordsToSort = bAlphaPass ? mBlendedDraws : mOpaqueDraws;
 
