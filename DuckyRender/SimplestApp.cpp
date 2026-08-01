@@ -684,8 +684,8 @@ void SimplestApp::WorkOutGlobalBoundingBoxCenter()
 
 						const XMVECTOR worldCorner = XMVector3TransformCoord( localCorner, instance.mTransform);
 
-						XMVECTOR globalMin = XMVectorMin(min, worldCorner);
-						XMVECTOR globalMax = XMVectorMax(max, worldCorner);
+						XMVECTOR globalMin = XMVectorMin(mGlobalAABB.GetMin(), worldCorner);
+						XMVECTOR globalMax = XMVectorMax(mGlobalAABB.GetMax(), worldCorner);
 
 						mGlobalAABB.SetNewMinMax(globalMin, globalMax);
 					}
@@ -754,7 +754,7 @@ void SimplestApp::SortDrawRecords(const XMMATRIX& WorldView, SortType SortOrder,
 	};
 
 	std::vector<SortRecord> sortedRecords;
-
+	sortedRecords.reserve(recordsToSort.size());
 	for (const DrawRecord& record : recordsToSort)
 	{
 		XMMATRIX transform = record.mInstanceIndex->mTransform * WorldView;
@@ -776,11 +776,11 @@ void SimplestApp::SortDrawRecords(const XMMATRIX& WorldView, SortType SortOrder,
 			}
 		}
 
-		sortedRecords.emplace_back(newRecord);
+		sortedRecords.emplace_back(std::move(newRecord));
 	}
 
-	if (bAlphaPass) sort(sortedRecords.begin(), sortedRecords.end(), [](SortRecord& a, SortRecord& b) { return a.minZ > b.minZ;});
-	else sort(sortedRecords.begin(), sortedRecords.end(), [](SortRecord& a, SortRecord& b) { return a.minZ < b.minZ;});
+	if (bAlphaPass) sort(sortedRecords.begin(), sortedRecords.end(), [](const SortRecord& a, const SortRecord& b) { return a.minZ > b.minZ;});
+	else sort(sortedRecords.begin(), sortedRecords.end(), [](const SortRecord& a, const SortRecord& b) { return a.minZ < b.minZ;});
 
 	recordsToSort.clear();
 
