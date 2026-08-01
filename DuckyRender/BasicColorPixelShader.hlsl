@@ -102,6 +102,19 @@ float GeometrySmith(float3 N, float3 V, float3 L, float roughness)
 
 float4 main(Input input, uint primitiveID : SV_PrimitiveID) : SV_TARGET
 {
+    float4 baseColorSample = BaseColorFactor * input.col;
+    
+    if (HasBaseColorTexture == 1)
+    {
+        baseColorSample = BaseColorFactor * tex.Sample(smp, input.uv);
+    }
+    
+    if (baseColorSample.a <= 0.5f)
+    {
+        discard;
+    }
+   
+    float3 baseColor = baseColorSample.rgb;
     float3 V = normalize(cameraPosition.xyz - input.worldPos);
     // create tangent space
     float3 N = normalize(input.normal);
@@ -142,13 +155,6 @@ float4 main(Input input, uint primitiveID : SV_PrimitiveID) : SV_TARGET
     
     float3 H = normalize(V + L);
     float NDotL = saturate(dot(N, L));
-    float4 baseColorSample = BaseColorFactor * input.col;
-    
-    if (HasBaseColorTexture == 1)
-    {
-        baseColorSample = BaseColorFactor * tex.Sample(smp, input.uv);
-    }
-    float3 baseColor = baseColorSample.rgb;
     
     float3 litColor = baseColor * lightColor.rgb * NDotL;
     
