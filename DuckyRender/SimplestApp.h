@@ -45,6 +45,7 @@ private:
 struct PerInstanceConstants
 {
 	XMFLOAT4X4 world;
+	XMFLOAT4X4 normal;
 };
 
 class SimplestApp : public DuckyApp
@@ -62,10 +63,11 @@ class SimplestApp : public DuckyApp
 
 		void WorkOutGlobalBoundingBoxCenter();
 		void CreateDrawRecords();
+		void DrawRecords(const std::vector<DrawRecord>& Draws, ConstantBufferAllocator& Allocator, ID3D12GraphicsCommandList* List);
 
 		bool Resize(UINT WindowWidth, UINT WindowHeight);
 
-		void SortDrawRecords(const XMMATRIX& WorldView, bool bAlphaPass = false);
+		void SortDrawRecords(const XMMATRIX& WorldView, std::vector<DrawRecord>& recordsToSort, bool bAlphaPass = false);
 
 	private:
 		bool mKeys[256] = {};
@@ -94,6 +96,18 @@ class SimplestApp : public DuckyApp
 
 		PipelineAndRootSig mTransparentPipeline;
 		std::vector<DrawRecord> mBlendedDraws;
+
+		PipelineAndRootSig mMaskedPipeline;
+		std::vector<DrawRecord> mMaskedDraws;
+
+		PipelineAndRootSig mOpaqueDblPipeline;
+		std::vector<DrawRecord> mOpaqueDblDraws;
+
+		PipelineAndRootSig mTransparentDblPipeline;
+		std::vector<DrawRecord> mBlendedDblDraws;
+
+		PipelineAndRootSig mMaskedDblPipeline;
+		std::vector<DrawRecord> mMaskedDblDraws;
 
 		int mCbvSrvUavHandle = -1;
 

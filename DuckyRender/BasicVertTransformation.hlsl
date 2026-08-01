@@ -20,6 +20,7 @@ cbuffer cbuff0 : register(b0)
 cbuffer cbuff1 : register(b1)
 {
     matrix instanceTransform;
+    matrix normalTransform;
 };
 
 Output main(float3 pos : POSITION, float3 normal : NORMAL, float4 tangent : TANGENT, float2 uv : TEXCOORD, float4 col : COLOR) 
@@ -30,8 +31,8 @@ Output main(float3 pos : POSITION, float3 normal : NORMAL, float4 tangent : TANG
     result.worldPos = worldPos.xyz;
     result.svpos    = mul(worldPos, viewProj);
     
-    result.normal =    normalize(mul(normal, (float3x3)instanceTransform));
-    float3 tangentWs = normalize(mul(tangent.xyz, (float3x3)instanceTransform));
+    result.normal = mul(float4(normal, 0.f), normalTransform).xyz;
+    float3 tangentWs = normalize(mul(tangent.xyz, (float3x3) instanceTransform));
     
     result.tangent = float4(tangentWs, tangent.w);
     

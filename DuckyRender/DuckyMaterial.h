@@ -30,9 +30,12 @@ struct MaterialConstants
     unsigned int mHasMetallicRoughnessTexture = 0;
     unsigned int mHasEmissiveTexture = 0;
 
-    AlphaMode alphaMode;
-    float alphaCutoff;
-    uint32_t doubleSided;
+    AlphaMode alphaMode = AlphaMode::Opaque;
+    float alphaCutoff = 0.5f;
+    unsigned int doubleSided = 0;
+
+    unsigned int padding1;
+    unsigned int padding2;
 };
 
 struct DuckyMaterial

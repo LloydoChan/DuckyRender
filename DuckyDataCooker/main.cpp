@@ -206,7 +206,7 @@ void WriteOutNodeData(const tinygltf::Node& Node, const tinygltf::Model& Model, 
 		unsigned int i = 0;
 		for (unsigned int i = 0; i < 16; i+=4)
 		{
-			XMVECTORF32 nextVector{ static_cast<float>(Node.matrix[i]), 
+			XMVECTORF32 nextVector{  static_cast<float>(Node.matrix[i]), 
 									 static_cast<float>(Node.matrix[i + 1]), 
 									 static_cast<float>(Node.matrix[i + 2]), 
 									 static_cast<float>(Node.matrix[i + 3])};
@@ -216,7 +216,6 @@ void WriteOutNodeData(const tinygltf::Node& Node, const tinygltf::Model& Model, 
 
 		transform = nextTransform * transform;
 	}
-	
 
 	streampos p = 0;
 	if (Node.mesh != -1)

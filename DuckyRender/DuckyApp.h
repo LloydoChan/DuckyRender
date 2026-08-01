@@ -9,6 +9,7 @@ class D3DDeviceManager;
 
 const XMFLOAT4 BaseColorFallback{ 1.f, 1.f, 1.f, 1.f };
 const XMFLOAT4 NormalFallback{ 0.5f, 0.5f, 1.f, 1.f };
+const XMFLOAT4 EmissiveFallback{ 1.f, 1.f, 1.f, 1.f };
 
 class DuckyApp
 {

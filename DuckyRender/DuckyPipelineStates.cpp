@@ -57,14 +57,50 @@ D3D12_GRAPHICS_PIPELINE_STATE_DESC MakeTransparentPipelineState()
 
     renderTargetBlendDesc.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
 
-    D3D12_DEPTH_STENCIL_DESC depthStencilDesc{};
-
     newState.DepthStencilState.DepthEnable    = TRUE;
     newState.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS;
     newState.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
     newState.DepthStencilState.StencilEnable  = FALSE;
 
     newState.BlendState.RenderTarget[0] = renderTargetBlendDesc;
+
+    return newState;
+}
+
+D3D12_GRAPHICS_PIPELINE_STATE_DESC MakeDoubleSidedOpaquePipelineState()
+{
+    D3D12_GRAPHICS_PIPELINE_STATE_DESC dblPipeline = MakeOpaquePipelineState();
+
+    dblPipeline.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
+
+    return dblPipeline;
+}
+
+D3D12_GRAPHICS_PIPELINE_STATE_DESC MakeDoubleSidedMaskedPipelineState()
+{
+    D3D12_GRAPHICS_PIPELINE_STATE_DESC dblPipeline = MakeMaskedPipelineState();
+
+    dblPipeline.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
+
+    return dblPipeline;
+}
+
+D3D12_GRAPHICS_PIPELINE_STATE_DESC MakeDoubleSidedTransparentPipelineState()
+{
+    D3D12_GRAPHICS_PIPELINE_STATE_DESC dblPipeline = MakeTransparentPipelineState();
+
+    dblPipeline.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
+
+    return dblPipeline;
+}
+
+
+D3D12_GRAPHICS_PIPELINE_STATE_DESC MakeMaskedPipelineState()
+{
+    D3D12_GRAPHICS_PIPELINE_STATE_DESC newState = MakeOpaquePipelineState();
+
+    // Masked materials are not blended.
+    newState.BlendState.RenderTarget[0].BlendEnable = FALSE;
 
     return newState;
 }

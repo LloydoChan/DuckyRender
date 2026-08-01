@@ -9,7 +9,7 @@
 #include <chrono>
 using Clock = std::chrono::steady_clock;
 
-const float MOVEMENT_SPEED = 1.f;
+const float MOVEMENT_SPEED = 20.f;
 const float ROTATIONAL_SPEED_YAW = 4.f * 3.141f;
 const float ROTATIONAL_SPEED_PITCH = 2.f * 3.141f;
 
@@ -164,7 +164,7 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 	samplerDesc.AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
 	samplerDesc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
 	samplerDesc.BorderColor = D3D12_STATIC_BORDER_COLOR_TRANSPARENT_BLACK;
-	samplerDesc.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
+	samplerDesc.Filter = D3D12_FILTER_ANISOTROPIC;
 	samplerDesc.MaxAnisotropy = 8;
 	samplerDesc.MaxLOD = D3D12_FLOAT32_MAX;
 	samplerDesc.MinLOD = 0.f;
@@ -175,11 +175,29 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 
 	auto opaqueState = MakeOpaquePipelineState();
 	auto transparantState = MakeTransparentPipelineState();
+	auto maskedState = MakeMaskedPipelineState();
+	auto dblOpaqueState = MakeDoubleSidedOpaquePipelineState();
+	auto dblBlendState = MakeDoubleSidedTransparentPipelineState();
+	auto dblMaskedState = MakeDoubleSidedMaskedPipelineState();
+
 	mOpaquePipeline = mDeviceManager->CreatePSO(L"BasicVertTransformation.hlsl", L"main", L"BasicColorPixelShader.hlsl", L"main", drawSig, opaqueState);
 	if (mOpaquePipeline.rootSig == nullptr || mOpaquePipeline.pipeLineState == nullptr) return false;
 
 	mTransparentPipeline = mDeviceManager->CreatePSO(L"BasicVertTransformation.hlsl", L"main", L"BasicColorPixelShader.hlsl", L"main", drawSig, transparantState);
 	if (mTransparentPipeline.rootSig == nullptr || mTransparentPipeline.pipeLineState == nullptr) return false;
+
+	mMaskedPipeline = mDeviceManager->CreatePSO(L"BasicVertTransformation.hlsl", L"main", L"BasicColorPixelShader.hlsl", L"main", drawSig, maskedState);
+	if (mMaskedPipeline.rootSig == nullptr || mMaskedPipeline.pipeLineState == nullptr) return false;
+
+	mOpaqueDblPipeline = mDeviceManager->CreatePSO(L"BasicVertTransformation.hlsl", L"main", L"BasicColorPixelShader.hlsl", L"main", drawSig, dblOpaqueState);
+	if (mOpaqueDblPipeline.rootSig == nullptr || mOpaqueDblPipeline.pipeLineState == nullptr) return false;
+
+	mTransparentDblPipeline = mDeviceManager->CreatePSO(L"BasicVertTransformation.hlsl", L"main", L"BasicColorPixelShader.hlsl", L"main", drawSig, dblBlendState);
+	if (mTransparentDblPipeline.rootSig == nullptr || mTransparentDblPipeline.pipeLineState == nullptr) return false;
+
+	mMaskedDblPipeline = mDeviceManager->CreatePSO(L"BasicVertTransformation.hlsl", L"main", L"BasicColorPixelShader.hlsl", L"main", drawSig, dblMaskedState);
+	if (mMaskedDblPipeline.rootSig == nullptr || mMaskedDblPipeline.pipeLineState == nullptr) return false;
+
 
 	mWholeScreenViewPortScissor.scissor.left = 0;
 	mWholeScreenViewPortScissor.scissor.right = WindowWidth;
@@ -421,17 +439,10 @@ bool SimplestApp::BindMaterial( ID3D12GraphicsCommandList* commandList, Constant
 
 	commandList->SetGraphicsRootConstantBufferView(RootParameter::PerMaterial, allocation.mGpuAddress);
 
-	if (material.constants.mHasBaseColorTexture)
-		BindTexture( commandList, RootParameter::BaseColorTexture, material.mBaseColorTexture, mBaseColorFallbackHandle);
-
-	if (material.constants.mHasNormalTexture)
-		BindTexture(commandList, RootParameter::NormalTexture, material.mNormalTexture, mNormalColorFallbackHandle);
-
-	if(material.constants.mHasMetallicRoughnessTexture)
-		BindTexture(commandList, RootParameter::MetallicRoughnessTexture, material.mMetallicRoughnessTexture, mBaseColorFallbackHandle);
-
-	if (material.constants.mHasEmissiveTexture)
-		BindTexture(commandList, RootParameter::EmissiveTexture, material.mEmissive, mBaseColorFallbackHandle);
+	BindTexture( commandList, RootParameter::BaseColorTexture, material.mBaseColorTexture, mBaseColorFallbackHandle);
+	BindTexture(commandList, RootParameter::NormalTexture, material.mNormalTexture, mNormalColorFallbackHandle);
+	BindTexture(commandList, RootParameter::MetallicRoughnessTexture, material.mMetallicRoughnessTexture, mBaseColorFallbackHandle);
+	BindTexture(commandList, RootParameter::EmissiveTexture, material.mEmissive, mBaseColorFallbackHandle);
 
 	return true;
 }
@@ -453,6 +464,9 @@ bool SimplestApp::BindInstanceConstants( ID3D12GraphicsCommandList* commandList,
 
 	auto* constants = static_cast<PerInstanceConstants*>(allocation.mCpuAddress);
 
+	XMMATRIX normalMatrix = XMMatrixInverse(nullptr, instance.mTransform);
+
+	XMStoreFloat4x4(&constants->normal,normalMatrix);
 	XMStoreFloat4x4(&constants->world, XMMatrixTranspose(instance.mTransform));
 	commandList->SetGraphicsRootConstantBufferView(RootParameter::PerInstance, allocation.mGpuAddress);
 
@@ -488,12 +502,12 @@ void SimplestApp::AppMainLoop()
 
 	if (lengthX < lengthZ)
 	{
-		xDiff = 2.f * lengthX;
+		xDiff = lengthX;
 		viewLength = xDiff;
 	}
 	else
 	{
-		zDiff = 2.f * lengthZ;
+		zDiff = lengthZ;
 		viewLength = zDiff;
 	}
 
@@ -575,8 +589,12 @@ void SimplestApp::AppMainLoop()
 		mMouseDeltaX = mMouseDeltaY = 0;
 		mScrollAmount = 0;
 
-		SortDrawRecords(view);
-		SortDrawRecords(view, true);
+		SortDrawRecords(view, mOpaqueDraws);
+		SortDrawRecords(view, mOpaqueDblDraws);
+		SortDrawRecords(view, mMaskedDraws);
+		SortDrawRecords(view, mMaskedDblDraws);
+		SortDrawRecords(view, mBlendedDraws, true);
+		SortDrawRecords(view, mBlendedDblDraws, true);
 
 		float clearColor[] = { 0.5f, 0.8f, 0.9f, 1.f };
 
@@ -616,23 +634,25 @@ void SimplestApp::AppMainLoop()
 
 		list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-		for (const DrawRecord& draw : mOpaqueDraws)
-		{
-			BindInstanceConstants(list, *cbvAllocator, *draw.mInstanceIndex);
-			BindMaterial(list, *cbvAllocator, *draw.mMaterialIndex);
-			draw.mPrimitiveIndex->BindGeometry(list);
-			draw.mPrimitiveIndex->Draw(list);
-		}
+		list->SetPipelineState(mOpaqueDblPipeline.pipeLineState.Get());
+		DrawRecords(mOpaqueDblDraws, *cbvAllocator, list);
+
+
+		list->SetPipelineState(mMaskedDblPipeline.pipeLineState.Get());
+		DrawRecords(mMaskedDblDraws, *cbvAllocator, list);
+
+		list->SetPipelineState(mOpaquePipeline.pipeLineState.Get());
+		DrawRecords(mOpaqueDraws, *cbvAllocator, list);
+
+		list->SetPipelineState(mMaskedPipeline.pipeLineState.Get());
+		DrawRecords(mMaskedDraws, *cbvAllocator, list);
+
+		list->SetPipelineState(mTransparentDblPipeline.pipeLineState.Get());
+		DrawRecords(mBlendedDblDraws, *cbvAllocator, list);
 
 		list->SetPipelineState(mTransparentPipeline.pipeLineState.Get());
+		DrawRecords(mBlendedDraws, *cbvAllocator, list);
 
-		for (const DrawRecord& draw : mBlendedDraws)
-		{
-			BindInstanceConstants(list, *cbvAllocator, *draw.mInstanceIndex);
-			BindMaterial(list, *cbvAllocator, *draw.mMaterialIndex);
-			draw.mPrimitiveIndex->BindGeometry(list);
-			draw.mPrimitiveIndex->Draw(list);
-		}
 
 		barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
 		barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
@@ -710,10 +730,49 @@ void SimplestApp::CreateDrawRecords()
 
 			DrawRecord newRecord{ instancePtr, primPtr, matPtr };
 
-			if (matPtr->constants.alphaMode == AlphaMode::Opaque) mOpaqueDraws.push_back(newRecord);
-			else mBlendedDraws.push_back(newRecord);
+			AlphaMode mode = matPtr->constants.alphaMode;
+
+			if (matPtr->constants.doubleSided)
+			{
+				switch (mode)
+				{
+					case AlphaMode::Blend:
+						mBlendedDblDraws.push_back(newRecord);
+						break;
+					case AlphaMode::Mask:
+						mMaskedDblDraws.push_back(newRecord);
+						break;
+					default:
+						mOpaqueDblDraws.push_back(newRecord);
+				}
+			}
+			else
+			{
+				switch (mode)
+				{
+					case AlphaMode::Blend:
+						mBlendedDraws.push_back(newRecord);
+						break;
+					case AlphaMode::Mask:
+						mMaskedDraws.push_back(newRecord);
+						break;
+					default:
+						mOpaqueDraws.push_back(newRecord);
+				}
+			}
 		}
 
+	}
+}
+
+void SimplestApp::DrawRecords(const std::vector<DrawRecord>& Draws, ConstantBufferAllocator& Allocator, ID3D12GraphicsCommandList* List)
+{
+	for (const DrawRecord& draw : Draws)
+	{
+		BindInstanceConstants(List, Allocator, *draw.mInstanceIndex);
+		BindMaterial(List, Allocator, *draw.mMaterialIndex);
+		draw.mPrimitiveIndex->BindGeometry(List);
+		draw.mPrimitiveIndex->Draw(List);
 	}
 }
 
@@ -743,9 +802,8 @@ bool SimplestApp::Resize(UINT WindowWidth, UINT WindowHeight)
 	return true;
 }
 
-void SimplestApp::SortDrawRecords(const XMMATRIX& WorldView, bool bAlphaPass)
+void SimplestApp::SortDrawRecords(const XMMATRIX& WorldView, std::vector<DrawRecord>& recordsToSort, bool bAlphaPass)
 {
-	std::vector<DrawRecord>& recordsToSort = bAlphaPass ? mBlendedDraws : mOpaqueDraws;
 
 	struct SortRecord
 	{
