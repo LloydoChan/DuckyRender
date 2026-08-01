@@ -473,8 +473,11 @@ void SimplestApp::AppMainLoop()
 
 	float angle = 0.f;
 
-	const XMFLOAT4& min = mGlobalAABB.GetMin();
-	const XMFLOAT4& max = mGlobalAABB.GetMax();
+	XMFLOAT4 min;
+	XMFLOAT4 max;
+
+	XMStoreFloat4(&min, mGlobalAABB.GetMin());
+	XMStoreFloat4(&max, mGlobalAABB.GetMax());
 
 	float lengthX = max.x - min.x;
 	float lengthY = max.y - min.y;
@@ -670,22 +673,19 @@ void SimplestApp::WorkOutGlobalBoundingBoxCenter()
 				{
 					for (int z = 0; z < 2; ++z)
 					{
-						const XMFLOAT4& min = box.GetMin();
-						const XMFLOAT4& max = box.GetMax();
+						const XMVECTOR& min = box.GetMin();
+						const XMVECTOR& max = box.GetMax();
 
 						const XMVECTOR localCorner = XMVectorSet(
-							x ? max.x : min.x,
-							y ? max.y : min.y,
-							z ? max.z : min.z,
+							x ? XMVectorGetX(max) : XMVectorGetX(min),
+							y ? XMVectorGetY(max) : XMVectorGetY(min),
+							z ? XMVectorGetZ(max) : XMVectorGetZ(min),
 							1.0f);
 
 						const XMVECTOR worldCorner = XMVector3TransformCoord( localCorner, instance.mTransform);
 
-						XMFLOAT3 corner;
-						XMStoreFloat3(&corner, worldCorner);
-
-						XMFLOAT4 globalMin{ (std::min)(min.x, corner.x), (std::min)(min.y, corner.y), (std::min)(min.z, corner.z), 1.f };
-						XMFLOAT4 globalMax{ (std::max)(max.x, corner.x), (std::max)(max.y, corner.y), (std::max)(max.z, corner.z), 1.f };
+						XMVECTOR globalMin = XMVectorMin(min, worldCorner);
+						XMVECTOR globalMax = XMVectorMax(max, worldCorner);
 
 						mGlobalAABB.SetNewMinMax(globalMin, globalMax);
 					}
@@ -760,21 +760,19 @@ void SimplestApp::SortDrawRecords(const XMMATRIX& WorldView, SortType SortOrder,
 		XMMATRIX transform = record.mInstanceIndex->mTransform * WorldView;
 
 		const AABB& boundingBox = record.mPrimitiveIndex->GetBoundingBox();
-		XMFLOAT4 const * points = boundingBox.GetPointsAddress();
+		XMVECTOR const * points = boundingBox.GetPointsAddress();
 
 		SortRecord newRecord;
 		newRecord.record = record;
 
 		for (int i = 0; i < 8; i++)
 		{
-			XMFLOAT4 point = points[i];
-			XMVECTOR vec = XMLoadFloat4(&point);
+			XMVECTOR vec = points[i];
 			XMVECTOR resultPoint = XMVector4Transform(vec, transform);
-			XMStoreFloat4(&point, resultPoint);
-
-			if (point.z < newRecord.minZ)
+			float resultZ = XMVectorGetZ(resultPoint);
+			if (resultZ < newRecord.minZ)
 			{
-				newRecord.minZ = point.z;
+				newRecord.minZ = resultZ;
 			}
 		}
 

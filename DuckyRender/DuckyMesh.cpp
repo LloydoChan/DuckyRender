@@ -133,10 +133,10 @@ bool DuckyMeshData::ReadPrimitive(D3DDeviceManager* deviceManager, std::ifstream
 	if (!ReadBufferInfo(inputFile, output.vertexBuffer))return false;
 
 	// read AABB data
-	XMFLOAT4 min{};
-	XMFLOAT4 max{};
-	inputFile.read(reinterpret_cast<char*>(&min), sizeof(XMFLOAT4));
-	inputFile.read(reinterpret_cast<char*>(&max), sizeof(XMFLOAT4));
+	XMVECTOR min{};
+	XMVECTOR max{};
+	inputFile.read(reinterpret_cast<char*>(&min), sizeof(XMVECTOR));
+	inputFile.read(reinterpret_cast<char*>(&max), sizeof(XMVECTOR));
 
 	output.boundingBox.SetNewMinMax(min, max);
 
@@ -192,7 +192,7 @@ AABB::AABB()
 	mVertices[AABB_MAX] = {(std::numeric_limits<float>::min)(), (std::numeric_limits<float>::min)() , (std::numeric_limits<float>::min)() , 1.f};
 }
 
-AABB::AABB(const XMFLOAT4& Min, const XMFLOAT4& Max)
+AABB::AABB(const XMVECTOR& Min, const XMVECTOR& Max)
 {
 	mVertices[AABB_MIN] = Min;
 	mVertices[AABB_MAX] = Max;
@@ -200,12 +200,12 @@ AABB::AABB(const XMFLOAT4& Min, const XMFLOAT4& Max)
 	RegenerateBox(Min, Max);
 }
 
-void AABB::RegenerateBox(const XMFLOAT4& Min, const XMFLOAT4& Max)
+void AABB::RegenerateBox(const XMVECTOR& Min, const XMVECTOR& Max)
 {
-	mVertices[2] = { Min.x, Max.y, Max.z, 1.f };
-	mVertices[3] = { Min.x, Min.y, Max.z, 1.f };
-	mVertices[4] = { Max.x, Min.y, Min.z, 1.f };
-	mVertices[5] = { Max.x, Max.y, Min.z, 1.f };
-	mVertices[6] = { Min.x, Max.y, Min.z, 1.f };
-	mVertices[7] = { Max.x, Min.y, Max.z, 1.f };
+	mVertices[2] = { XMVectorGetX(Max), XMVectorGetY(Max), XMVectorGetZ(Max), 1.f};
+	mVertices[3] = { XMVectorGetX(Min), XMVectorGetY(Min), XMVectorGetZ(Max), 1.f };
+	mVertices[4] = { XMVectorGetX(Max), XMVectorGetY(Min), XMVectorGetZ(Min), 1.f };
+	mVertices[5] = { XMVectorGetX(Max), XMVectorGetY(Max), XMVectorGetZ(Min), 1.f };
+	mVertices[6] = { XMVectorGetX(Min), XMVectorGetY(Max), XMVectorGetZ(Min), 1.f };
+	mVertices[7] = { XMVectorGetX(Max), XMVectorGetY(Min), XMVectorGetZ(Max), 1.f };
 }

@@ -39,22 +39,22 @@ class AABB
 {
 	public:
 		AABB();
-		AABB(const XMFLOAT4& Min, const XMFLOAT4& Max);
+		AABB(const XMVECTOR& Min, const XMVECTOR& Max);
 
-		const XMFLOAT4& GetMin() const { return mVertices[AABB_MIN]; }
-		const XMFLOAT4& GetMax() const { return mVertices[AABB_MAX]; }
+		const XMVECTOR& GetMin() const { return mVertices[AABB_MIN]; }
+		const XMVECTOR& GetMax() const { return mVertices[AABB_MAX]; }
 
-		void SetNewMinMax(const XMFLOAT4& newMin, const XMFLOAT4& newMax) {
+		void SetNewMinMax(const XMVECTOR& newMin, const XMVECTOR& newMax) {
 			mVertices[AABB_MIN] = newMin;
 			mVertices[AABB_MAX] = newMax;
 			RegenerateBox(newMin, newMax);
 		}
 
-		XMFLOAT4 const * GetPointsAddress() const { return &mVertices[0]; }
+		XMVECTOR const * GetPointsAddress() const { return &mVertices[0]; }
 
 	private:
-		void RegenerateBox(const XMFLOAT4& newMin, const XMFLOAT4& newMax);
-		XMFLOAT4 mVertices[8] {};
+		void RegenerateBox(const XMVECTOR& newMin, const XMVECTOR& newMax);
+		XMVECTOR mVertices[8] {};
 };
 
 struct PrimitiveLoadData
