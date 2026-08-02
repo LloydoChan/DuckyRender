@@ -435,8 +435,8 @@ int main(int argc, char** argv)
 	}
 
 	const std::filesystem::path outputDirectory = std::filesystem::path("..") / "Assets" / "CookedAssets" / asset;
-	ofstream outputFile(outputDirectory.string() + "//CookedData.Ducky", std::ios::binary);
 	std::filesystem::create_directories(outputDirectory / "Textures");
+	ofstream outputFile(outputDirectory.string() + "//CookedData.Ducky", std::ios::binary);
 
 
 	if (!outputFile) return 1;
