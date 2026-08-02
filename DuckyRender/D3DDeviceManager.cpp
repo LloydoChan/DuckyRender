@@ -435,6 +435,8 @@ DescriptorHeapResource D3DDeviceManager::CreateTexture(const wchar_t* Filepath, 
 
 	if (FAILED(hResult) && !OutputErrorFromHResult(hResult, "couldn't load Texture ", *mLogFilePtr)) return newTexture;
 
+	newTexture.buffer->SetName(Filepath);
+
 	auto img = imageData.GetImages();
 	size_t imgCount = imageData.GetImageCount();
 	
