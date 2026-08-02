@@ -58,6 +58,16 @@ SamplerState smp : register(s0);
 
 static const float PI = 3.14159265359f;
 
+float3 LinearToSRGB(float3 value)
+{
+    value = max(value, 0.0f);
+
+    float3 low  = value * 12.92f;
+    float3 high = 1.055f * pow(value, 1.0f / 2.4f) - 0.055f;
+
+    return lerp(low, high, step(0.0031308f, value));
+}
+
 float3 PrimitiveIDToColour(uint primitiveID)
 {
     uint hash = primitiveID;
@@ -127,17 +137,12 @@ float4 main(Input input,
     float3 baseColor = baseColorSample.rgb;
     float3 V = normalize(cameraPosition.xyz - input.worldPos);
     // create tangent space
-    float3 N = normalize(input.normal);
-    float3 T = normalize(input.tangent.xyz);
     
-    if (doubleSided != 0 && !isFrontFace)
-    {
-        N = -N;
-    }
-    
-     T = normalize(T - N * dot(N, T));
-    
-     float3 B = cross(N, T) * input.tangent.w;
+    float faceSign = doubleSided != 0 && !isFrontFace ? -1.0f : 1.0f;
+
+    float3 N = normalize(input.normal) * faceSign;
+    float3 T = normalize(input.tangent.xyz) * faceSign;
+    float3 B = cross(N, T) * input.tangent.w;
     
      float3 L = normalize(-lightDirection.xyz);
     
@@ -172,11 +177,7 @@ float4 main(Input input,
     
      float3 H = normalize(V + L);
      float NDotL = saturate(dot(N, L));
-    
-     float3 litColor = baseColor * lightColor.rgb * NDotL;
-    
      float NdotV = saturate(dot(N, V));
-
      float VdotH = saturate(dot(V, H));
 
      float3 F0 = lerp(0.04f, baseColor, metallic);
@@ -190,20 +191,14 @@ float4 main(Input input,
 
      float3 diffuse = kD * baseColor / PI;
 
-     float3 radiance = lightColor;
+     float3 radiance = lightColor * 0.5f;
 
-     float3 color = (diffuse + specular) * radiance * NDotL + emissive;
+     float3 color = (diffuse + specular) * NDotL * radiance + emissive;
     
     // hack ambient term
-    //color += baseColor * float3(0.05f, 0.05f, 0.05f);
-   
-    // gamma
-    color = color / (color + 1.0f);
-    color = pow(saturate(color), 1.0f / 2.2f);
-
-    float depthVal = input.svpos.z;
- 
-   
+    float3 ambient = baseColor * 0.03f * (1.0f - metallic);
+    color += ambient;
+  
     if (visualisationMode == DEPTH)
         return float4(input.svpos.z.xxx, 1.f);
     
@@ -211,10 +206,10 @@ float4 main(Input input,
         return float4(roughness.xxx, 1.f);
     
     if (visualisationMode == NORMAL)
-        return float4(N, 1.f);
+        return float4(N * 0.5f + 0.5f, 1.f);
     
     if (visualisationMode == METAL)
         return float4(metallic.xxx, 1.f);
     
-    return float4(color, baseColorSample.a);
+    return float4(baseColorSample.rgb, baseColorSample.a);
 }

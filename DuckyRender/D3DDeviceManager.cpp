@@ -311,7 +311,7 @@ PipelineAndRootSig D3DDeviceManager::CreatePSO(LPCWSTR vertexShader,
 
 	PipelineDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
 	PipelineDesc.NumRenderTargets = 1;
-	PipelineDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
+	PipelineDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
 	PipelineDesc.SampleDesc.Count = 1;
 	PipelineDesc.SampleDesc.Quality = 0;
 
@@ -435,7 +435,6 @@ DescriptorHeapResource D3DDeviceManager::CreateTexture(const wchar_t* Filepath, 
 
 	if (FAILED(hResult) && !OutputErrorFromHResult(hResult, "couldn't load Texture ", *mLogFilePtr)) return newTexture;
 
-	newTexture.buffer->SetName(Filepath);
 
 	auto img = imageData.GetImages();
 	size_t imgCount = imageData.GetImageCount();
@@ -469,6 +468,8 @@ DescriptorHeapResource D3DDeviceManager::CreateTexture(const wchar_t* Filepath, 
 		IID_PPV_ARGS(&newTexture.buffer));
 
 	if (FAILED(hResult) && !OutputErrorFromHResult(hResult, "couldn't create texture ", *mLogFilePtr)) return newTexture;
+	
+	newTexture.buffer->SetName(Filepath);
 
 	for (size_t subresourceIndex = 0; subresourceIndex < imgCount; ++subresourceIndex)
 	{
@@ -517,7 +518,7 @@ DescriptorHeapResource D3DDeviceManager::CreateFallbackTexture(const wchar_t* Na
 
 	D3D12_RESOURCE_DESC resDesc = {};
 
-	resDesc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
+	resDesc.Format = DXGI_FORMAT_BC7_UNORM_SRGB;
 	resDesc.Width = 4;
 	resDesc.Height =1;
 	resDesc.DepthOrArraySize = 1;
@@ -539,12 +540,13 @@ DescriptorHeapResource D3DDeviceManager::CreateFallbackTexture(const wchar_t* Na
 	if (FAILED(hResult) && !OutputErrorFromHResult(hResult, "couldn't create texture ", *mLogFilePtr)) return newTexture;
 
 	hResult = newTexture.buffer->WriteToSubresource(0, nullptr, &Color, 1, 1);
+	newTexture.buffer->SetName(Name);
 
 	if (FAILED(hResult) && !OutputErrorFromHResult(hResult, "couldn't write to subresource ", *mLogFilePtr)) return newTexture;
 
 	// create the resource view
 	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-	srvDesc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
+	srvDesc.Format = DXGI_FORMAT_BC7_UNORM_SRGB;
 	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
 	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
 	srvDesc.Texture2D.MipLevels = 1;
