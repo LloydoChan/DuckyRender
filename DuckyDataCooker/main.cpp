@@ -69,11 +69,11 @@ struct AABB
 
 size_t totalMeshes = 0;
 
-bool ConvertToDds(TextureType Type, const std::string& texconvPath, const std::string& inputJpg, const std::string& outputDir) {
+bool ConvertToDds(TextureType Type, const std::string& texconvPath, const std::string& inputJpg, const std::string& outputDir, string prefix) {
 	
 	std::string conversionFormat = CompressionTypes[Type];
 	// Example command: texconv.exe -f BC1_UNORM -y input.jpg -o C:/output
-	std::string cmd = texconvPath + " -f " + conversionFormat +"  -y \"" + inputJpg + "\" -o \"" + outputDir + "\"";
+	std::string cmd = texconvPath + " -px " + prefix + " -f " + conversionFormat + "  -y \"" + inputJpg + "\" -o \"" + outputDir + "\"";
 
 	int result = std::system(cmd.c_str());
 
@@ -243,7 +243,7 @@ void WriteOutTextureData(int index,
 						 const std::filesystem::path& InputPath, 
 						 const std::filesystem::path& OutputPath)
 {
-	static std::set<string> alreadySeen;
+	static std::unordered_map<std::string, std::string> assignedNames;
 
 	if (index != -1)
 	{
@@ -252,26 +252,37 @@ void WriteOutTextureData(int index,
 
 		std::string textureName = img.uri;
 
+		auto itr = assignedNames.find(textureName);
 
-		const std::filesystem::path expectedDdsPath =
-			OutputPath / "Textures" /
-			std::filesystem::path(textureName).filename()
-			.replace_extension(".dds");
+		if (itr == assignedNames.end())
+		{
+			static int prefix = 0;
+			string prefixString = "_" + to_string(prefix);
+			prefix++;
+			string OutFilenameString = prefixString + std::filesystem::path(textureName).filename().replace_extension(".dds").string();
+			const std::filesystem::path expectedDdsPath = OutputPath / "Textures" / OutFilenameString;
 
-		string outputDirStr = OutputPath.string() + "/Textures/";
-		string expectedDDSPathStr = expectedDdsPath.string();
-		size_t expectedDDSPathLength = expectedDDSPathStr.length();
+			string outputDirStr = OutputPath.string() + "/Textures/";
+			string expectedDDSPathStr = expectedDdsPath.string();
+			size_t expectedDDSPathLength = expectedDDSPathStr.length();
 
-		DataToFlushOut.write((char*)&expectedDDSPathLength, sizeof(size_t));
-		DataToFlushOut.write((char*)&expectedDDSPathStr[0], expectedDDSPathLength);
+			DataToFlushOut.write((char*)&expectedDDSPathLength, sizeof(size_t));
+			DataToFlushOut.write((char*)&expectedDDSPathStr[0], expectedDDSPathLength);
 
-		if (alreadySeen.contains(textureName)) return;
-		alreadySeen.insert(textureName);
+			const std::filesystem::path expectedInputPath = InputPath / textureName;
 
-		const std::filesystem::path expectedInputPath =
-			InputPath / textureName;
+			ConvertToDds(Type, "texConv.exe", expectedInputPath.string(), outputDirStr, prefixString);
 
-		ConvertToDds(Type, "texConv.exe", expectedInputPath.string(), outputDirStr);
+			assignedNames[textureName] = expectedDDSPathStr;
+		}
+		else
+		{
+			string associatedName = itr->second;
+			size_t length = associatedName.length();
+
+			DataToFlushOut.write((char*)&length, sizeof(size_t));
+			DataToFlushOut.write((char*)&associatedName[0], length);
+		}
 	}
 }
 
@@ -280,6 +291,8 @@ unsigned int DetermineAlphaMode(const std::string& str)
 	if (str == "OPAQUE") return 0;
 	else if (str == "MASK") return 1;
 	else if (str == "BLEND") return 2;
+
+	return 0;
 }
 
 void WriteOutMeshData(const tinygltf::Node& Node, 
