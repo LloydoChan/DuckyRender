@@ -1,7 +1,4 @@
 #pragma once
-#include <DirectXMath.h>
-#include <cstddef>
-#include <limits>
 
 using namespace DirectX;
 

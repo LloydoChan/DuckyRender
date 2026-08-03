@@ -1,3 +1,4 @@
+#include "pch.h"
 #include "DuckyPipelineStates.h"
 
 D3D12_GRAPHICS_PIPELINE_STATE_DESC MakeOpaquePipelineState()

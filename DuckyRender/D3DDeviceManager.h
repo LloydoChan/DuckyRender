@@ -1,12 +1,5 @@
 #pragma once
-#include <d3d12.h>
-#include <fstream>
-#include <dxgi1_6.h>
-#include <vector>
 
-#include <wrl/client.h>
-#include <DirectXMath.h>
-#include <unordered_map>
 
 #include "DuckyCompiler.h"
 #include "DuckySwapChain.h"

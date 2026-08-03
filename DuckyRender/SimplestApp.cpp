@@ -1,17 +1,16 @@
+#include "pch.h"
 #include "SimplestApp.h"
+#include "DuckyGraphicsContext.h"
 #include "D3DDeviceManager.h"
-#include <vector>
 #include "DuckyPipelineStates.h"
-#include <errno.h>
-#include <algorithm>
 #include "DuckyTools.h"
 
-#include <chrono>
+
 using Clock = std::chrono::steady_clock;
 
 // this isn't const because it needs to change based on scale
 float MOVEMENT_SPEED = 20.f;
-const float ROTATIONAL_SPEED_YAW = 4.f * 3.141f;
+const float ROTATIONAL_SPEED_YAW = 2.f * 3.141f;
 const float ROTATIONAL_SPEED_PITCH = 2.f * 3.141f;
 
 namespace RootParameter
@@ -26,6 +25,12 @@ namespace RootParameter
 	constexpr UINT Count = 7;
 
 }
+
+SimplestApp::~SimplestApp()
+{
+	if(mDuckyContext != nullptr)
+		delete mDuckyContext;
+};
 
 bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* WindowName)
 {
@@ -98,7 +103,7 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 	mBaseColorFallbackHandle = mDeviceManager->InitFallbackTexture(L"BaseColorFallback", BaseColorFallback, mCbvSrvUavHandle);
 	mNormalColorFallbackHandle = mDeviceManager->InitFallbackTexture(L"NormalFallback", NormalFallback, mCbvSrvUavHandle);
 
-	mDuckyContext = std::make_unique<DuckyGraphicsContext>();
+	mDuckyContext = new DuckyGraphicsContext;
 	if(!mDuckyContext->Init(mDeviceManager.get(), neededCapacity, &mLogFile)) return false;
 
 	RootSignatureDesc drawSig = {};
@@ -427,9 +432,9 @@ void SimplestApp::UpdateMovementAndRotation(XMVECTOR& ViewVector, MovementStruct
 	}
 }
 
-bool SimplestApp::BindMaterial( ID3D12GraphicsCommandList* commandList, ConstantBufferAllocator& allocator, const DuckyMaterial& material)
+bool SimplestApp::BindMaterial( ID3D12GraphicsCommandList* commandList, ConstantBufferAllocator* allocator, const DuckyMaterial& material)
 {
-	ConstantBufferAllocation allocation = allocator.AllocateConstantBuffer(sizeof(MaterialConstants));
+	ConstantBufferAllocation allocation = allocator->AllocateConstantBuffer(sizeof(MaterialConstants));
 
 	if (allocation.mCpuAddress == nullptr) return false;
 
@@ -454,9 +459,9 @@ void SimplestApp::BindTexture(ID3D12GraphicsCommandList* commandList, UINT rootP
 	commandList->SetGraphicsRootDescriptorTable(rootParameter,texture->descHandle);
 }
 
-bool SimplestApp::BindInstanceConstants( ID3D12GraphicsCommandList* commandList, ConstantBufferAllocator& allocator, const DuckyMeshInstance& instance)
+bool SimplestApp::BindInstanceConstants( ID3D12GraphicsCommandList* commandList, ConstantBufferAllocator* allocator, const DuckyMeshInstance& instance)
 {
-	ConstantBufferAllocation allocation = allocator.AllocateConstantBuffer( sizeof(PerInstanceConstants));
+	ConstantBufferAllocation allocation = allocator->AllocateConstantBuffer( sizeof(PerInstanceConstants));
 
 	if (allocation.mCpuAddress == nullptr) return false;
 
@@ -636,23 +641,23 @@ void SimplestApp::AppMainLoop()
 		list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
 		list->SetPipelineState(mOpaqueDblPipeline.pipeLineState.Get());
-		DrawRecords(mOpaqueDblDraws, *cbvAllocator, list);
+		DrawRecords(mOpaqueDblDraws, cbvAllocator, list);
 
 
 		list->SetPipelineState(mMaskedDblPipeline.pipeLineState.Get());
-		DrawRecords(mMaskedDblDraws, *cbvAllocator, list);
+		DrawRecords(mMaskedDblDraws, cbvAllocator, list);
 
 		list->SetPipelineState(mOpaquePipeline.pipeLineState.Get());
-		DrawRecords(mOpaqueDraws, *cbvAllocator, list);
+		DrawRecords(mOpaqueDraws, cbvAllocator, list);
 
 		list->SetPipelineState(mMaskedPipeline.pipeLineState.Get());
-		DrawRecords(mMaskedDraws, *cbvAllocator, list);
+		DrawRecords(mMaskedDraws, cbvAllocator, list);
 
 		list->SetPipelineState(mTransparentDblPipeline.pipeLineState.Get());
-		DrawRecords(mBlendedDblDraws, *cbvAllocator, list);
+		DrawRecords(mBlendedDblDraws, cbvAllocator, list);
 
 		list->SetPipelineState(mTransparentPipeline.pipeLineState.Get());
-		DrawRecords(mBlendedDraws, *cbvAllocator, list);
+		DrawRecords(mBlendedDraws, cbvAllocator, list);
 
 
 		barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
@@ -766,7 +771,7 @@ void SimplestApp::CreateDrawRecords()
 	}
 }
 
-void SimplestApp::DrawRecords(const std::vector<DrawRecord>& Draws, ConstantBufferAllocator& Allocator, ID3D12GraphicsCommandList* List)
+void SimplestApp::DrawRecords(const std::vector<DrawRecord>& Draws, ConstantBufferAllocator* Allocator, ID3D12GraphicsCommandList* List)
 {
 	for (const DrawRecord& draw : Draws)
 	{

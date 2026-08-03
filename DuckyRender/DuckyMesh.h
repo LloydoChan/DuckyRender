@@ -1,9 +1,4 @@
 #pragma once
-#include <d3d12.h>
-#include <DirectXMath.h>
-#include <vector>
-#include <fstream>
-#include <wrl/client.h>
 
 #include "DuckyMaterial.h"
 

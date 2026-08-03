@@ -1,3 +1,4 @@
+#include "pch.h"
 #include "DuckySwapChain.h"
 #include "D3DDeviceManager.h"
 #include "DuckyTools.h"

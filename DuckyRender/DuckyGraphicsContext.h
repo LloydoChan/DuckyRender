@@ -1,6 +1,4 @@
 #pragma once
-#include <wrl/client.h>
-#include <fstream>
 #include "DuckyDescriptor.h"
 
 using Microsoft::WRL::ComPtr;

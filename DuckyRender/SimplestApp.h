@@ -2,7 +2,9 @@
 #include "DuckyApp.h"
 #include "D3DDeviceManager.h"
 #include "DuckyMesh.h"
-#include "DuckyGraphicsContext.h"
+
+class DuckyGraphicsContext;
+struct ConstantBufferAllocator;
 
 namespace MaterialVisualization
 {
@@ -52,18 +54,19 @@ class SimplestApp : public DuckyApp
 {
 	public:
 		SimplestApp() : mWholeScreenViewPortScissor(1920, 1080) {};
+		~SimplestApp();
 		virtual bool Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* WindowName) override;
 		virtual LRESULT WindowProcedure(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam);
 		virtual void HandleInput(UINT msg, WPARAM wParam, LPARAM lParam);
 		void UpdateMovementAndRotation(XMVECTOR& ViewVector, MovementStruct& movement, float DeltaTime);
-		bool BindMaterial(ID3D12GraphicsCommandList* commandList, ConstantBufferAllocator& allocator, const DuckyMaterial& material);
+		bool BindMaterial(ID3D12GraphicsCommandList* commandList, ConstantBufferAllocator* allocator, const DuckyMaterial& material);
 		void BindTexture(ID3D12GraphicsCommandList* commandList, UINT rootParameter, size_t textureHandle, size_t fallBackHandle);
-		bool BindInstanceConstants(ID3D12GraphicsCommandList* commandList, ConstantBufferAllocator& allocator, const DuckyMeshInstance& instance);
+		bool BindInstanceConstants(ID3D12GraphicsCommandList* commandList, ConstantBufferAllocator* allocator, const DuckyMeshInstance& instance);
 		virtual void AppMainLoop();
 
 		void WorkOutGlobalBoundingBoxCenter();
 		void CreateDrawRecords();
-		void DrawRecords(const std::vector<DrawRecord>& Draws, ConstantBufferAllocator& Allocator, ID3D12GraphicsCommandList* List);
+		void DrawRecords(const std::vector<DrawRecord>& Draws, ConstantBufferAllocator* Allocator, ID3D12GraphicsCommandList* List);
 
 		bool Resize(UINT WindowWidth, UINT WindowHeight);
 
@@ -111,7 +114,7 @@ class SimplestApp : public DuckyApp
 
 		int mCbvSrvUavHandle = -1;
 
-		std::unique_ptr<DuckyGraphicsContext> mDuckyContext;
+		DuckyGraphicsContext* mDuckyContext;
 
 		unsigned int mVisualizationMode = 0;
 

@@ -1,7 +1,6 @@
+#include "pch.h"
 #include "DuckyCompiler.h"
 #include "DuckyTools.h"
-#include <vector>
-#include <iostream>
 
 #pragma comment(lib, "dxcompiler.lib")
 

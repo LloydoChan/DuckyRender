@@ -1,8 +1,4 @@
 #pragma once
-#include <wrl/client.h>
-#include <dxcapi.h>
-#include <fstream>
-#include <d3d12shader.h>
 
 using Microsoft::WRL::ComPtr;
 

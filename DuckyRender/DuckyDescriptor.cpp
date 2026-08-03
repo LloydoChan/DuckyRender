@@ -1,3 +1,4 @@
+#include "pch.h"
 #include "DuckyDescriptor.h"
 #include "DuckyTools.h"
 

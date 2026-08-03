@@ -1,3 +1,4 @@
+#include "pch.h"
 #include "DuckyMesh.h"
 #include "D3DDeviceManager.h"
 

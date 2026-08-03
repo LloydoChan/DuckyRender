@@ -1,5 +1,4 @@
-#include <Windows.h>
-
+#include "pch.h"
 #include "SimplestApp.h"
 
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)

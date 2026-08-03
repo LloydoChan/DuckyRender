@@ -1,8 +1,6 @@
+#include "pch.h"
 #include "DuckyApp.h"
 #include "D3DDeviceManager.h"
-#include <tchar.h>
-
-#pragma comment(lib, "WindowsApp.lib")
 
 DuckyApp::~DuckyApp() = default;
 

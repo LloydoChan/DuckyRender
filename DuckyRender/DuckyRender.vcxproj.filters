@@ -75,6 +75,7 @@
     <ClCompile Include="DuckyPipelineStates.cpp">
       <Filter>Source Files\Core</Filter>
     </ClCompile>
+    <ClCompile Include="pch.cpp" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="BasicVertTransformation.hlsl">
@@ -118,5 +119,6 @@
     <ClInclude Include="DuckyPipelineStates.h">
       <Filter>Header Files\Core</Filter>
     </ClInclude>
+    <ClInclude Include="pch.h" />
   </ItemGroup>
 </Project>

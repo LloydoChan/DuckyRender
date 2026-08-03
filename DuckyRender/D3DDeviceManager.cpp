@@ -1,17 +1,7 @@
-#include <DirectXTex.h>
-#include <dxgi1_6.h>
-#include <vector>
-#include <D3dx12.h>
-#include <d3d12shader.h>
-#include <filesystem>
-
+#include "pch.h"
 #include "D3DDeviceManager.h"
 #include "DuckyTools.h"
 #include "DuckyMaterial.h"
-
-#pragma comment(lib, "d3d12.lib")
-#pragma comment(lib, "dxgi.lib")
-#pragma comment(lib, "DirectXTex.lib")
 
 
 bool D3DDeviceManager::Init(HWND hWnd, UINT WindowWidth, UINT WindowHeight, std::wofstream* LogFile)

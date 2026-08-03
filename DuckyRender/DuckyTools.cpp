@@ -1,6 +1,5 @@
+#include "pch.h"
 #include "DuckyTools.h"
-#include <winrt/base.h>
-
 
 bool OutputErrorFromHResult(HRESULT hResult, const char* message, std::wofstream& logFile)
 {
