@@ -42,7 +42,7 @@ bool DuckyApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* WindowNa
 
 	RegisterClassEx(&w);
 
-	HWND hwnd = CreateWindow(w.lpszClassName,
+	mWindowHandle = CreateWindow(w.lpszClassName,
 		WindowName,
 		WS_OVERLAPPEDWINDOW,
 		CW_USEDEFAULT,
@@ -59,7 +59,7 @@ bool DuckyApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* WindowNa
 	rawInputDevice.usUsagePage = 0x01; // Generic desktop controls
 	rawInputDevice.usUsage = 0x02;     // Mouse
 	rawInputDevice.dwFlags = 0;
-	rawInputDevice.hwndTarget = hwnd;
+	rawInputDevice.hwndTarget = mWindowHandle;
 
 	if (!RegisterRawInputDevices(
 		&rawInputDevice,
@@ -70,21 +70,21 @@ bool DuckyApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* WindowNa
 	}
 
 	mDeviceManager = std::make_unique<D3DDeviceManager>();
-	if (!mDeviceManager->Init(hwnd, WindowWidth, WindowHeight, &mLogFile)) return false;
+	if (!mDeviceManager->Init(mWindowHandle, WindowWidth, WindowHeight, &mLogFile)) return false;
 
 	SetWindowLongPtr(
-		hwnd,
+		mWindowHandle,
 		GWL_STYLE,
 		WS_POPUP | WS_VISIBLE);
 
-	HMONITOR monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTOPRIMARY);
+	HMONITOR monitor = MonitorFromWindow(mWindowHandle, MONITOR_DEFAULTTOPRIMARY);
 
 	MONITORINFO mi = {};
 	mi.cbSize = sizeof(mi);
 	GetMonitorInfo(monitor, &mi);
 
 	SetWindowPos(
-		hwnd,
+		mWindowHandle,
 		HWND_TOP,
 		mi.rcMonitor.left,
 		mi.rcMonitor.top,
@@ -92,7 +92,7 @@ bool DuckyApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* WindowNa
 		mi.rcMonitor.bottom - mi.rcMonitor.top,
 		SWP_FRAMECHANGED);
 
-	ShowWindow(hwnd, SW_SHOW);
+	ShowWindow(mWindowHandle, SW_SHOW);
 	return true;
 }
 

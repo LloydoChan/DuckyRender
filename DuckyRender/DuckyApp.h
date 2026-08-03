@@ -19,6 +19,8 @@ public:
 	virtual LRESULT WindowProcedure(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) = 0;
 	virtual void HandleInput(UINT msg, WPARAM wParam, LPARAM lParam) = 0;
 	virtual void AppMainLoop() = 0;
+
+	HWND GetWindowHandle() { return mWindowHandle; }
 protected:
 	
 	std::unique_ptr<D3DDeviceManager> mDeviceManager;
@@ -29,6 +31,7 @@ protected:
 	std::wofstream mLogFile;
 
 	HANDLE mFenceEvent = nullptr;
+	HWND mWindowHandle = 0;
 
 	UINT mClientWidth  = 0;
 	UINT mClientHeight = 0;
