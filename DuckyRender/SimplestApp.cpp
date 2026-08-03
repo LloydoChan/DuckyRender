@@ -5,6 +5,15 @@
 #include "DuckyPipelineStates.h"
 #include "DuckyTools.h"
 
+#include "imgui/imgui.h"
+#include "imgui/imgui_impl_win32.h"
+
+extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(
+	HWND hwnd,
+	UINT msg,
+	WPARAM wparam,
+	LPARAM lparam);
+
 
 using Clock = std::chrono::steady_clock;
 
@@ -225,6 +234,16 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 		HRESULT hResult = mMatrixBuffer[i].buffer->Map(0, nullptr, reinterpret_cast<void**>(&mMappedTransform[i]));
 
 		if (FAILED(hResult))return false;
+	}
+
+	if (!mImGui.Init(
+		GetWindowHandle(),
+		mDeviceManager.get(),
+		mDeviceManager->GetDescriptorHeapHandleInt(),
+		FrameCount,
+		DXGI_FORMAT_R8G8B8A8_UNORM_SRGB))
+	{
+		return false;
 	}
 	
 	return true;
@@ -566,6 +585,16 @@ void SimplestApp::AppMainLoop()
 		float deltaTime = std::chrono::duration<float>(
 			currentTime - previousTime).count();
 
+		mImGui.BeginFrame();
+
+		ImGui::Begin("DuckyRender");
+
+		ImGui::Text(
+			"Frame time: %.3f ms",
+			deltaTime * 1000.0f);
+
+		ImGui::End();
+
 		previousTime = currentTime;
 
 		XMVECTOR viewVector = XMVector4Normalize(XMVectorSubtract(eye, at));
@@ -659,6 +688,8 @@ void SimplestApp::AppMainLoop()
 		DrawRecords(mBlendedDraws, cbvAllocator, list);
 		PIXEndEvent(list);
 
+		mImGui.Render(list);
+
 		barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
 		barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
 		list->ResourceBarrier(1, &barrier);
@@ -677,6 +708,19 @@ void SimplestApp::AppMainLoop()
 	{
 		mDuckyContext->WaitForGpu(mQueue, mFence.Get(), mFenceEvent);
 	}
+
+	if (mDuckyContext &&
+		mQueue &&
+		mFence &&
+		mFenceEvent)
+	{
+		mDuckyContext->WaitForGpu(
+			mQueue,
+			mFence.Get(),
+			mFenceEvent);
+	}
+
+	mImGui.Shutdown();
 
 	CloseHandle(mFenceEvent);
 	mFenceEvent = nullptr;

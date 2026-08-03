@@ -94,6 +94,7 @@ class D3DDeviceManager
 		ID3D12DescriptorHeap* GetDepthStencilBufferHeap() { return mDsvHeaps.Get(); }
 		UINT GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE type) { return mDevice->GetDescriptorHandleIncrementSize(type); }
 		ID3D12DescriptorHeap* GetDescriptorHeapHandle() { return mDescriptorHeaps[mCbvUavSrvDescriptorHandle].Get(); };
+		UINT GetDescriptorHeapHandleInt() { return mCbvUavSrvDescriptorHandle; };
 		ID3D12Device* GetDevice() { return mDevice.Get(); }
 		UINT32 GetCurrentFrameIndex() { return mSwapChain->GetCurrentBackBufferIndex(); };
 		bool CreateDepthBuffer(UINT width, UINT height);

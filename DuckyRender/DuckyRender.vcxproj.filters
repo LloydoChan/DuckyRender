@@ -94,6 +94,9 @@
     <ClCompile Include="Imgui\imgui_impl_win32.cpp">
       <Filter>ImGUI</Filter>
     </ClCompile>
+    <ClCompile Include="DuckyImGui.cpp">
+      <Filter>Source Files\Core</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="BasicVertTransformation.hlsl">
@@ -161,6 +164,9 @@
     </ClInclude>
     <ClInclude Include="Imgui\imconfig.h">
       <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="DuckyImGui.h">
+      <Filter>Header Files\Core</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
