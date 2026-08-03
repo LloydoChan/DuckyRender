@@ -9,7 +9,8 @@
 #include <chrono>
 using Clock = std::chrono::steady_clock;
 
-const float MOVEMENT_SPEED = 20.f;
+// this isn't const because it needs to change based on scale
+float MOVEMENT_SPEED = 20.f;
 const float ROTATIONAL_SPEED_YAW = 4.f * 3.141f;
 const float ROTATIONAL_SPEED_PITCH = 2.f * 3.141f;
 
@@ -424,9 +425,6 @@ void SimplestApp::UpdateMovementAndRotation(XMVECTOR& ViewVector, MovementStruct
 	{
 		movement.xMovement = MOVEMENT_SPEED * DeltaTime * localMouseDeltaXCopy;
 	}
-
-	if (movement.zMovement < 0.2f) movement.zMovement = 0.2f;
-
 }
 
 bool SimplestApp::BindMaterial( ID3D12GraphicsCommandList* commandList, ConstantBufferAllocator& allocator, const DuckyMaterial& material)
@@ -503,13 +501,15 @@ void SimplestApp::AppMainLoop()
 	if (lengthX < lengthZ)
 	{
 		xDiff = lengthX;
-		viewLength = xDiff;
+		viewLength = xDiff * 0.5f;
 	}
 	else
 	{
 		zDiff = lengthZ;
-		viewLength = zDiff;
+		viewLength = zDiff * 0.5f;
 	}
+
+	MOVEMENT_SPEED = viewLength;
 
 	float sceneMidPoint[3] = { min.x + lengthX * 0.5f,
 							   min.y + lengthY * 0.5f,
@@ -569,16 +569,17 @@ void SimplestApp::AppMainLoop()
 
 		MovementStruct movement{};
 
-		movement.zMovement = viewLength;
 		UpdateMovementAndRotation(viewVector, movement, deltaTime);
-		viewLength = movement.zMovement;
 
 		XMVECTOR right = XMVector3Cross(viewVector, up);
 		XMVECTOR relativeUp = XMVector3Cross(viewVector, right);
 		XMVECTOR delta{ movement.xMovement, movement.yMovement, 0.f };
 
+		XMVECTOR forward = XMVectorScale(viewVector, movement.zMovement);
 		right = XMVectorScale(right, movement.xMovement);
 		relativeUp = XMVectorScale(relativeUp, movement.yMovement);
+
+		at = XMVectorAdd(at, forward);
 		at = XMVectorAdd(at, right);
 		at = XMVectorAdd(at, relativeUp);
 
