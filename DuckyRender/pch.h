@@ -22,6 +22,8 @@
 #include <d3d12compiler.h>
 #include <dxcapi.h>
 
+#include <pix3.h>
+#include <shlobj.h>
 
 #pragma comment(lib, "WindowsApp.lib")
 #pragma comment(lib, "d3d12.lib")

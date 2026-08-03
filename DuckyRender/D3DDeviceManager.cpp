@@ -7,7 +7,10 @@
 bool D3DDeviceManager::Init(HWND hWnd, UINT WindowWidth, UINT WindowHeight, std::wofstream* LogFile)
 {
 	mLogFilePtr = LogFile;
-
+	if (GetModuleHandle(L"WinPixGpuCapturer.dll") == 0)
+	{
+		LoadLibrary(GetLatestWinPixGpuCapturerPath_Cpp17().c_str());
+	}
 	matIdent = XMMatrixIdentity();
 
 	ComPtr<IDXGIFactory6> factory;

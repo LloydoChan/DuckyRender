@@ -23,7 +23,6 @@ namespace RootParameter
 	constexpr UINT MetallicRoughnessTexture = 5;
 	constexpr UINT EmissiveTexture = 6;
 	constexpr UINT Count = 7;
-
 }
 
 SimplestApp::~SimplestApp()
@@ -640,9 +639,10 @@ void SimplestApp::AppMainLoop()
 
 		list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
+		PIXBeginEvent(list, PIX_COLOR(0, 255, 0), "DRAW");
+		PIXScopedEvent(PIX_COLOR(0, 255, 255), "DRAW");
 		list->SetPipelineState(mOpaqueDblPipeline.pipeLineState.Get());
 		DrawRecords(mOpaqueDblDraws, cbvAllocator, list);
-
 
 		list->SetPipelineState(mMaskedDblPipeline.pipeLineState.Get());
 		DrawRecords(mMaskedDblDraws, cbvAllocator, list);
@@ -658,7 +658,7 @@ void SimplestApp::AppMainLoop()
 
 		list->SetPipelineState(mTransparentPipeline.pipeLineState.Get());
 		DrawRecords(mBlendedDraws, cbvAllocator, list);
-
+		PIXEndEvent(list);
 
 		barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
 		barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
@@ -810,7 +810,7 @@ bool SimplestApp::Resize(UINT WindowWidth, UINT WindowHeight)
 
 void SimplestApp::SortDrawRecords(const XMMATRIX& WorldView, std::vector<DrawRecord>& recordsToSort, bool bAlphaPass)
 {
-
+	PIXScopedEvent(PIX_COLOR(255, 0, 0), "SortDrawRecords");
 	struct SortRecord
 	{
 		DrawRecord record;
