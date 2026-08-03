@@ -34,7 +34,6 @@ SimplestApp::~SimplestApp()
 bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* WindowName)
 {
 	if (!DuckyApp::Init(WindowWidth, WindowHeight, WindowName)) return false;
-	mCbvSrvUavHandle = mDeviceManager->CreateDescriptorHeap(D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
 	std::ifstream DuckyFile;
 	DuckyFile.open(mInputFilePath, std::ios::binary);
@@ -74,7 +73,7 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 	for (int i = 0; i < numMeshes; i++)
 	{
 		DuckyMeshData nextMesh;
-		if(!nextMesh.Init(mDeviceManager.get(), DuckyFile, mCbvSrvUavHandle)) return false;
+		if(!nextMesh.Init(mDeviceManager.get(), DuckyFile)) return false;
 		mMeshes.emplace_back(std::move(nextMesh));
 	}
 
@@ -99,8 +98,8 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 								  totalPrimitiveDraws * AlignConstantBufferSize(sizeof(MaterialConstants));
 
 	// init fallback textures
-	mBaseColorFallbackHandle = mDeviceManager->InitFallbackTexture(L"BaseColorFallback", BaseColorFallback, mCbvSrvUavHandle);
-	mNormalColorFallbackHandle = mDeviceManager->InitFallbackTexture(L"NormalFallback", NormalFallback, mCbvSrvUavHandle);
+	mBaseColorFallbackHandle = mDeviceManager->InitFallbackTexture(L"BaseColorFallback", BaseColorFallback);
+	mNormalColorFallbackHandle = mDeviceManager->InitFallbackTexture(L"NormalFallback", NormalFallback);
 
 	mDuckyContext = new DuckyGraphicsContext;
 	if(!mDuckyContext->Init(mDeviceManager.get(), neededCapacity, &mLogFile)) return false;
@@ -221,7 +220,7 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 
 	for (int i = 0; i < 2; i++)
 	{
-		mMatrixBuffer[i] = mDeviceManager->CreateConstantBuffer(sizeof(XMMATRIX), mCbvSrvUavHandle);
+		mMatrixBuffer[i] = mDeviceManager->CreateConstantBuffer(sizeof(XMMATRIX));
 		if (mMatrixBuffer[i].buffer == nullptr) return false;
 		HRESULT hResult = mMatrixBuffer[i].buffer->Map(0, nullptr, reinterpret_cast<void**>(&mMappedTransform[i]));
 
@@ -530,7 +529,7 @@ void SimplestApp::AppMainLoop()
 	MSG msg = {};
 	UINT64 fenceVal = 0;
 
-	ID3D12DescriptorHeap* heapPtr = mDeviceManager->GetDescriptorHeapHandle(mCbvSrvUavHandle);
+	ID3D12DescriptorHeap* heapPtr = mDeviceManager->GetDescriptorHeapHandle();
 
 	ID3D12GraphicsCommandList* list = mDuckyContext->GetCommandList();
 

@@ -71,7 +71,7 @@ void DuckyPrimitive::Draw(ID3D12GraphicsCommandList* commandList) const
 }
 
 
-bool DuckyMeshData::Init(D3DDeviceManager* DeviceManager, std::ifstream& InFile, UINT DescriptorHeapHandle)
+bool DuckyMeshData::Init(D3DDeviceManager* DeviceManager, std::ifstream& InFile)
 {
 	if (DeviceManager == nullptr || !InFile) return false;
 
@@ -91,7 +91,7 @@ bool DuckyMeshData::Init(D3DDeviceManager* DeviceManager, std::ifstream& InFile,
 	{
 		PrimitiveLoadData loadData;
 
-		if (!ReadPrimitive(DeviceManager,InFile, DescriptorHeapHandle, loadData)) return false;
+		if (!ReadPrimitive(DeviceManager,InFile, loadData)) return false;
 
 		const uint32_t materialIndex = static_cast<uint32_t>(mMaterials.size());
 
@@ -107,12 +107,12 @@ bool DuckyMeshData::Init(D3DDeviceManager* DeviceManager, std::ifstream& InFile,
 	return true;
 }
 
-bool DuckyMeshData::ReadPrimitive(D3DDeviceManager* deviceManager, std::ifstream& inputFile, UINT descriptorHeapHandle, PrimitiveLoadData& output)
+bool DuckyMeshData::ReadPrimitive(D3DDeviceManager* deviceManager, std::ifstream& inputFile, PrimitiveLoadData& output)
 {
-	output.material.mBaseColorTexture		    = ReadTexture(deviceManager,inputFile,descriptorHeapHandle);
-	output.material.mNormalTexture				= ReadTexture(deviceManager,inputFile,descriptorHeapHandle);
-	output.material.mMetallicRoughnessTexture   = ReadTexture(deviceManager,inputFile,descriptorHeapHandle);
-	output.material.mEmissive					= ReadTexture(deviceManager,inputFile,descriptorHeapHandle);
+	output.material.mBaseColorTexture		    = ReadTexture(deviceManager,inputFile);
+	output.material.mNormalTexture				= ReadTexture(deviceManager,inputFile);
+	output.material.mMetallicRoughnessTexture   = ReadTexture(deviceManager,inputFile);
+	output.material.mEmissive					= ReadTexture(deviceManager,inputFile);
 
 	inputFile.read(reinterpret_cast<char*>(&output.material.constants.mBaseColorFactor), sizeof(float) * 4);
 	inputFile.read(reinterpret_cast<char*>(&output.material.constants.mNormalScale), sizeof(float));
@@ -146,7 +146,7 @@ bool DuckyMeshData::ReadPrimitive(D3DDeviceManager* deviceManager, std::ifstream
 	return true;
 }
 
-size_t DuckyMeshData::ReadTexture(D3DDeviceManager* deviceManager, std::ifstream& inputFile, UINT descriptorHeapHandle)
+size_t DuckyMeshData::ReadTexture(D3DDeviceManager* deviceManager, std::ifstream& inputFile)
 {
 	int textureCheck = -1;
 
@@ -170,7 +170,7 @@ size_t DuckyMeshData::ReadTexture(D3DDeviceManager* deviceManager, std::ifstream
 
 	const std::wstring wideTextureName(textureName.begin(), textureName.end());
 
-	return deviceManager->InitTexture(wideTextureName.c_str(), descriptorHeapHandle);
+	return deviceManager->InitTexture(wideTextureName.c_str());
 }
 
 bool DuckyMeshData::ReadBufferInfo(std::ifstream& inputFile, BufferInfo& output)

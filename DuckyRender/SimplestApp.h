@@ -112,8 +112,6 @@ class SimplestApp : public DuckyApp
 		PipelineAndRootSig mMaskedDblPipeline;
 		std::vector<DrawRecord> mMaskedDblDraws;
 
-		int mCbvSrvUavHandle = -1;
-
 		DuckyGraphicsContext* mDuckyContext;
 
 		unsigned int mVisualizationMode = 0;

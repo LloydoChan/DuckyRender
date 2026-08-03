@@ -55,6 +55,20 @@ struct Vertex
 	XMFLOAT2 uv;
 };
 
+struct DescriptorAllocation
+{
+	D3D12_CPU_DESCRIPTOR_HANDLE cpu{};
+	D3D12_GPU_DESCRIPTOR_HANDLE gpu{};
+	UINT heapIndex = UINT_MAX;
+	UINT descriptorIndex = UINT_MAX;
+
+	bool IsValid() const
+	{
+		return heapIndex != UINT_MAX &&
+			descriptorIndex != UINT_MAX;
+	}
+};
+
 const UINT MAX_NUM_DESCRIPTORS_PER_HEAP = 100;
 
 class D3DDeviceManager
@@ -68,22 +82,24 @@ class D3DDeviceManager
 		int CreateDescriptorHeap(D3D12_DESCRIPTOR_HEAP_FLAGS flags, D3D12_DESCRIPTOR_HEAP_TYPE type, UINT numDescriptors = MAX_NUM_DESCRIPTORS_PER_HEAP);
 
 		ComPtr<ID3D12Resource> CreateBuffer(size_t bufferSize);
-		DescriptorHeapResource CreateConstantBuffer(size_t bufferSize, int DescriptorHeapHandle);
+		DescriptorHeapResource CreateConstantBuffer(size_t bufferSize);
 		PipelineAndRootSig CreatePSO(LPCWSTR vertexShader, LPCWSTR vertexEntry, LPCWSTR pixelShader, LPCWSTR pixelEntry, RootSignatureDesc& NewRootSigDesc, D3D12_GRAPHICS_PIPELINE_STATE_DESC& desc);
 		std::vector<D3D12_INPUT_ELEMENT_DESC> CreateInputLayout(ShaderCompilationOutput& shaderCompData);
 
-		size_t InitTexture(const wchar_t* Filepath, UINT DescriptorHeapIndex);
-		size_t InitFallbackTexture(const wchar_t* Name, const XMFLOAT4& InputColor, UINT DescriptorHeapIndex);
+		size_t InitTexture(const wchar_t* Filepath);
+		size_t InitFallbackTexture(const wchar_t* Name, const XMFLOAT4& InputColor);
 
 		ID3D12CommandQueue* GetCommandQueue() { return mCommandQueue.Get(); }
 		DescriptorHeapResource* GetTexture(size_t HashedInput);
 		ID3D12DescriptorHeap* GetDepthStencilBufferHeap() { return mDsvHeaps.Get(); }
 		UINT GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE type) { return mDevice->GetDescriptorHandleIncrementSize(type); }
-		ID3D12DescriptorHeap* GetDescriptorHeapHandle(int Index) { return mDescriptorHeaps[Index].Get(); };
+		ID3D12DescriptorHeap* GetDescriptorHeapHandle() { return mDescriptorHeaps[mCbvUavSrvDescriptorHandle].Get(); };
 		ID3D12Device* GetDevice() { return mDevice.Get(); }
 		UINT32 GetCurrentFrameIndex() { return mSwapChain->GetCurrentBackBufferIndex(); };
 		bool CreateDepthBuffer(UINT width, UINT height);
 		bool CreateDepthBufferHeap();
+
+		DescriptorAllocation AllocateCbvSrvUavDescriptor(UINT descriptorHeapHandle);
 
 		D3D12_RESOURCE_BARRIER GetBarrier()
 		{
@@ -110,8 +126,8 @@ class D3DDeviceManager
 
 	private:
 		// only want to call this from the DeviceManager itself
-		DescriptorHeapResource CreateTexture(const wchar_t* Filepath, ID3D12DescriptorHeap* descHeap);
-		DescriptorHeapResource CreateFallbackTexture(const wchar_t* Name, const XMFLOAT4& Color, ID3D12DescriptorHeap* descHeap);
+		DescriptorHeapResource CreateTexture(const wchar_t* Filepath);
+		DescriptorHeapResource CreateFallbackTexture(const wchar_t* Name, const XMFLOAT4& Color);
 		std::unordered_map<size_t,DescriptorHeapResource> mTextures;
 
 		ComPtr<ID3D12Device> mDevice;
@@ -125,6 +141,7 @@ class D3DDeviceManager
 		XMMATRIX matIdent;
 
 		UINT mDescriptorHandleIndex = 0;
+		UINT mCbvUavSrvDescriptorHandle = 0;
 
 		std::wofstream* mLogFilePtr = nullptr;
 		std::unique_ptr<DuckyCompiler> mCompiler;

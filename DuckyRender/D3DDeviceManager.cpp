@@ -76,6 +76,8 @@ bool D3DDeviceManager::Init(HWND hWnd, UINT WindowWidth, UINT WindowHeight, std:
 	mCompiler = std::make_unique<DuckyCompiler>();
 	if(!mCompiler->Init(mLogFilePtr)) return false;
 
+	mCbvUavSrvDescriptorHandle = CreateDescriptorHeap(D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 1024);
+
 	return true;
 }
 
@@ -137,15 +139,14 @@ std::vector<D3D12_INPUT_ELEMENT_DESC> D3DDeviceManager::CreateInputLayout(Shader
 	return Elems;
 }
 
-size_t D3DDeviceManager::InitTexture(const wchar_t* Filepath, UINT DescriptorHeapIndex)
+size_t D3DDeviceManager::InitTexture(const wchar_t* Filepath)
 {
 	// Alternative: Inline instantiation and call
 	std::size_t quickHash = std::hash<std::wstring>{}(Filepath);
-	ID3D12DescriptorHeap* dscHeap = mDescriptorHeaps[DescriptorHeapIndex].Get();
 
 	if(!mTextures.contains(quickHash))
 	{ 
-		DescriptorHeapResource newResource = CreateTexture(Filepath, dscHeap);
+		DescriptorHeapResource newResource = CreateTexture(Filepath);
 		if (newResource.buffer == nullptr) return INVALID_HANDLE;
 		mTextures[quickHash] = newResource;
 		return quickHash;
@@ -154,14 +155,13 @@ size_t D3DDeviceManager::InitTexture(const wchar_t* Filepath, UINT DescriptorHea
 	return quickHash;
 }
 
-size_t D3DDeviceManager::InitFallbackTexture(const wchar_t* Name, const XMFLOAT4& InputColor, UINT DescriptorHeapIndex)
+size_t D3DDeviceManager::InitFallbackTexture(const wchar_t* Name, const XMFLOAT4& InputColor)
 {
 	std::size_t quickHash = std::hash<std::wstring>{}(Name);
-	ID3D12DescriptorHeap* dscHeap = mDescriptorHeaps[DescriptorHeapIndex].Get();
 
 	if (!mTextures.contains(quickHash))
 	{
-		DescriptorHeapResource newResource = CreateFallbackTexture(Name, InputColor, dscHeap);
+		DescriptorHeapResource newResource = CreateFallbackTexture(Name, InputColor);
 		if (newResource.buffer == nullptr) return INVALID_HANDLE;
 		mTextures[quickHash] = newResource;
 		return quickHash;
@@ -218,7 +218,7 @@ ComPtr<ID3D12Resource> D3DDeviceManager::CreateBuffer(size_t bufferSize)
 	return newBuff;
 }
 
-DescriptorHeapResource D3DDeviceManager::CreateConstantBuffer(size_t bufferSize, int DescriptorHeapHandle)
+DescriptorHeapResource D3DDeviceManager::CreateConstantBuffer(size_t bufferSize)
 {
 	DescriptorHeapResource constantBuffer;
 
@@ -235,21 +235,17 @@ DescriptorHeapResource D3DDeviceManager::CreateConstantBuffer(size_t bufferSize,
 
 	if (FAILED(hResult) && !OutputErrorFromHResult(hResult, "couldn't create const buffer ", *mLogFilePtr)) return constantBuffer;
 
+	DescriptorAllocation descriptor = AllocateCbvSrvUavDescriptor(mCbvUavSrvDescriptorHandle);
+
 	D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {};
 	cbvDesc.BufferLocation = constantBuffer.buffer->GetGPUVirtualAddress();
 	cbvDesc.SizeInBytes = constantBuffer.buffer->GetDesc().Width;
 
-	ID3D12DescriptorHeap* heap = mDescriptorHeaps[DescriptorHeapHandle].Get();
-	UINT offset = mDescriptorHandleIndex * mDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-	D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle = heap->GetCPUDescriptorHandleForHeapStart();
-	cpuHandle.ptr += offset;
-	mDevice->CreateConstantBufferView(&cbvDesc, cpuHandle);
+	mDevice->CreateConstantBufferView(&cbvDesc, descriptor.cpu);
 
-	D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle = heap->GetGPUDescriptorHandleForHeapStart();
-	gpuHandle.ptr += offset;
-	constantBuffer.descHandle = gpuHandle;
-
+	constantBuffer.descHandle = descriptor.gpu;
 	constantBuffer.heapOffset = mDescriptorHandleIndex++;
+
 	return constantBuffer;
 }
 
@@ -412,7 +408,34 @@ bool D3DDeviceManager::CreateDepthBufferHeap()
 	return true;
 }
 
-DescriptorHeapResource D3DDeviceManager::CreateTexture(const wchar_t* Filepath, ID3D12DescriptorHeap* descHeap)
+DescriptorAllocation D3DDeviceManager::AllocateCbvSrvUavDescriptor(UINT descriptorHeapHandle)
+{
+	DescriptorAllocation allocation{};
+
+	if (descriptorHeapHandle >= mDescriptorHeaps.size()) return allocation;
+
+	ID3D12DescriptorHeap* heap = mDescriptorHeaps[descriptorHeapHandle].Get();
+
+	if (heap == nullptr) return allocation;
+
+	const UINT descriptorIndex = mDescriptorHandleIndex++;
+
+	if (descriptorIndex >= MAX_NUM_DESCRIPTORS_PER_HEAP) return allocation;
+
+	const UINT descriptorSize = mDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
+	allocation.cpu = heap->GetCPUDescriptorHandleForHeapStart();
+	allocation.gpu = heap->GetGPUDescriptorHandleForHeapStart();
+	allocation.cpu.ptr += static_cast<SIZE_T>(descriptorIndex) * descriptorSize;
+	allocation.gpu.ptr += static_cast<UINT64>(descriptorIndex) * descriptorSize;
+
+	allocation.heapIndex = descriptorHeapHandle;
+	allocation.descriptorIndex = descriptorIndex;
+
+	return allocation;
+}
+
+DescriptorHeapResource D3DDeviceManager::CreateTexture(const wchar_t* Filepath)
 {
 	TexMetadata metaData = {};
 	ScratchImage imageData = {};
@@ -486,19 +509,15 @@ DescriptorHeapResource D3DDeviceManager::CreateTexture(const wchar_t* Filepath, 
 	srvDesc.Texture2D.MipLevels = metaData.mipLevels;
 	srvDesc.Texture2D.MostDetailedMip = 0;
 
-	UINT IncrementOffset = mDescriptorHandleIndex * mDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-	D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle = descHeap->GetCPUDescriptorHandleForHeapStart();
-	cpuHandle.ptr += IncrementOffset;
-	mDevice->CreateShaderResourceView(newTexture.buffer.Get(), &srvDesc, cpuHandle);
+	DescriptorAllocation allocation = AllocateCbvSrvUavDescriptor(mCbvUavSrvDescriptorHandle);
 
-	D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle = descHeap->GetGPUDescriptorHandleForHeapStart();
-	gpuHandle.ptr += IncrementOffset;
-	newTexture.heapOffset = mDescriptorHandleIndex++;
-	newTexture.descHandle = gpuHandle;
+	mDevice->CreateShaderResourceView(newTexture.buffer.Get(), &srvDesc, allocation.cpu);
+	newTexture.heapOffset = allocation.descriptorIndex;
+	newTexture.descHandle = allocation.gpu;
 	return newTexture;
 }
 
-DescriptorHeapResource D3DDeviceManager::CreateFallbackTexture(const wchar_t* Name, const XMFLOAT4& Color, ID3D12DescriptorHeap* descHeap)
+DescriptorHeapResource D3DDeviceManager::CreateFallbackTexture(const wchar_t* Name, const XMFLOAT4& Color)
 {
 	DescriptorHeapResource newTexture;
 
@@ -546,15 +565,13 @@ DescriptorHeapResource D3DDeviceManager::CreateFallbackTexture(const wchar_t* Na
 	srvDesc.Texture2D.MostDetailedMip = 0;
 	srvDesc.Texture2D.ResourceMinLODClamp = 0.f;
 
-	UINT IncrementOffset = mDescriptorHandleIndex * mDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-	D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle = descHeap->GetCPUDescriptorHandleForHeapStart();
-	cpuHandle.ptr += IncrementOffset;
-	mDevice->CreateShaderResourceView(newTexture.buffer.Get(), &srvDesc, cpuHandle);
+	DescriptorAllocation descriptor = AllocateCbvSrvUavDescriptor(mCbvUavSrvDescriptorHandle);
 
-	D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle = descHeap->GetGPUDescriptorHandleForHeapStart();
-	gpuHandle.ptr += IncrementOffset;
-	newTexture.heapOffset = mDescriptorHandleIndex++;
-	newTexture.descHandle = gpuHandle;
+	mDevice->CreateShaderResourceView(newTexture.buffer.Get(), &srvDesc, descriptor.cpu);
+
+	newTexture.heapOffset = descriptor.descriptorIndex;
+	newTexture.descHandle = descriptor.gpu;
+
 	return newTexture;
 }
 

@@ -95,12 +95,12 @@ class DuckyMeshData
 public:
 	const std::vector<DuckyPrimitive>& GetPrimitives() const { return mPrimitives; }
 	const DuckyMaterial& GetMaterial(uint32_t index) const { return mMaterials[index]; }
-	bool Init(D3DDeviceManager* deviceManager, std::ifstream& inputFile, UINT descriptorHeapHandle);
+	bool Init(D3DDeviceManager* deviceManager, std::ifstream& inputFile);
 	size_t GetPrimitiveCount() { return mPrimitives.size(); }
 
 private:
-	bool ReadPrimitive( D3DDeviceManager* deviceManager, std::ifstream& inputFile, UINT descriptorHeapHandle, PrimitiveLoadData& output);
-	size_t ReadTexture( D3DDeviceManager* deviceManager, std::ifstream& inputFile, UINT descriptorHeapHandle);
+	bool ReadPrimitive( D3DDeviceManager* deviceManager, std::ifstream& inputFile, PrimitiveLoadData& output);
+	size_t ReadTexture( D3DDeviceManager* deviceManager, std::ifstream& inputFile);
 
 	static bool ReadBufferInfo( std::ifstream& inputFile,BufferInfo& output);
 
