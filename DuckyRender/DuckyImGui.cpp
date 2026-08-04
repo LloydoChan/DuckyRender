@@ -13,17 +13,10 @@ bool DuckyImGui::Init(
     UINT frameCount,
     DXGI_FORMAT renderTargetFormat)
 {
-    if (mInitialized)
-    {
-        return true;
-    }
-
-    if (windowHandle == nullptr ||
-        deviceManager == nullptr)
-    {
-        return false;
-    }
-
+    if (mInitialized) return true;
+   
+    if (windowHandle == nullptr || deviceManager == nullptr) return false;
+   
     ID3D12Device* device = deviceManager->GetDevice();
     mDescriptorHeap = deviceManager->GetDescriptorHeapHandleInt();
     mDescriptorHeapMem = deviceManager->GetDescriptorHeapHandle();
@@ -114,14 +107,12 @@ void DuckyImGui::Render(ID3D12GraphicsCommandList* commandList)
 
 bool DuckyImGui::WantsMouse() const
 {
-    return mInitialized &&
-        ImGui::GetIO().WantCaptureMouse;
+    return mInitialized && ImGui::GetIO().WantCaptureMouse;
 }
 
 bool DuckyImGui::WantsKeyboard() const
 {
-    return mInitialized &&
-        ImGui::GetIO().WantCaptureKeyboard;
+    return mInitialized && ImGui::GetIO().WantCaptureKeyboard;
 }
 
 void DuckyImGui::Shutdown()

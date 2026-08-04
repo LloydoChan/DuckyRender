@@ -47,6 +47,11 @@ bool DuckySwapChain::Init(D3DDeviceManager* DeviceManager, IDXGIFactory6* factor
 
 	D3D12_CPU_DESCRIPTOR_HANDLE handle = mRtvHeaps->GetCPUDescriptorHandleForHeapStart();
 
+	D3D12_RENDER_TARGET_VIEW_DESC rtvTargetDesc{};
+	rtvTargetDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+	rtvTargetDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
+	rtvTargetDesc.Texture2D.MipSlice = 0;
+
 	for (UINT idx = 0; idx < swapChainDesc.BufferCount; idx++)
 	{
 		ComPtr<ID3D12Resource> ptr;
@@ -55,8 +60,9 @@ bool DuckySwapChain::Init(D3DDeviceManager* DeviceManager, IDXGIFactory6* factor
 
 		if (FAILED(hResult) && !OutputErrorFromHResult(hResult, "problem getting back buffer: ", *LogFile)) return false;
 
-		device->CreateRenderTargetView(mBackBuffers[idx].Get(), nullptr, handle);
+		device->CreateRenderTargetView(mBackBuffers[idx].Get(), &rtvTargetDesc, handle);
 		handle.ptr += device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+		mBackBuffers[idx].Get()->SetName(L"RTV");
 	}
 
 	return true;

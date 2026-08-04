@@ -24,8 +24,9 @@ public:
 
 	// GPU timing
 	bool InitGPUTimeStamps();
-	void StartTimeStamp();
-	void EndTimeStamp();
+	void StartGPUTimeStamp(ID3D12GraphicsCommandList* commandList, UINT frameIndex);
+	void EndGPUTimeStamp(ID3D12GraphicsCommandList* commandList, UINT frameIndex);
+	double GetGPUFrameMilliSeconds(UINT frameIndex);
 protected:
 	
 	std::unique_ptr<D3DDeviceManager> mDeviceManager;

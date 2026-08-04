@@ -58,14 +58,22 @@ SamplerState smp : register(s0);
 
 static const float PI = 3.14159265359f;
 
-float3 LinearToSRGB(float3 value)
+float3 SRGBToLinear(float3 c)
 {
-    value = max(value, 0.0f);
+    float3 low = c / 12.92f;
+    float3 high = pow((c + 0.055f) / 1.055f, 2.4f);
 
-    float3 low  = value * 12.92f;
-    float3 high = 1.055f * pow(value, 1.0f / 2.4f) - 0.055f;
+    return select(high, low, c <= 0.04045f);
+}
 
-    return lerp(low, high, step(0.0031308f, value));
+float3 LinearToSRGB(float3 c)
+{
+    c = saturate(c);
+
+    float3 low = c * 12.92f;
+    float3 high = 1.055f * pow(c, 1.0f / 2.4f) - 0.055f;
+
+    return select(high, low, c <= 0.0031308f);
 }
 
 float3 PrimitiveIDToColour(uint primitiveID)
@@ -125,12 +133,12 @@ float4 main(Input input,
             uint primitiveID : SV_PrimitiveID,
             bool isFrontFace : SV_IsFrontFace) : SV_TARGET
 {
-    float4 baseColorSample = BaseColorFactor * input.col;
+    //float4 baseColorSample = BaseColorFactor * float4(input.col.rgb, 1.f);
     
-    if (HasBaseColorTexture == 1)
-    {
-        baseColorSample *= tex.Sample(smp, input.uv);
-    }
+    //if (HasBaseColorTexture == 1)
+    //{
+       float4 baseColorSample = tex.Sample(smp, input.uv);
+    //}
     
     if (alphaMode == ALPHA_MASK) clip(baseColorSample.a - alphaCutoff);
    
@@ -191,7 +199,7 @@ float4 main(Input input,
 
      float3 diffuse = kD * baseColor / PI;
 
-     float3 radiance = lightColor * 0.5f;
+     float3 radiance = lightColor;
 
      float3 color = (diffuse + specular) * NDotL * radiance + emissive;
     

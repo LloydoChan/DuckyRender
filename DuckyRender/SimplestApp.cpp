@@ -253,6 +253,9 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 
 LRESULT SimplestApp::WindowProcedure(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 {
+
+	ImGui_ImplWin32_WndProcHandler(hwnd, msg, wparam, lparam);
+
 	if (msg == WM_DESTROY)
 	{
 		PostQuitMessage(0);
@@ -557,7 +560,8 @@ void SimplestApp::AppMainLoop()
 	if (list == nullptr) return;
 
 	bool bRunning = true;
-
+	double gpuTime = 0.0;
+	float deltaCPU = 0.f;
 	while (bRunning)
 	{
 		while (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE))
@@ -586,16 +590,6 @@ void SimplestApp::AppMainLoop()
 
 		float deltaTime = std::chrono::duration<float>(
 			currentTime - previousTime).count();
-
-		mImGui.BeginFrame();
-
-		ImGui::Begin("DuckyRender");
-
-		ImGui::Text(
-			"Frame time: %.3f ms",
-			deltaTime * 1000.0f);
-
-		ImGui::End();
 
 		previousTime = currentTime;
 
@@ -633,8 +627,30 @@ void SimplestApp::AppMainLoop()
 
 		float clearColor[] = { 0.5f, 0.8f, 0.9f, 1.f };
 
+		ImGui::SetNextWindowSize(
+			ImVec2(320.0f, 300.0f),
+			ImGuiCond_FirstUseEver);
+
+		mImGui.BeginFrame();
+
+		ImGui::Begin("DuckyRender");
+
+		ImGui::Text(" GPU Frame: %.3f ms", gpuTime);
+
+		ImGui::Text(" CPU Frame: %.3f ms", deltaCPU);
+
+		ImGui::Text( "Frame time: %.3f ms", deltaTime * 1000.0f);
+
+		ImGui::End();
+
 		if (!mDuckyContext->BeginFrame(currentFrame, mFence.Get(), mOpaquePipeline.pipeLineState.Get(), mFenceEvent, &mLogFile)) break;
 		ConstantBufferAllocator* cbvAllocator = mDuckyContext->GetBufferAllocator(currentFrame);
+
+		gpuTime = GetGPUFrameMilliSeconds(currentFrame);
+
+
+		StartGPUTimeStamp(list, currentFrame);
+
 		D3D12_RESOURCE_BARRIER barrier = mDeviceManager->GetBarrier();
 		list->ResourceBarrier(1, &barrier);
 		list->SetPipelineState(mOpaquePipeline.pipeLineState.Get());
@@ -691,6 +707,8 @@ void SimplestApp::AppMainLoop()
 		PIXEndEvent(list);
 
 		mImGui.Render(list);
+
+		EndGPUTimeStamp(list, currentFrame);
 
 		barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
 		barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;

@@ -165,14 +165,66 @@ bool DuckyApp::InitGPUTimeStamps()
 	return true;
 }
 
-void DuckyApp::StartTimeStamp()
+void DuckyApp::StartGPUTimeStamp(ID3D12GraphicsCommandList* commandList, UINT frameIndex)
 {
-	
+	const UINT startQuery = frameIndex * QueriesPerFrame;
+
+	// Timestamp queries use EndQuery for both
+	// the start and end timestamp.
+	commandList->EndQuery(
+		mQueryHeap.Get(),
+		D3D12_QUERY_TYPE_TIMESTAMP,
+		startQuery);
 }
 
-void DuckyApp::EndTimeStamp()
+void DuckyApp::EndGPUTimeStamp(ID3D12GraphicsCommandList* commandList, UINT frameIndex)
 {
-	
+	const UINT startQuery = frameIndex * QueriesPerFrame;
+
+	const UINT endQuery = startQuery + 1;
+
+	commandList->EndQuery(
+		mQueryHeap.Get(),
+		D3D12_QUERY_TYPE_TIMESTAMP,
+		endQuery);
+
+	const UINT64 destinationOffset = static_cast<UINT64>(startQuery) * sizeof(UINT64);
+
+	commandList->ResolveQueryData(
+		mQueryHeap.Get(),
+		D3D12_QUERY_TYPE_TIMESTAMP,
+		startQuery,
+		QueriesPerFrame,
+		mReadbackBuffer.Get(),
+		destinationOffset);
+}
+
+double DuckyApp::GetGPUFrameMilliSeconds(UINT frameIndex)
+{
+	double outMilliseconds = 0.0;
+
+	if (mMappedTimestamps == nullptr ||
+		mTimeStampFrequency == 0 ||
+		frameIndex >= mFrameCount)
+	{
+		return false;
+	}
+
+	const UINT startIndex = frameIndex * QueriesPerFrame;
+
+	const UINT endIndex = startIndex + 1;
+
+	const UINT64 startTicks = mMappedTimestamps[startIndex];
+
+	const UINT64 endTicks = mMappedTimestamps[endIndex];
+
+	if (endTicks < startTicks) return false;
+
+	const UINT64 elapsedTicks = endTicks - startTicks;
+
+	outMilliseconds = static_cast<double>(elapsedTicks) * 1000.0 / static_cast<double>(mTimeStampFrequency);
+
+	return outMilliseconds;
 }
 
 LRESULT DuckyApp::StaticWindowProcedure(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
