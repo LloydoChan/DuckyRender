@@ -221,7 +221,7 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 	mFence = mDeviceManager->CreateFence(fenceVal);
 	if (mFence == nullptr) return false;
 
-	mQueue = mDeviceManager->GetCommandQueue();
+	mCommandQueue = mDeviceManager->GetCommandQueue();
 
 	mFenceEvent = CreateEvent(nullptr, false, false, nullptr);
 
@@ -246,6 +246,8 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 		return false;
 	}
 	
+	if (!InitGPUTimeStamps()) return false;
+
 	return true;
 }
 
@@ -697,25 +699,24 @@ void SimplestApp::AppMainLoop()
 		if (FAILED(hResult)) break;
 
 		ID3D12CommandList* cmdLists[] = {list};
-		mQueue->ExecuteCommandLists(1, cmdLists);
+		mCommandQueue->ExecuteCommandLists(1, cmdLists);
 		mDeviceManager->Present();
 
-		if (!mDuckyContext->EndFrame(currentFrame, mQueue, mFence.Get())) break;
-		
+		if (!mDuckyContext->EndFrame(currentFrame, mCommandQueue, mFence.Get())) break;
 	}
 
-	if (mDuckyContext && mQueue && mFence && mFenceEvent)
+	if (mDuckyContext && mCommandQueue && mFence && mFenceEvent)
 	{
-		mDuckyContext->WaitForGpu(mQueue, mFence.Get(), mFenceEvent);
+		mDuckyContext->WaitForGpu(mCommandQueue, mFence.Get(), mFenceEvent);
 	}
 
 	if (mDuckyContext &&
-		mQueue &&
+		mCommandQueue &&
 		mFence &&
 		mFenceEvent)
 	{
 		mDuckyContext->WaitForGpu(
-			mQueue,
+			mCommandQueue,
 			mFence.Get(),
 			mFenceEvent);
 	}
@@ -829,7 +830,7 @@ bool SimplestApp::Resize(UINT WindowWidth, UINT WindowHeight)
 {
 	if (WindowWidth == 0 || WindowHeight == 0) return true;
 	
-	if (!mDuckyContext->WaitForGpu(mQueue, mFence.Get(), mFenceEvent)) return false;
+	if (!mDuckyContext->WaitForGpu(mCommandQueue, mFence.Get(), mFenceEvent)) return false;
 
 	if (!mDeviceManager->Resize(WindowWidth,WindowHeight)) return false;
 

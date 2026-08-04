@@ -81,8 +81,6 @@ class SimplestApp : public DuckyApp
 		bool mLeftButtonDown = false;
 		int  mScrollAmount = 0;
 
-		ID3D12CommandQueue* mQueue = nullptr;
-
 		ViewportScissor mWholeScreenViewPortScissor;
 
 		ComPtr<ID3D12Fence> mFence;

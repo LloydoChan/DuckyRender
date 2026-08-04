@@ -96,6 +96,85 @@ bool DuckyApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* WindowNa
 	return true;
 }
 
+bool DuckyApp::InitGPUTimeStamps()
+{
+	mFrameCount = 2;
+
+	HRESULT result = mCommandQueue->GetTimestampFrequency(&mTimeStampFrequency);
+
+	if (FAILED(result) || mTimeStampFrequency == 0) return false;
+
+	const UINT totalQueryCount = mFrameCount * QueriesPerFrame;
+
+	D3D12_QUERY_HEAP_DESC queryHeapDesc{};
+	queryHeapDesc.Type =
+		D3D12_QUERY_HEAP_TYPE_TIMESTAMP;
+	queryHeapDesc.Count = totalQueryCount;
+	queryHeapDesc.NodeMask = 0;
+
+	ID3D12Device* device = mDeviceManager->GetDevice();
+
+	result = device->CreateQueryHeap(
+		&queryHeapDesc,
+		IID_PPV_ARGS(
+		mQueryHeap.ReleaseAndGetAddressOf()));
+
+	if (FAILED(result)) return false;
+
+	const UINT64 readbackSize = static_cast<UINT64>(totalQueryCount) * sizeof(UINT64);
+
+	D3D12_HEAP_PROPERTIES heapProperties{};
+	heapProperties.Type = D3D12_HEAP_TYPE_READBACK;
+
+	D3D12_RESOURCE_DESC resourceDesc{};
+	resourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+	resourceDesc.Width = readbackSize;
+	resourceDesc.Height = 1;
+	resourceDesc.DepthOrArraySize = 1;
+	resourceDesc.MipLevels = 1;
+	resourceDesc.SampleDesc.Count = 1;
+	resourceDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+
+	result = device->CreateCommittedResource(
+		&heapProperties,
+		D3D12_HEAP_FLAG_NONE,
+		&resourceDesc,
+		D3D12_RESOURCE_STATE_COPY_DEST,
+		nullptr,
+		IID_PPV_ARGS(
+		mReadbackBuffer.ReleaseAndGetAddressOf()));
+
+	if (FAILED(result)) return false;
+
+	D3D12_RANGE readRange{ 0, static_cast<SIZE_T>(readbackSize)};
+
+	result = mReadbackBuffer->Map(
+		0,
+		&readRange,
+		reinterpret_cast<void**>(
+		&mMappedTimestamps));
+
+	if (FAILED(result))
+	{
+		mMappedTimestamps = nullptr;
+		mReadbackBuffer.Reset();
+		mQueryHeap.Reset();
+		return false;
+	}
+
+	return true;
+}
+
+void DuckyApp::StartTimeStamp()
+{
+	
+}
+
+void DuckyApp::EndTimeStamp()
+{
+	
+}
+
 LRESULT DuckyApp::StaticWindowProcedure(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 {
 	DuckyApp* app = nullptr;

@@ -21,6 +21,11 @@ public:
 	virtual void AppMainLoop() = 0;
 
 	HWND GetWindowHandle() { return mWindowHandle; }
+
+	// GPU timing
+	bool InitGPUTimeStamps();
+	void StartTimeStamp();
+	void EndTimeStamp();
 protected:
 	
 	std::unique_ptr<D3DDeviceManager> mDeviceManager;
@@ -42,4 +47,17 @@ protected:
 	size_t mNormalColorFallbackHandle = 0;
 
 	std::wstring mInputFilePath;
+
+	ID3D12CommandQueue* mCommandQueue = nullptr;
+
+  //for gpu timestamps
+	static constexpr UINT QueriesPerFrame = 2;
+
+	Microsoft::WRL::ComPtr<ID3D12QueryHeap> mQueryHeap;
+	Microsoft::WRL::ComPtr<ID3D12Resource>  mReadbackBuffer;
+
+	UINT64* mMappedTimestamps = nullptr;
+
+	UINT64 mFrameCount = 0;
+	UINT64 mTimeStampFrequency = 0;
 };
