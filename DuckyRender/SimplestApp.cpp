@@ -247,6 +247,7 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 	}
 	
 	if (!InitGPUTimeStamps()) return false;
+	if (!InitGPUStats()) return false;
 
 	return true;
 }
@@ -562,6 +563,9 @@ void SimplestApp::AppMainLoop()
 	bool bRunning = true;
 	double gpuTime = 0.0;
 	float deltaCPU = 0.f;
+
+	D3D12_QUERY_DATA_PIPELINE_STATISTICS gpuStats{};
+
 	while (bRunning)
 	{
 		while (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE))
@@ -628,18 +632,21 @@ void SimplestApp::AppMainLoop()
 		float clearColor[] = { 0.5f, 0.8f, 0.9f, 1.f };
 
 		ImGui::SetNextWindowSize(
-			ImVec2(320.0f, 300.0f),
+			ImVec2(320.f, 420.f),
 			ImGuiCond_FirstUseEver);
 
 		mImGui.BeginFrame();
 
 		ImGui::Begin("DuckyRender");
 
-		ImGui::Text(" GPU Frame: %.3f ms", gpuTime);
+		ImGui::Text("GPU Frame: %.3f ms", gpuTime);
+		ImGui::Text("CPU Frame: %.3f ms", deltaCPU);
+		ImGui::Text("Frame time: %.3f ms", deltaTime * 1000.f);
 
-		ImGui::Text(" CPU Frame: %.3f ms", deltaCPU);
-
-		ImGui::Text( "Frame time: %.3f ms", deltaTime * 1000.0f);
+		ImGui::Text("PS Invocations: %d ", gpuStats.PSInvocations);
+		ImGui::Text("VS Invocations: %d ", gpuStats.VSInvocations);
+		ImGui::Text("IA Vertices: %d", gpuStats.IAVertices);
+		ImGui::Text("IA Primitives: %d", gpuStats.IAPrimitives);
 
 		ImGui::End();
 
@@ -687,6 +694,9 @@ void SimplestApp::AppMainLoop()
 
 		PIXBeginEvent(list, PIX_COLOR(0, 255, 0), "DRAW");
 		PIXScopedEvent(PIX_COLOR(0, 255, 255), "DRAW");
+
+		StartGpuStats(list, currentFrame);
+
 		list->SetPipelineState(mOpaqueDblPipeline.pipeLineState.Get());
 		DrawRecords(mOpaqueDblDraws, cbvAllocator, list);
 
@@ -704,7 +714,11 @@ void SimplestApp::AppMainLoop()
 
 		list->SetPipelineState(mTransparentPipeline.pipeLineState.Get());
 		DrawRecords(mBlendedDraws, cbvAllocator, list);
+
+		EndGPUStats(list, currentFrame);
 		PIXEndEvent(list);
+
+		gpuStats = WriteOutGPUStats(currentFrame);
 
 		mImGui.Render(list);
 

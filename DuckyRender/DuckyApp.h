@@ -2,6 +2,7 @@
 
 using namespace DirectX;
 
+
 class D3DDeviceManager;
 
 const XMFLOAT4 BaseColorFallback{ 1.f, 1.f, 1.f, 1.f };
@@ -27,6 +28,13 @@ public:
 	void StartGPUTimeStamp(ID3D12GraphicsCommandList* commandList, UINT frameIndex);
 	void EndGPUTimeStamp(ID3D12GraphicsCommandList* commandList, UINT frameIndex);
 	double GetGPUFrameMilliSeconds(UINT frameIndex);
+
+	// GPU Stats
+	bool InitGPUStats();
+	void StartGpuStats(ID3D12GraphicsCommandList* commandList, UINT frameIndex);
+	void EndGPUStats(ID3D12GraphicsCommandList* commandList, UINT frameIndex);
+	D3D12_QUERY_DATA_PIPELINE_STATISTICS WriteOutGPUStats(UINT FrameIndex);
+
 protected:
 	
 	std::unique_ptr<D3DDeviceManager> mDeviceManager;
@@ -56,6 +64,10 @@ protected:
 
 	Microsoft::WRL::ComPtr<ID3D12QueryHeap> mQueryHeap;
 	Microsoft::WRL::ComPtr<ID3D12Resource>  mReadbackBuffer;
+
+	//for gpu stats
+	Microsoft::WRL::ComPtr<ID3D12QueryHeap> mPipelineStatsHeap;
+	Microsoft::WRL::ComPtr<ID3D12Resource>  mPipelineStatsReadback;
 
 	UINT64* mMappedTimestamps = nullptr;
 

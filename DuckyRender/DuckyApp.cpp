@@ -227,6 +227,102 @@ double DuckyApp::GetGPUFrameMilliSeconds(UINT frameIndex)
 	return outMilliseconds;
 }
 
+bool DuckyApp::InitGPUStats()
+{
+	D3D12_QUERY_HEAP_DESC queryHeapDesc{};
+	queryHeapDesc.Type = D3D12_QUERY_HEAP_TYPE_PIPELINE_STATISTICS;
+	queryHeapDesc.Count = 2;
+	queryHeapDesc.NodeMask = 0;
+
+	ID3D12Device* device = mDeviceManager->GetDevice();
+
+	HRESULT result = device->CreateQueryHeap(
+		&queryHeapDesc,
+		IID_PPV_ARGS(
+			mPipelineStatsHeap.ReleaseAndGetAddressOf()));
+
+	if (FAILED(result)) return false;
+
+	const UINT64 bufferSize = sizeof(D3D12_QUERY_DATA_PIPELINE_STATISTICS) * 2;
+
+	D3D12_HEAP_PROPERTIES heapProperties{};
+	heapProperties.Type = D3D12_HEAP_TYPE_READBACK;
+
+	D3D12_RESOURCE_DESC resourceDesc{};
+	resourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+	resourceDesc.Width = bufferSize;
+	resourceDesc.Height = 1;
+	resourceDesc.DepthOrArraySize = 1;
+	resourceDesc.MipLevels = 1;
+	resourceDesc.SampleDesc.Count = 1;
+	resourceDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+
+	result = device->CreateCommittedResource(
+		&heapProperties,
+		D3D12_HEAP_FLAG_NONE,
+		&resourceDesc,
+		D3D12_RESOURCE_STATE_COPY_DEST,
+		nullptr,
+		IID_PPV_ARGS(mPipelineStatsReadback.ReleaseAndGetAddressOf()));
+
+	if (FAILED(result)) return false;
+
+	return true;
+}
+
+void DuckyApp::StartGpuStats(ID3D12GraphicsCommandList* CommandList, UINT FrameIndex)
+{
+	CommandList->BeginQuery(
+		mPipelineStatsHeap.Get(),
+		D3D12_QUERY_TYPE_PIPELINE_STATISTICS,
+		FrameIndex);
+}
+
+void DuckyApp::EndGPUStats(ID3D12GraphicsCommandList* CommandList, UINT FrameIndex)
+{
+	CommandList->EndQuery(
+		mPipelineStatsHeap.Get(),
+		D3D12_QUERY_TYPE_PIPELINE_STATISTICS,
+		FrameIndex);
+
+	const UINT64 destinationOffset =
+		static_cast<UINT64>(FrameIndex) *
+		sizeof(D3D12_QUERY_DATA_PIPELINE_STATISTICS);
+
+	CommandList->ResolveQueryData(
+		mPipelineStatsHeap.Get(),
+		D3D12_QUERY_TYPE_PIPELINE_STATISTICS,
+		FrameIndex,
+		1,
+		mPipelineStatsReadback.Get(),
+		destinationOffset);
+}
+
+D3D12_QUERY_DATA_PIPELINE_STATISTICS DuckyApp::WriteOutGPUStats(UINT FrameIndex)
+{
+	D3D12_QUERY_DATA_PIPELINE_STATISTICS stats{};
+
+	const SIZE_T offset = static_cast<SIZE_T>(FrameIndex) * sizeof(D3D12_QUERY_DATA_PIPELINE_STATISTICS);
+
+	D3D12_RANGE readRange{offset, offset + sizeof(D3D12_QUERY_DATA_PIPELINE_STATISTICS)};
+
+	void* mappedData = nullptr;
+
+	HRESULT result = mPipelineStatsReadback->Map(0, &readRange, &mappedData);
+
+	if (SUCCEEDED(result))
+	{
+		const auto* frameStats = reinterpret_cast<const D3D12_QUERY_DATA_PIPELINE_STATISTICS*>(static_cast<const std::byte*>(mappedData) +offset);
+
+		stats = *frameStats;
+		D3D12_RANGE writtenRange{ 0, 0 };
+
+		mPipelineStatsReadback->Unmap(0, &writtenRange);
+	}
+
+	return stats;
+}
+
 LRESULT DuckyApp::StaticWindowProcedure(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 {
 	DuckyApp* app = nullptr;
