@@ -208,7 +208,7 @@ float4 main(Input input,
     color += ambient;
   
     if (visualisationMode == DEPTH)
-        return float4(input.svpos.z.xxx, 1.f);
+        return float4((input.svpos.z / input.svpos.w).xxx, 1.f);
     
     if (visualisationMode == ROUGHNESS)
         return float4(roughness.xxx, 1.f);
@@ -219,5 +219,5 @@ float4 main(Input input,
     if (visualisationMode == METAL)
         return float4(metallic.xxx, 1.f);
     
-    return float4(baseColorSample.rgb, baseColorSample.a);
+    return float4(color, baseColorSample.a);
 }
