@@ -20,6 +20,25 @@ struct CookedVertex
 	XMFLOAT4 color0   {1.f,1.f,1.f,1.f};
 };
 
+struct MaterialInfo
+{
+	unsigned int primTextureIndex = 0;
+	unsigned int normTextureIndex = 0; 
+	unsigned int metallicIndex = 0; 
+	unsigned int emissiveIndex = 0;
+
+	XMFLOAT4 baseColor{1.f,1.f,1.f,1.f};
+	float normalScale = 0.f;
+	float roughness = 0.f; 
+	float metal = 0.f; 
+
+	// alpha info
+	unsigned int blendMode = 0; 
+	float alphaCutoff = 0.5f;
+	unsigned int doubleSided = 0;
+};
+
+
 struct BufferPointerStruct
 {
 	const tinygltf::Accessor*   outAccessor = nullptr;
@@ -120,71 +139,87 @@ void MemCpyOverToCookedVertex(BufferStartAndStride& StartAndStride, void* Elem, 
 	StartAndStride.start += StartAndStride.stride;
 }
 
-void FindPrimitiveData(const tinygltf::Primitive& Primitive, const tinygltf::Model& Model, stringstream& DataToFlushOut)
+void FindAllVertexData(const tinygltf::Model& Model, vector<size_t>& Offsets, stringstream& VertexDataStream)
 {
+	size_t currentVertOffset = 0;
 
-	BufferPointerStruct posBuffer;
-	GetBufferView(Primitive, Model, "POSITION", posBuffer);
+	for (const auto& mesh : Model.meshes)
+	{
+		for (const auto& primitive : mesh.primitives)
+		{
+			Offsets.push_back(currentVertOffset);
+			std::cout << "global offset for vertices " << currentVertOffset << std::endl;
 
-	BufferPointerStruct normBuffer;
-	bool bHasNormals = GetBufferView(Primitive, Model, "NORMAL", normBuffer);
+			BufferPointerStruct posBuffer;
+			GetBufferView(primitive, Model, "POSITION", posBuffer);
 
-	BufferPointerStruct tangentBuffer;
-	bool bHasTangents = GetBufferView(Primitive, Model, "TANGENT", tangentBuffer);
+			BufferPointerStruct normBuffer;
+			bool bHasNormals = GetBufferView(primitive, Model, "NORMAL", normBuffer);
 
-	BufferPointerStruct uvBuffer;
-	bool bHasUVs = GetBufferView(Primitive, Model, "TEXCOORD_0", uvBuffer);
+			BufferPointerStruct tangentBuffer;
+			bool bHasTangents = GetBufferView(primitive, Model, "TANGENT", tangentBuffer);
 
-	BufferPointerStruct colorBuffer;
-	bool bHasCols = GetBufferView(Primitive, Model, "COLOR_0", colorBuffer);
+			BufferPointerStruct uvBuffer;
+			bool bHasUVs = GetBufferView(primitive, Model, "TEXCOORD_0", uvBuffer);
 
-	size_t Count = posBuffer.outAccessor->count;
-	
-	//entire size
-	size_t BufferInfoSize = sizeof(CookedVertex) * Count;
-	unsigned int CookedVertexSize = sizeof(CookedVertex);
+			BufferPointerStruct colorBuffer;
+			bool bHasCols = GetBufferView(primitive, Model, "COLOR_0", colorBuffer);
 
-	BufferStartAndStride posInfo;
-	InitStartAndStride(posBuffer, posInfo);
-	
-	BufferStartAndStride normInfo, tangentInfo, uvInfo, colorInfo;
-	if (bHasNormals)   InitStartAndStride(normBuffer, normInfo);
-	if (bHasTangents)  InitStartAndStride(tangentBuffer, tangentInfo);
-	if (bHasUVs)       InitStartAndStride(uvBuffer, uvInfo);
-	if (bHasCols)      InitStartAndStride(colorBuffer, colorInfo);
+			size_t Count = posBuffer.outAccessor->count;
+
+			//entire size
+			size_t BufferInfoSize = sizeof(CookedVertex) * Count;
+			unsigned int CookedVertexSize = sizeof(CookedVertex);
+
+			BufferStartAndStride posInfo;
+			InitStartAndStride(posBuffer, posInfo);
+
+			BufferStartAndStride normInfo, tangentInfo, uvInfo, colorInfo;
+			if (bHasNormals)   InitStartAndStride(normBuffer, normInfo);
+			if (bHasTangents)  InitStartAndStride(tangentBuffer, tangentInfo);
+			if (bHasUVs)       InitStartAndStride(uvBuffer, uvInfo);
+			if (bHasCols)      InitStartAndStride(colorBuffer, colorInfo);
+
+			std::cout << "found vertex data " << Count << " vertices " << std::endl;
+
+			for (int elem = 0; elem < Count; elem++)
+			{
+				CookedVertex cookedVertex{};
+
+				MemCpyOverToCookedVertex(posInfo, (void*)&cookedVertex.position, sizeof(cookedVertex.position));
+				if (bHasNormals)	MemCpyOverToCookedVertex(normInfo, (void*)&cookedVertex.normal, sizeof(cookedVertex.normal));
+				if (bHasTangents)	MemCpyOverToCookedVertex(tangentInfo, (void*)&cookedVertex.tangent, sizeof(cookedVertex.tangent));
+				if (bHasUVs)		MemCpyOverToCookedVertex(uvInfo, (void*)&cookedVertex.texcoord0, sizeof(cookedVertex.texcoord0));
+				if (bHasCols)		MemCpyOverToCookedVertex(colorInfo, (void*)&cookedVertex.color0, sizeof(cookedVertex.color0));
+
+				VertexDataStream.write((const char*)&cookedVertex, sizeof(CookedVertex));
+				currentVertOffset++;
+			}
+
+		}
+	}
 	
 
 	//TODO this is temp
-	DataToFlushOut.write((const char*)&CookedVertexSize, sizeof(unsigned int));
-	DataToFlushOut.write((const char*)&BufferInfoSize, sizeof(size_t));
+	//DataToFlushOut.write((const char*)&CookedVertexSize, sizeof(unsigned int));
+	//DataToFlushOut.write((const char*)&BufferInfoSize, sizeof(size_t));
 
-	for (int elem = 0; elem < Count; elem++)
-	{
-		CookedVertex cookedVertex{};
-
-		MemCpyOverToCookedVertex(posInfo, (void*)&cookedVertex.position, sizeof(cookedVertex.position));
-		if (bHasNormals)	MemCpyOverToCookedVertex(normInfo, (void*)&cookedVertex.normal,		sizeof(cookedVertex.normal));
-		if (bHasTangents)	MemCpyOverToCookedVertex(tangentInfo, (void*)&cookedVertex.tangent, sizeof(cookedVertex.tangent));
-		if (bHasUVs)		MemCpyOverToCookedVertex(uvInfo, (void*)&cookedVertex.texcoord0,	sizeof(cookedVertex.texcoord0));
-		if (bHasCols)		MemCpyOverToCookedVertex(colorInfo, (void*)&cookedVertex.color0,	sizeof(cookedVertex.color0));
-
-		DataToFlushOut.write((const char*)&cookedVertex, sizeof(CookedVertex));
-	}
-
-	// get min / max bounding box points for primitive
-	AABB localBoundingBox;
-	localBoundingBox.mMin.x = static_cast<float>(posBuffer.outAccessor->minValues[0]);
-	localBoundingBox.mMin.y = static_cast<float>(posBuffer.outAccessor->minValues[1]);
-	localBoundingBox.mMin.z = static_cast<float>(posBuffer.outAccessor->minValues[2]);
-	localBoundingBox.mMin.w = 1.f;
-
-	localBoundingBox.mMax.x = static_cast<float>(posBuffer.outAccessor->maxValues[0]);
-	localBoundingBox.mMax.y = static_cast<float>(posBuffer.outAccessor->maxValues[1]);
-	localBoundingBox.mMax.z = static_cast<float>(posBuffer.outAccessor->maxValues[2]);
-	localBoundingBox.mMax.w = 1.f;
 	
-	// write out localBoundingBox
-	DataToFlushOut.write(reinterpret_cast<const char*>(&localBoundingBox), sizeof(AABB));
+
+	//// get min / max bounding box points for primitive
+	//AABB localBoundingBox;
+	//localBoundingBox.mMin.x = static_cast<float>(posBuffer.outAccessor->minValues[0]);
+	//localBoundingBox.mMin.y = static_cast<float>(posBuffer.outAccessor->minValues[1]);
+	//localBoundingBox.mMin.z = static_cast<float>(posBuffer.outAccessor->minValues[2]);
+	//localBoundingBox.mMin.w = 1.f;
+
+	//localBoundingBox.mMax.x = static_cast<float>(posBuffer.outAccessor->maxValues[0]);
+	//localBoundingBox.mMax.y = static_cast<float>(posBuffer.outAccessor->maxValues[1]);
+	//localBoundingBox.mMax.z = static_cast<float>(posBuffer.outAccessor->maxValues[2]);
+	//localBoundingBox.mMax.w = 1.f;
+	//
+	//// write out localBoundingBox
+	//DataToFlushOut.write(reinterpret_cast<const char*>(&localBoundingBox), sizeof(AABB));
 }
 
 void CountMeshNodes(const tinygltf::Node& Node, const tinygltf::Model& Model, size_t& numMeshNodes)
@@ -238,7 +273,7 @@ void WriteOutNodeData(const tinygltf::Node& Node, const tinygltf::Model& Model, 
 
 void WriteOutTextureData(int index, 
 						 const tinygltf::Model& Model, 
-						 stringstream& DataToFlushOut, 
+						 stringstream& MaterialData, 
 						 TextureType Type, 
 						 const std::filesystem::path& InputPath, 
 						 const std::filesystem::path& OutputPath)
@@ -266,8 +301,8 @@ void WriteOutTextureData(int index,
 			string expectedDDSPathStr = expectedDdsPath.string();
 			size_t expectedDDSPathLength = expectedDDSPathStr.length();
 
-			DataToFlushOut.write((char*)&expectedDDSPathLength, sizeof(size_t));
-			DataToFlushOut.write((char*)&expectedDDSPathStr[0], expectedDDSPathLength);
+			MaterialData.write((char*)&expectedDDSPathLength, sizeof(size_t));
+			MaterialData.write((char*)&expectedDDSPathStr[0], expectedDDSPathLength);
 
 			const std::filesystem::path expectedInputPath = InputPath / textureName;
 
@@ -280,8 +315,8 @@ void WriteOutTextureData(int index,
 			string associatedName = itr->second;
 			size_t length = associatedName.length();
 
-			DataToFlushOut.write((char*)&length, sizeof(size_t));
-			DataToFlushOut.write((char*)&associatedName[0], length);
+			MaterialData.write((char*)&length, sizeof(size_t));
+			MaterialData.write((char*)&associatedName[0], length);
 		}
 	}
 }
@@ -295,70 +330,88 @@ unsigned int DetermineAlphaMode(const std::string& str)
 	return 0;
 }
 
-void WriteOutMeshData(const tinygltf::Node& Node, 
-					  const tinygltf::Model& Model, 
-					  stringstream& DataToFlushOut, 
-					  AABB& GlobalBoundingBox, 
-					  const std::filesystem::path& InputPath, 
-					  const std::filesystem::path& OutputPath)
+void ProcessMaterials(const tinygltf::Model& Model,
+					  stringstream& MaterialDataStream)
 {
-	// first write out Node info, get transforms and mesh indices of all nodes...
-	//top node
+	size_t numMaterial = Model.materials.size();
+	MaterialDataStream.write((const char*)&numMaterial, sizeof(size_t));
 
-	// now write out Mesh Data
+	for (const tinygltf::Material& material : Model.materials)
+	{
+		MaterialInfo newMaterial{};
+		const tinygltf::PbrMetallicRoughness& pbrValues = material.pbrMetallicRoughness;
+		newMaterial.primTextureIndex = pbrValues.baseColorTexture.index;
+		newMaterial.normTextureIndex = material.normalTexture.index;
+		newMaterial.normalScale = (float)material.normalTexture.scale;
+		newMaterial.metallicIndex = material.pbrMetallicRoughness.metallicRoughnessTexture.index;
+		newMaterial.emissiveIndex = material.emissiveTexture.index;
+
+		const std::vector<double>& baseColorValues = pbrValues.baseColorFactor;
+		newMaterial.baseColor =	XMFLOAT4 ((float)baseColorValues[0], (float)baseColorValues[1], (float)baseColorValues[2], (float)baseColorValues[3]);
+		newMaterial.roughness = static_cast<float>(pbrValues.roughnessFactor);
+		newMaterial.metal	  = static_cast<float>(pbrValues.metallicFactor);
+	
+		newMaterial.blendMode = DetermineAlphaMode(material.alphaMode);
+		newMaterial.alphaCutoff = static_cast<float>(material.alphaCutoff);
+		newMaterial.doubleSided = material.doubleSided;
+
+		MaterialDataStream.write((const char*)&newMaterial, sizeof(MaterialInfo));
+	}
+}
+
+void ProcessTextures(const tinygltf::Model& Model,
+					 stringstream& MaterialDataStream,
+					 const std::filesystem::path& TextureInputAssetPath,
+					 const std::filesystem::path& TextureOutputAssetPath)
+{
+	stringstream tempTextureStream;
+	size_t numTextures = 0;
+	for (const tinygltf::Material& material : Model.materials)
+	{
+		unsigned int textureIndex = material.pbrMetallicRoughness.baseColorTexture.index;
+		if (textureIndex != -1)
+		{
+			WriteOutTextureData(textureIndex, Model, tempTextureStream, TextureType::BASE_COLOR, TextureInputAssetPath, TextureOutputAssetPath);
+			numTextures++;
+		}
+
+		textureIndex = material.pbrMetallicRoughness.metallicRoughnessTexture.index;
+		if (textureIndex != -1)
+		{
+			WriteOutTextureData(textureIndex, Model, tempTextureStream, TextureType::METALLIC_ROUGHNESS, TextureInputAssetPath, TextureOutputAssetPath);
+			numTextures++;
+		}
+
+		textureIndex = material.normalTexture.index;
+		if (textureIndex != -1)
+		{
+			WriteOutTextureData(textureIndex, Model, tempTextureStream, TextureType::NORMAL, TextureInputAssetPath, TextureOutputAssetPath);
+			numTextures++;
+		}
+
+		textureIndex = material.emissiveTexture.index;
+		if (textureIndex != -1)
+		{
+			WriteOutTextureData(textureIndex, Model, tempTextureStream, TextureType::EMISSIVE, TextureInputAssetPath, TextureOutputAssetPath);
+			numTextures++;
+		}
+		
+	}
+
+	MaterialDataStream.write((const char*)&numTextures, sizeof(size_t));
+	MaterialDataStream << tempTextureStream.rdbuf();
+}
+
+void FindAllIndexData(const tinygltf::Model& Model, stringstream& MeshDataStream, vector<size_t>& IndexOffsets)
+{
+	size_t globalIndexOffset = 0;
+
 	for (const auto& mesh : Model.meshes)
 	{
-		size_t numPrims = mesh.primitives.size();
-		DataToFlushOut.write((char*)&numPrims, sizeof(size_t));
-
 		for (const auto& primitive : mesh.primitives)
 		{
-			// get texture info for this primitive
-			const tinygltf::Material& primMaterial = Model.materials[primitive.material];
-			int primTextureIndex = primMaterial.pbrMetallicRoughness.baseColorTexture.index;
-
-			DataToFlushOut.write((char*)&primTextureIndex, sizeof(int));
-			WriteOutTextureData(primTextureIndex, Model, DataToFlushOut, TextureType::BASE_COLOR, InputPath, OutputPath);
-
-			int normTextureIndex = primMaterial.normalTexture.index;
-			DataToFlushOut.write((char*)&normTextureIndex, sizeof(int));
-			WriteOutTextureData(normTextureIndex, Model, DataToFlushOut, TextureType::NORMAL, InputPath, OutputPath);
-
-			int metallicIndex = primMaterial.pbrMetallicRoughness.metallicRoughnessTexture.index;
-			DataToFlushOut.write((char*)&metallicIndex, sizeof(int));
-			WriteOutTextureData(metallicIndex, Model, DataToFlushOut, TextureType::METALLIC_ROUGHNESS, InputPath, OutputPath);
-
-			int emissiveIndex = primMaterial.emissiveTexture.index;
-			DataToFlushOut.write((char*)&emissiveIndex, sizeof(int));
-			WriteOutTextureData(emissiveIndex, Model, DataToFlushOut, TextureType::EMISSIVE, InputPath, OutputPath);
-
-			const tinygltf::PbrMetallicRoughness& pbrValues = primMaterial.pbrMetallicRoughness;
-			const std::vector<double>& baseColorValues = primMaterial.pbrMetallicRoughness.baseColorFactor;
-			XMFLOAT4 baseColor ((float)baseColorValues[0], (float)baseColorValues[1], (float)baseColorValues[2], (float)baseColorValues[3]);
-			DataToFlushOut.write((char*)&baseColor, sizeof(float) * 4);
-
-			float normalScale = (float)primMaterial.normalTexture.scale;
-			DataToFlushOut.write((char*)&normalScale, sizeof(float));
-
-			float roughness = static_cast<float>(pbrValues.roughnessFactor);
-			DataToFlushOut.write((char*)&roughness, sizeof(float));
-
-			float metal = static_cast<float>(pbrValues.metallicFactor);
-			DataToFlushOut.write((char*)&metal, sizeof(float));
-
-			// alpha info
-			unsigned int blendMode = DetermineAlphaMode(primMaterial.alphaMode);
-			DataToFlushOut.write((char*)&blendMode, sizeof(unsigned int));
-
-
-			float alphaCutoff = static_cast<float>(primMaterial.alphaCutoff);
-			DataToFlushOut.write((char*)&alphaCutoff, sizeof(float));
-
-			DataToFlushOut.write((char*)&primMaterial.doubleSided, sizeof(unsigned int));
-
-			
-			FindPrimitiveData(primitive, Model, DataToFlushOut);
-			
+			IndexOffsets.push_back(globalIndexOffset);
+			cout << "global index offset: " << globalIndexOffset << endl;
 			if (primitive.indices >= 0)
 			{
 				const tinygltf::Accessor& accessor = Model.accessors[primitive.indices];
@@ -376,15 +429,12 @@ void WriteOutMeshData(const tinygltf::Node& Node,
 				else if (accessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT) stride = 2;
 				else if (accessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT)   stride = 4;
 
-				DataToFlushOut.write((char*)&stride, sizeof(unsigned int));
-
 				const unsigned char* start = &buffer.data[accessor.byteOffset + bufferView.byteOffset];
 				const unsigned char* end = start + accessor.count * stride;
 
 				size_t size = end - start;
-				DataToFlushOut.write((char*)&size, sizeof(size_t));
-				DataToFlushOut.write((char*)start, size);
-
+				MeshDataStream.write((char*)start, size);
+				globalIndexOffset += accessor.count;
 			}
 			else
 			{
@@ -392,19 +442,35 @@ void WriteOutMeshData(const tinygltf::Node& Node,
 				std::cout << " No index Data, generating own" << std::endl;
 				auto itr = primitive.attributes.find("POSITION");
 				const tinygltf::Accessor& accessor = Model.accessors[itr->second];
-				unsigned int stride = sizeof(unsigned int);
-				size_t indexBufferSize = accessor.count * stride;
-				DataToFlushOut.write((char*)&stride, sizeof(unsigned int));
-				DataToFlushOut.write((char*)&indexBufferSize, sizeof(size_t));
+				
 				for (unsigned int i = 0; i < accessor.count; i++)
 				{
-					DataToFlushOut.write((char*)&i, sizeof(unsigned int));
+					MeshDataStream.write((char*)&i, sizeof(unsigned int));
+					globalIndexOffset++;
 				}
+
+				IndexOffsets.push_back(globalIndexOffset);
 			}
 		}
 	}
+}
 
-	//DataToFlushOut.write((char*)&GlobalBoundingBox, sizeof(AABB));
+void FindMeshData(const tinygltf::Model& Model, 
+				  stringstream& MeshDataStream,
+				  stringstream& OffsetsStream)
+{
+	//write out a mega buffer of mesh data!
+	vector<size_t> vertexOffsets;
+	vector<size_t> indexOffsets;
+
+	FindAllVertexData(Model, vertexOffsets, MeshDataStream);
+	FindAllIndexData(Model, MeshDataStream, indexOffsets);
+
+	for (int i = 0; i < vertexOffsets.size(); i++)
+	{
+		OffsetsStream.write((const char*)&vertexOffsets[i], sizeof(size_t));
+		OffsetsStream.write((const char*)&indexOffsets[i],  sizeof(size_t));
+	}
 }
 
 int main(int argc, char** argv)
@@ -432,36 +498,38 @@ int main(int argc, char** argv)
 		return 1;
 	}
 
+	const std::filesystem::path inputDirectory = std::filesystem::path("..") / "Assets" / "InputAssets" / asset ;
 	const std::filesystem::path outputDirectory = std::filesystem::path("..") / "Assets" / "CookedAssets" / asset;
 	std::filesystem::create_directories(outputDirectory / "Textures");
-	ofstream outputFile(outputDirectory.string() + "//CookedData.Ducky", std::ios::binary);
-
+	ofstream outputFile(outputDirectory.string() + "//CookedData.Ducky", ios::binary);
 
 	if (!outputFile) return 1;
-	stringstream dataToFlushOut;
+
+	// three streams that will be output later in this order
+	// this allows easier traversal of data but output in a different order later!
+	stringstream instanceTransformData;
+	stringstream materialsData;
+	stringstream offsetData;
+	stringstream bufferData;
 
 	const tinygltf::Scene& scene = model.scenes[model.defaultScene];
 	const tinygltf::Node& rootNode = model.nodes[scene.nodes[0]];
 
+	// Num Meshes and Transform Data
 	size_t numMeshNodes = 0;
 	CountMeshNodes(rootNode, model, numMeshNodes);
-	dataToFlushOut.write((char*)&numMeshNodes, sizeof(size_t));
+	instanceTransformData.write((char*)&numMeshNodes, sizeof(size_t));
 
 	XMMATRIX Transform = XMMatrixIdentity();
-	WriteOutNodeData(rootNode, model, dataToFlushOut, Transform);
+	WriteOutNodeData(rootNode, model, instanceTransformData, Transform);
 
+	// Textures and Materials
 	string textureOutputPath = outputDirectory.string();
+	ProcessMaterials(model, materialsData);
+	ProcessTextures(model, materialsData, inputDirectory, textureOutputPath);
+	FindMeshData(model, bufferData, offsetData);
 
-	const std::filesystem::path inputPath = std::filesystem::path("..") / "Assets" / "InputAssets" / asset;
-
-	size_t numMeshes = model.meshes.size();
-	dataToFlushOut.write((char*)&numMeshes, sizeof(size_t));
-	std::filesystem::create_directories(textureOutputPath);
-	AABB globalBoundingBox;
-	WriteOutMeshData(model.nodes[scene.nodes[0]], model, dataToFlushOut, globalBoundingBox, inputPath, outputDirectory);
-
-	outputFile << dataToFlushOut.rdbuf();
-	size_t s = outputFile.tellp();
+	outputFile << materialsData.rdbuf() << instanceTransformData.rdbuf() << offsetData.rdbuf() << bufferData.rdbuf();
 	outputFile.close();
 
 	return 0;
