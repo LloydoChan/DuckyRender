@@ -350,8 +350,6 @@ void WriteOutMeshData(const tinygltf::Node& Node,
 			unsigned int blendMode = DetermineAlphaMode(primMaterial.alphaMode);
 			DataToFlushOut.write((char*)&blendMode, sizeof(unsigned int));
 
-			if (blendMode == 1) 
-				cout << "mask!" << endl;
 
 			float alphaCutoff = static_cast<float>(primMaterial.alphaCutoff);
 			DataToFlushOut.write((char*)&alphaCutoff, sizeof(float));
