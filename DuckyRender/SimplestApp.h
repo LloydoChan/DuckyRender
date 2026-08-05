@@ -2,7 +2,6 @@
 #include "DuckyApp.h"
 #include "D3DDeviceManager.h"
 #include "DuckyMesh.h"
-#include "DuckyImGui.h"
 
 class DuckyGraphicsContext;
 struct ConstantBufferAllocator;
@@ -116,6 +115,4 @@ class SimplestApp : public DuckyApp
 		unsigned int mVisualizationMode = 0;
 
 		AABB mGlobalAABB;
-
-		DuckyImGui mImGui;
 };

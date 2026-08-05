@@ -5,9 +5,6 @@
 #include "DuckyPipelineStates.h"
 #include "DuckyTools.h"
 
-#include "imgui/imgui.h"
-#include "imgui/imgui_impl_win32.h"
-
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(
 	HWND hwnd,
 	UINT msg,
@@ -631,24 +628,7 @@ void SimplestApp::AppMainLoop()
 
 		float clearColor[] = { 0.5f, 0.8f, 0.9f, 1.f };
 
-		ImGui::SetNextWindowSize(
-			ImVec2(320.f, 420.f),
-			ImGuiCond_FirstUseEver);
-
-		mImGui.BeginFrame();
-
-		ImGui::Begin("DuckyRender");
-
-		ImGui::Text("GPU Frame: %.3f ms", gpuTime);
-		ImGui::Text("CPU Frame: %.3f ms", deltaCPU);
-		ImGui::Text("Frame time: %.3f ms", deltaTime * 1000.f);
-
-		ImGui::Text("PS Invocations: %d ", gpuStats.PSInvocations);
-		ImGui::Text("VS Invocations: %d ", gpuStats.VSInvocations);
-		ImGui::Text("IA Vertices: %d", gpuStats.IAVertices);
-		ImGui::Text("IA Primitives: %d", gpuStats.IAPrimitives);
-
-		ImGui::End();
+		ImGUIDraw(gpuTime, deltaCPU, gpuStats);
 
 		if (!mDuckyContext->BeginFrame(currentFrame, mFence.Get(), mOpaquePipeline.pipeLineState.Get(), mFenceEvent, &mLogFile)) break;
 		ConstantBufferAllocator* cbvAllocator = mDuckyContext->GetBufferAllocator(currentFrame);

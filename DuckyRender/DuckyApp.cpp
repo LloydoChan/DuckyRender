@@ -323,6 +323,27 @@ D3D12_QUERY_DATA_PIPELINE_STATISTICS DuckyApp::WriteOutGPUStats(UINT FrameIndex)
 	return stats;
 }
 
+void DuckyApp::ImGUIDraw(double GpuTime, double CpuTime, const D3D12_QUERY_DATA_PIPELINE_STATISTICS& Stats)
+{
+	ImGui::SetNextWindowSize(
+		ImVec2(320.f, 420.f),
+		ImGuiCond_FirstUseEver);
+
+	mImGui.BeginFrame();
+
+	ImGui::Begin("DuckyRender");
+
+	ImGui::Text("GPU Frame: %.3f ms", GpuTime);
+	ImGui::Text("CPU Frame: %.3f ms", CpuTime);
+
+	ImGui::Text("PS Invocations: %d ", Stats.PSInvocations);
+	ImGui::Text("VS Invocations: %d ", Stats.VSInvocations);
+	ImGui::Text("IA Vertices: %d", Stats.IAVertices);
+	ImGui::Text("IA Primitives: %d", Stats.IAPrimitives);
+
+	ImGui::End();
+}
+
 LRESULT DuckyApp::StaticWindowProcedure(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 {
 	DuckyApp* app = nullptr;

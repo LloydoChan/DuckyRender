@@ -1,7 +1,7 @@
 #pragma once
 
 using namespace DirectX;
-
+#include "DuckyImGui.h"
 
 class D3DDeviceManager;
 
@@ -34,6 +34,8 @@ public:
 	void StartGpuStats(ID3D12GraphicsCommandList* commandList, UINT frameIndex);
 	void EndGPUStats(ID3D12GraphicsCommandList* commandList, UINT frameIndex);
 	D3D12_QUERY_DATA_PIPELINE_STATISTICS WriteOutGPUStats(UINT FrameIndex);
+
+	void ImGUIDraw(double GpuTime, double CpuTime, const D3D12_QUERY_DATA_PIPELINE_STATISTICS& Stats);
 
 protected:
 	
@@ -73,4 +75,6 @@ protected:
 
 	UINT64 mFrameCount = 0;
 	UINT64 mTimeStampFrequency = 0;
+
+	DuckyImGui mImGui;
 };
