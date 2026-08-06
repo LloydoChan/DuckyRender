@@ -22,12 +22,8 @@ struct CookedVertex
 
 struct MaterialInfo
 {
-	unsigned int primTextureIndex = 0;
-	unsigned int normTextureIndex = 0; 
-	unsigned int metallicIndex = 0; 
-	unsigned int emissiveIndex = 0;
-
 	XMFLOAT4 baseColor{1.f,1.f,1.f,1.f};
+
 	float normalScale = 0.f;
 	float roughness = 0.f; 
 	float metal = 0.f; 
@@ -36,6 +32,15 @@ struct MaterialInfo
 	unsigned int blendMode = 0; 
 	float alphaCutoff = 0.5f;
 	unsigned int doubleSided = 0;
+
+	unsigned int padding1;
+	unsigned int padding2;
+
+	int primTextureIndex = -1;
+	int normTextureIndex = -1; 
+	int metallicIndex = -1; 
+	int emissiveIndex = -1;
+
 };
 
 
@@ -139,15 +144,17 @@ void MemCpyOverToCookedVertex(BufferStartAndStride& StartAndStride, void* Elem, 
 	StartAndStride.start += StartAndStride.stride;
 }
 
-void FindAllVertexData(const tinygltf::Model& Model, vector<size_t>& Offsets, stringstream& VertexDataStream)
+void FindAllVertexData(const tinygltf::Model& Model, vector<vector<size_t>>& Offsets, vector<int>& PrimitiveMaterials, stringstream& VertexDataStream)
 {
 	size_t currentVertOffset = 0;
 
 	for (const auto& mesh : Model.meshes)
 	{
+		vector<size_t> primOffsets;
 		for (const auto& primitive : mesh.primitives)
 		{
-			Offsets.push_back(currentVertOffset);
+			PrimitiveMaterials.push_back(primitive.material);
+			primOffsets.push_back(currentVertOffset);
 			std::cout << "global offset for vertices " << currentVertOffset << std::endl;
 
 			BufferPointerStruct posBuffer;
@@ -195,10 +202,11 @@ void FindAllVertexData(const tinygltf::Model& Model, vector<size_t>& Offsets, st
 				VertexDataStream.write((const char*)&cookedVertex, sizeof(CookedVertex));
 				currentVertOffset++;
 			}
-
 		}
+		primOffsets.push_back(currentVertOffset); // need one last one
+		Offsets.push_back(primOffsets);
 	}
-	
+	PrimitiveMaterials.push_back(-1);
 
 	//TODO this is temp
 	//DataToFlushOut.write((const char*)&CookedVertexSize, sizeof(unsigned int));
@@ -261,7 +269,6 @@ void WriteOutNodeData(const tinygltf::Node& Node, const tinygltf::Model& Model, 
 		int nodeMesh = Node.mesh;
 		DataToFlushOut.write((char*)&nodeMesh, sizeof(int));
 		DataToFlushOut.write((char*)&storedWorld, sizeof(XMFLOAT4X4));
-
 	}
 
 	for (const auto& childNode : Node.children)
@@ -340,11 +347,11 @@ void ProcessMaterials(const tinygltf::Model& Model,
 	{
 		MaterialInfo newMaterial{};
 		const tinygltf::PbrMetallicRoughness& pbrValues = material.pbrMetallicRoughness;
-		newMaterial.primTextureIndex = pbrValues.baseColorTexture.index;
-		newMaterial.normTextureIndex = material.normalTexture.index;
+		newMaterial.primTextureIndex = pbrValues.baseColorTexture.index != -1 ? pbrValues.baseColorTexture.index : -1 ;
+		newMaterial.normTextureIndex = material.normalTexture.index != -1 ? material.normalTexture.index : -1;
 		newMaterial.normalScale = (float)material.normalTexture.scale;
-		newMaterial.metallicIndex = material.pbrMetallicRoughness.metallicRoughnessTexture.index;
-		newMaterial.emissiveIndex = material.emissiveTexture.index;
+		newMaterial.metallicIndex = pbrValues.metallicRoughnessTexture.index != -1 ? pbrValues.metallicRoughnessTexture.index : -1;
+		newMaterial.emissiveIndex = material.emissiveTexture.index != -1 ? material.emissiveTexture.index : -1;
 
 		const std::vector<double>& baseColorValues = pbrValues.baseColorFactor;
 		newMaterial.baseColor =	XMFLOAT4 ((float)baseColorValues[0], (float)baseColorValues[1], (float)baseColorValues[2], (float)baseColorValues[3]);
@@ -402,15 +409,16 @@ void ProcessTextures(const tinygltf::Model& Model,
 	MaterialDataStream << tempTextureStream.rdbuf();
 }
 
-void FindAllIndexData(const tinygltf::Model& Model, stringstream& MeshDataStream, vector<size_t>& IndexOffsets)
+void FindAllIndexData(const tinygltf::Model& Model, stringstream& MeshDataStream, vector<vector<size_t>>& IndexOffsets)
 {
 	size_t globalIndexOffset = 0;
 
 	for (const auto& mesh : Model.meshes)
 	{
+		vector<size_t> currentPrim;
 		for (const auto& primitive : mesh.primitives)
 		{
-			IndexOffsets.push_back(globalIndexOffset);
+			currentPrim.push_back(globalIndexOffset);
 			cout << "global index offset: " << globalIndexOffset << endl;
 			if (primitive.indices >= 0)
 			{
@@ -449,10 +457,14 @@ void FindAllIndexData(const tinygltf::Model& Model, stringstream& MeshDataStream
 					globalIndexOffset++;
 				}
 
-				IndexOffsets.push_back(globalIndexOffset);
+				currentPrim.push_back(globalIndexOffset);
 			}
 		}
+		currentPrim.push_back(globalIndexOffset);
+		IndexOffsets.push_back(currentPrim);
 	}
+
+	
 }
 
 void FindMeshData(const tinygltf::Model& Model, 
@@ -460,16 +472,39 @@ void FindMeshData(const tinygltf::Model& Model,
 				  stringstream& OffsetsStream)
 {
 	//write out a mega buffer of mesh data!
-	vector<size_t> vertexOffsets;
-	vector<size_t> indexOffsets;
+	vector<vector<size_t>> vertexOffsets;
+	vector<vector<size_t>> indexOffsets;
+	vector<int> primMaterials;
 
-	FindAllVertexData(Model, vertexOffsets, MeshDataStream);
+	FindAllVertexData(Model, vertexOffsets, primMaterials,MeshDataStream);
 	FindAllIndexData(Model, MeshDataStream, indexOffsets);
 
-	for (int i = 0; i < vertexOffsets.size(); i++)
+	int numMeshes = vertexOffsets.size();
+	OffsetsStream.write((const char*)&numMeshes, sizeof(int));
+	
+	for (int i = 0; i < numMeshes; i++)
 	{
-		OffsetsStream.write((const char*)&vertexOffsets[i], sizeof(size_t));
-		OffsetsStream.write((const char*)&indexOffsets[i],  sizeof(size_t));
+		int primsSize = vertexOffsets[i].size() -1;
+		OffsetsStream.write((const char*)&primsSize, sizeof(int));
+
+		for (int j = 0; j < primsSize; j++)
+		{
+			OffsetsStream.write((const char*)&primMaterials[i], sizeof(int));
+
+			// vertex number and offset
+			size_t Offset = vertexOffsets[i][j];
+			size_t Num = vertexOffsets[i][j + 1] - Offset;
+
+			OffsetsStream.write((const char*)&Num, sizeof(size_t));
+			OffsetsStream.write((const char*)&Offset, sizeof(size_t));
+			
+			// same for indices
+			Offset = indexOffsets[i][j];
+			Num = indexOffsets[i][j + 1] - Offset;
+
+			OffsetsStream.write((const char*)&Num, sizeof(size_t));
+			OffsetsStream.write((const char*)&Offset, sizeof(size_t));
+		}
 	}
 }
 
@@ -529,7 +564,7 @@ int main(int argc, char** argv)
 	ProcessTextures(model, materialsData, inputDirectory, textureOutputPath);
 	FindMeshData(model, bufferData, offsetData);
 
-	outputFile << materialsData.rdbuf() << instanceTransformData.rdbuf() << offsetData.rdbuf() << bufferData.rdbuf();
+	outputFile << instanceTransformData.rdbuf() << materialsData.rdbuf() << offsetData.rdbuf() << bufferData.rdbuf();
 	outputFile.close();
 
 	return 0;

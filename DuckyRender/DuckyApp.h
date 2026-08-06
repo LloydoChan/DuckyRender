@@ -1,9 +1,8 @@
 #pragma once
+#include "DuckyMaterial.h"
+#include "DuckyMesh.h"
 
 using namespace DirectX;
-
-
-class D3DDeviceManager;
 
 const XMFLOAT4 BaseColorFallback{ 1.f, 1.f, 1.f, 1.f };
 const XMFLOAT4 NormalFallback{ 0.5f, 0.5f, 1.f, 1.f };
@@ -34,6 +33,12 @@ public:
 	void StartGpuStats(ID3D12GraphicsCommandList* commandList, UINT frameIndex);
 	void EndGPUStats(ID3D12GraphicsCommandList* commandList, UINT frameIndex);
 	D3D12_QUERY_DATA_PIPELINE_STATISTICS WriteOutGPUStats(UINT FrameIndex);
+
+	// materials and mesh data
+	bool InitMaterials(std::ifstream& ModelFile);
+	bool InitTextures(std::ifstream& ModelFile);
+	bool InitMeshes(std::ifstream& ModelFile);
+	bool InitVertexAndIndexMegaBuffer(std::ifstream& ModelFile);
 
 protected:
 	
@@ -73,4 +78,16 @@ protected:
 
 	UINT64 mFrameCount = 0;
 	UINT64 mTimeStampFrequency = 0;
+
+	std::vector<DuckyMaterial> mMaterials;
+	std::vector<DescriptorHeapResource> mTextures;
+
+	std::vector<DuckyMeshData> mMeshes;
+	std::vector<DuckyMeshInstance> mInstances;
+
+	Microsoft::WRL::ComPtr<ID3D12Resource> mVertices;
+	Microsoft::WRL::ComPtr<ID3D12Resource> mIndices;
+
+	D3D12_VERTEX_BUFFER_VIEW mVbView;
+	D3D12_INDEX_BUFFER_VIEW mIbView;
 };

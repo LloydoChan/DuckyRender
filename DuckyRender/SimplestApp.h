@@ -18,9 +18,10 @@ namespace MaterialVisualization
 
 struct DrawRecord
 {
-	const DuckyMeshInstance* mInstanceIndex;
-	const DuckyPrimitive*    mPrimitiveIndex;
-	const DuckyMaterial*     mMaterialIndex;
+	const unsigned int mInstanceIndex;
+	const unsigned int mMeshIndex;
+	const unsigned int mPrimitiveIndex;
+	const unsigned int mMaterialIndex;
 };
 
 struct MovementStruct
@@ -60,9 +61,9 @@ class SimplestApp : public DuckyApp
 		virtual LRESULT WindowProcedure(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam);
 		virtual void HandleInput(UINT msg, WPARAM wParam, LPARAM lParam);
 		void UpdateMovementAndRotation(XMVECTOR& ViewVector, MovementStruct& movement, float DeltaTime);
-		bool BindMaterial(ID3D12GraphicsCommandList* commandList, ConstantBufferAllocator* allocator, const DuckyMaterial& material);
+		bool BindMaterial(ID3D12GraphicsCommandList* commandList, ConstantBufferAllocator* allocator, unsigned int material);
 		void BindTexture(ID3D12GraphicsCommandList* commandList, UINT rootParameter, size_t textureHandle, size_t fallBackHandle);
-		bool BindInstanceConstants(ID3D12GraphicsCommandList* commandList, ConstantBufferAllocator* allocator, const DuckyMeshInstance& instance);
+		bool BindInstanceConstants(ID3D12GraphicsCommandList* commandList, ConstantBufferAllocator* allocator, unsigned int instance);
 		virtual void AppMainLoop();
 
 		void WorkOutGlobalBoundingBoxCenter();
@@ -89,9 +90,6 @@ class SimplestApp : public DuckyApp
 
 		DescriptorHeapResource mMatrixBuffer[2];
 		XMFLOAT4X4* mMappedTransform[2] = {};
-
-		std::vector<DuckyMeshData> mMeshes;
-		std::vector<DuckyMeshInstance> mInstances;
 
 		PipelineAndRootSig mOpaquePipeline;
 		std::vector<DrawRecord> mOpaqueDraws;

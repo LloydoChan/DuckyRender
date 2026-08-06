@@ -2,7 +2,7 @@
 
 using namespace DirectX;
 
-const size_t INVALID_HANDLE = (std::numeric_limits<size_t>::max)();
+const int INVALID_HANDLE = -1;
 
 enum class AlphaMode : uint32_t
 {
@@ -22,10 +22,6 @@ struct MaterialConstants
     float mMetallicFactor = 1.0f;
     float mNormalScale = 1.0f;
 
-    unsigned int mHasBaseColorTexture = 0;
-    unsigned int mHasNormalTexture = 0;
-    unsigned int mHasMetallicRoughnessTexture = 0;
-    unsigned int mHasEmissiveTexture = 0;
 
     AlphaMode alphaMode = AlphaMode::Opaque;
     float alphaCutoff = 0.5f;
@@ -39,8 +35,8 @@ struct DuckyMaterial
 {
     MaterialConstants constants{};
 
-    size_t mBaseColorTexture         = INVALID_HANDLE;
-    size_t mNormalTexture            = INVALID_HANDLE;
-    size_t mMetallicRoughnessTexture = INVALID_HANDLE;
-    size_t mEmissive                 = INVALID_HANDLE;
+   int mBaseColorTexture         = INVALID_HANDLE;
+   int mNormalTexture            = INVALID_HANDLE;
+   int mMetallicRoughnessTexture = INVALID_HANDLE;
+   int mEmissive                 = INVALID_HANDLE;
 };

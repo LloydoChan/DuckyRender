@@ -144,14 +144,14 @@ size_t D3DDeviceManager::InitTexture(const wchar_t* Filepath)
 	// Alternative: Inline instantiation and call
 	std::size_t quickHash = std::hash<std::wstring>{}(Filepath);
 
-	if(!mTextures.contains(quickHash))
+	/*if(!mTextures.contains(quickHash))
 	{ 
 		DescriptorHeapResource newResource = CreateTexture(Filepath);
 		if (newResource.buffer == nullptr) return INVALID_HANDLE;
 		mTextures[quickHash] = newResource;
 		return quickHash;
 	}
-	
+	*/
 	return quickHash;
 }
 
@@ -159,24 +159,25 @@ size_t D3DDeviceManager::InitFallbackTexture(const wchar_t* Name, const XMFLOAT4
 {
 	std::size_t quickHash = std::hash<std::wstring>{}(Name);
 
-	if (!mTextures.contains(quickHash))
+	/*if (!mTextures.contains(quickHash))
 	{
 		DescriptorHeapResource newResource = CreateFallbackTexture(Name, InputColor);
 		if (newResource.buffer == nullptr) return INVALID_HANDLE;
 		mTextures[quickHash] = newResource;
 		return quickHash;
-	}
+	}*/
 
 	return quickHash;
 }
 
 DescriptorHeapResource* D3DDeviceManager::GetTexture(size_t HashedInput)
 {
-	auto it = mTextures.find(HashedInput);
+	/*auto it = mTextures.find(HashedInput);
 
 	if (it == mTextures.end()) return nullptr;
 
-	return &it->second;
+	return &it->second;*/
+	return 0;
 }
 
 ComPtr<ID3D12Resource> D3DDeviceManager::CreateBuffer(size_t bufferSize)

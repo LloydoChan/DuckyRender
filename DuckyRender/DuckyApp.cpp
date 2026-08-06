@@ -323,6 +323,133 @@ D3D12_QUERY_DATA_PIPELINE_STATISTICS DuckyApp::WriteOutGPUStats(UINT FrameIndex)
 	return stats;
 }
 
+bool DuckyApp::InitMaterials(std::ifstream& ModelFile)
+{
+	size_t numMaterials = 0;
+	ModelFile.read((char*)&numMaterials, sizeof(size_t));
+	for (int i = 0; i < numMaterials; i++)
+	{
+		DuckyMaterial nextMaterial{};
+		ModelFile.read((char*)&nextMaterial, sizeof(DuckyMaterial));
+		mMaterials.emplace_back(nextMaterial);
+	}
+
+	return true;
+}
+
+bool DuckyApp::InitTextures(std::ifstream& ModelFile)
+{
+	size_t numTextures = 0;
+	ModelFile.read((char*)&numTextures, sizeof(size_t));
+
+	for (size_t i = 0; i < numTextures; i++)
+	{
+		size_t textureNameLength = 0;
+		ModelFile.read((char*)&textureNameLength, sizeof(size_t));
+		std::string fileName(textureNameLength, '\0');
+		ModelFile.read((char*)&fileName[0], textureNameLength);
+
+		if (!ModelFile) return false;
+
+		const std::wstring wideTextureName(fileName.begin(), fileName.end());
+
+		DescriptorHeapResource newResource = mDeviceManager->CreateTexture(wideTextureName.c_str());
+		if (newResource.buffer == nullptr) return false;
+		mTextures.emplace_back(newResource);
+	}
+
+	return true;
+}
+
+bool DuckyApp::InitMeshes(std::ifstream& ModelFile)
+{
+	int numMeshes = 0;
+	ModelFile.read((char*)&numMeshes, sizeof(int));
+
+	for (int i = 0; i < numMeshes; i++)
+	{
+		DuckyMeshData newMesh;
+		int numPrims = 0;
+		ModelFile.read((char*)&numPrims, sizeof(int));
+
+		for (int j = 0; j < numPrims; j++)
+		{
+			int materialIndex = 0;
+			size_t numberVertices = 0;
+			size_t vertexOffset = 0;
+			size_t numberIndices = 0;
+			size_t indexOffset = 0;
+
+			ModelFile.read((char*)&materialIndex, sizeof(int));
+		
+			ModelFile.read((char*)&numberVertices, sizeof(size_t));
+			ModelFile.read((char*)&vertexOffset, sizeof(size_t));
+			ModelFile.read((char*)&numberIndices, sizeof(size_t));
+			ModelFile.read((char*)&indexOffset, sizeof(size_t));
+
+			DuckyPrimitive newPrimitive(numberIndices, numberVertices, indexOffset, vertexOffset, materialIndex);
+			newMesh.AddPrimitive(newPrimitive);
+		}
+
+		mMeshes.emplace_back(newMesh);
+	}
+	return true;
+}
+
+bool DuckyApp::InitVertexAndIndexMegaBuffer(std::ifstream& ModelFile)
+{
+	size_t numVertices = 0;
+	size_t numIndices = 0;
+
+	for (const DuckyMeshData& mesh : mMeshes)
+	{
+		for (const DuckyPrimitive& primitive : mesh.GetPrimitives())
+		{
+			numVertices += primitive.GetNumVertices();
+			numIndices += primitive.GetNumIndices();
+		}
+	}
+
+	size_t vertexBufferSize = numVertices * sizeof(CookedVertex);
+	size_t indexBufferSize = numIndices * sizeof(unsigned int);
+	//now create vertex and index buffers
+	mVertices = mDeviceManager->CreateBuffer(vertexBufferSize);
+	mIndices = mDeviceManager->CreateBuffer(indexBufferSize);
+
+	void* mappedVertices = nullptr;
+	HRESULT result = mVertices->Map(0, nullptr, &mappedVertices);
+
+	if (FAILED(result)) return false;
+
+	ModelFile.read(static_cast<char*>(mappedVertices), static_cast<std::streamsize>(vertexBufferSize));
+
+	mVertices->Unmap(0, nullptr);
+
+	if (!ModelFile) return false;
+
+	void* mappedIndices = nullptr;
+
+	result = mIndices->Map(0, nullptr,&mappedIndices);
+
+	if (FAILED(result)) return false;
+
+	ModelFile.read(static_cast<char*>(mappedIndices), static_cast<std::streamsize>(indexBufferSize));
+
+	mIndices->Unmap(0, nullptr);
+
+	if (!ModelFile) return false;
+
+	mVbView.BufferLocation = mVertices->GetGPUVirtualAddress();
+	mVbView.SizeInBytes = vertexBufferSize;
+	mVbView.StrideInBytes = sizeof(CookedVertex);
+
+	mIbView.BufferLocation = mIndices->GetGPUVirtualAddress();
+	mIbView.SizeInBytes = indexBufferSize;
+	mIbView.Format = DXGI_FORMAT_R32_UINT;
+
+	return true;
+}
+
 LRESULT DuckyApp::StaticWindowProcedure(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 {
 	DuckyApp* app = nullptr;

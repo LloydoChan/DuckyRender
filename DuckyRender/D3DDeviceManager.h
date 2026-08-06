@@ -124,12 +124,10 @@ class D3DDeviceManager
 
 		bool Resize(UINT WindowWidth, UINT WindowHeight);
 
-
-	private:
-		// only want to call this from the DeviceManager itself
 		DescriptorHeapResource CreateTexture(const wchar_t* Filepath);
 		DescriptorHeapResource CreateFallbackTexture(const wchar_t* Name, const XMFLOAT4& Color);
-		std::unordered_map<size_t,DescriptorHeapResource> mTextures;
+
+	private:
 
 		ComPtr<ID3D12Device> mDevice;
 		ComPtr<ID3D12CommandQueue> mCommandQueue;

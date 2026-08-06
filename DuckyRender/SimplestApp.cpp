@@ -76,16 +76,12 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 		mInstances.emplace_back(std::move(instance));
 	}
 
-	size_t numMeshes = 0;
-	DuckyFile.read((char*)&numMeshes, sizeof(size_t));
-	std::streampos p = 0;
-	for (int i = 0; i < numMeshes; i++)
-	{
-		DuckyMeshData nextMesh;
-		if(!nextMesh.Init(mDeviceManager.get(), DuckyFile)) return false;
-		mMeshes.emplace_back(std::move(nextMesh));
-	}
 
+	InitMaterials(DuckyFile);
+	InitTextures(DuckyFile);
+	InitMeshes(DuckyFile);
+	InitVertexAndIndexMegaBuffer(DuckyFile);
+	
 	CreateDrawRecords();
 
 	if (mMeshes.empty()) return false;
@@ -455,34 +451,37 @@ void SimplestApp::UpdateMovementAndRotation(XMVECTOR& ViewVector, MovementStruct
 	}
 }
 
-bool SimplestApp::BindMaterial( ID3D12GraphicsCommandList* commandList, ConstantBufferAllocator* allocator, const DuckyMaterial& material)
+bool SimplestApp::BindMaterial( ID3D12GraphicsCommandList* commandList, ConstantBufferAllocator* allocator, unsigned int material)
 {
 	ConstantBufferAllocation allocation = allocator->AllocateConstantBuffer(sizeof(MaterialConstants));
 
 	if (allocation.mCpuAddress == nullptr) return false;
 
-	std::memcpy(allocation.mCpuAddress, &material.constants, sizeof(MaterialConstants));
+	const DuckyMaterial& materialRef = mMaterials[material];
+
+	std::memcpy(allocation.mCpuAddress, &materialRef.constants, sizeof(MaterialConstants));
 
 	commandList->SetGraphicsRootConstantBufferView(RootParameter::PerMaterial, allocation.mGpuAddress);
 
-	BindTexture( commandList, RootParameter::BaseColorTexture, material.mBaseColorTexture, mBaseColorFallbackHandle);
-	BindTexture(commandList, RootParameter::NormalTexture, material.mNormalTexture, mNormalColorFallbackHandle);
-	BindTexture(commandList, RootParameter::MetallicRoughnessTexture, material.mMetallicRoughnessTexture, mBaseColorFallbackHandle);
-	BindTexture(commandList, RootParameter::EmissiveTexture, material.mEmissive, mBaseColorFallbackHandle);
+	BindTexture( commandList, RootParameter::BaseColorTexture, materialRef.mBaseColorTexture, mBaseColorFallbackHandle);
+	BindTexture(commandList, RootParameter::NormalTexture, materialRef.mNormalTexture, mNormalColorFallbackHandle);
+	BindTexture(commandList, RootParameter::MetallicRoughnessTexture, materialRef.mMetallicRoughnessTexture, mBaseColorFallbackHandle);
+	BindTexture(commandList, RootParameter::EmissiveTexture, materialRef.mEmissive, mBaseColorFallbackHandle);
 
 	return true;
 }
 
 void SimplestApp::BindTexture(ID3D12GraphicsCommandList* commandList, UINT rootParameter, size_t textureHandle, size_t fallBackHandle)
 {
-	DescriptorHeapResource* texture = mDeviceManager->GetTexture(textureHandle);
+	DescriptorHeapResource* texture = nullptr;
+	if (textureHandle != -1) texture = &mTextures[textureHandle];
 	if (texture == nullptr) texture = mDeviceManager->GetTexture(fallBackHandle); // if texture not found find fallback
 	if (texture == nullptr) return; // if still not found...
 
 	commandList->SetGraphicsRootDescriptorTable(rootParameter,texture->descHandle);
 }
 
-bool SimplestApp::BindInstanceConstants( ID3D12GraphicsCommandList* commandList, ConstantBufferAllocator* allocator, const DuckyMeshInstance& instance)
+bool SimplestApp::BindInstanceConstants( ID3D12GraphicsCommandList* commandList, ConstantBufferAllocator* allocator, unsigned int instance)
 {
 	ConstantBufferAllocation allocation = allocator->AllocateConstantBuffer( sizeof(PerInstanceConstants));
 
@@ -490,10 +489,10 @@ bool SimplestApp::BindInstanceConstants( ID3D12GraphicsCommandList* commandList,
 
 	auto* constants = static_cast<PerInstanceConstants*>(allocation.mCpuAddress);
 
-	XMMATRIX normalMatrix = XMMatrixInverse(nullptr, instance.mTransform);
+	XMMATRIX normalMatrix = XMMatrixInverse(nullptr, mInstances[instance].mTransform);
 
 	XMStoreFloat4x4(&constants->normal,normalMatrix);
-	XMStoreFloat4x4(&constants->world, XMMatrixTranspose(instance.mTransform));
+	XMStoreFloat4x4(&constants->world, XMMatrixTranspose(mInstances[instance].mTransform));
 	commandList->SetGraphicsRootConstantBufferView(RootParameter::PerInstance, allocation.mGpuAddress);
 
 	return true;
@@ -524,9 +523,9 @@ void SimplestApp::AppMainLoop()
 	float lengthZ = max.z - min.z;
 
 	float xDiff = 0.f, zDiff = 0.f;
-	float viewLength = 0.f;
+	float viewLength = 5.f; //0.f;
 
-	if (lengthX < lengthZ)
+	/*if (lengthX < lengthZ)
 	{
 		xDiff = lengthX;
 		viewLength = xDiff * 0.5f;
@@ -535,7 +534,7 @@ void SimplestApp::AppMainLoop()
 	{
 		zDiff = lengthZ;
 		viewLength = zDiff * 0.5f;
-	}
+	}*/
 
 	MOVEMENT_SPEED = viewLength;
 
@@ -545,8 +544,8 @@ void SimplestApp::AppMainLoop()
 
 
 
-	XMVECTOR at = XMVectorSet(sceneMidPoint[0], sceneMidPoint[1], sceneMidPoint[2], 1.f);
-	XMVECTOR eye = XMVectorSet(sceneMidPoint[0] + xDiff, sceneMidPoint[1] + viewLength, sceneMidPoint[2] + zDiff, 1.f);
+	XMVECTOR at = XMVectorSet(0.f, 0.f, 0.0f, 1.f);//XMVectorSet(sceneMidPoint[0], sceneMidPoint[1], sceneMidPoint[2], 1.f);
+	XMVECTOR eye = XMVectorSet(5.f, viewLength, 5.f, 1.f);
 	const XMVECTOR up = XMVectorSet(0.f, 1.f, 0.f, 0.f);
 
 	auto previousTime = Clock::now();
@@ -691,6 +690,8 @@ void SimplestApp::AppMainLoop()
 		list->SetGraphicsRootConstantBufferView(0, constantAllocation.mGpuAddress);
 
 		list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+		list->IASetVertexBuffers(0, 1, &mVbView);
+		list->IASetIndexBuffer(&mIbView);
 
 		PIXBeginEvent(list, PIX_COLOR(0, 255, 0), "DRAW");
 		PIXScopedEvent(PIX_COLOR(0, 255, 255), "DRAW");
@@ -800,17 +801,19 @@ void SimplestApp::WorkOutGlobalBoundingBoxCenter()
 
 void SimplestApp::CreateDrawRecords()
 {
-	for (const auto& instance : mInstances)
+	for (int instance = 0; instance < mInstances.size(); instance++)
 	{
-		const DuckyMeshInstance* instancePtr = &instance;
+		const DuckyMeshInstance* instancePtr = &mInstances[instance];
 		const DuckyMeshData&	 meshData = mMeshes[instancePtr->mMeshDataIndex];
 		
-		for (const auto& primitive : meshData.GetPrimitives())
-		{
-			const DuckyPrimitive* primPtr = &primitive;
-			const DuckyMaterial*  matPtr =   &meshData.GetMaterial(primPtr->GetMaterialIndex());
+		const std::vector<DuckyPrimitive>& primitives = meshData.GetPrimitives();
 
-			DrawRecord newRecord{ instancePtr, primPtr, matPtr };
+		for (int primitive = 0; primitive < primitives.size(); primitive++)
+		{
+			const DuckyPrimitive* primPtr = &primitives[primitive];
+			const DuckyMaterial*  matPtr =  &mMaterials[primPtr->GetMaterialIndex()];
+
+			DrawRecord newRecord{ instance, instancePtr->mMeshDataIndex, primitive, primPtr->GetMaterialIndex() };
 
 			AlphaMode mode = matPtr->constants.alphaMode;
 
@@ -851,10 +854,10 @@ void SimplestApp::DrawRecords(const std::vector<DrawRecord>& Draws, ConstantBuff
 {
 	for (const DrawRecord& draw : Draws)
 	{
-		BindInstanceConstants(List, Allocator, *draw.mInstanceIndex);
-		BindMaterial(List, Allocator, *draw.mMaterialIndex);
-		draw.mPrimitiveIndex->BindGeometry(List);
-		draw.mPrimitiveIndex->Draw(List);
+		BindInstanceConstants(List, Allocator, draw.mInstanceIndex);
+		BindMaterial(List, Allocator, draw.mMaterialIndex);
+		const DuckyPrimitive& prim = mMeshes[draw.mMeshIndex].GetPrimitive(draw.mPrimitiveIndex);
+		prim.Draw(List);
 	}
 }
 
@@ -886,7 +889,7 @@ bool SimplestApp::Resize(UINT WindowWidth, UINT WindowHeight)
 
 void SimplestApp::SortDrawRecords(const XMMATRIX& WorldView, std::vector<DrawRecord>& recordsToSort, bool bAlphaPass)
 {
-	PIXScopedEvent(PIX_COLOR(255, 0, 0), "SortDrawRecords");
+	/*PIXScopedEvent(PIX_COLOR(255, 0, 0), "SortDrawRecords");
 	struct SortRecord
 	{
 		DrawRecord record;
@@ -927,5 +930,5 @@ void SimplestApp::SortDrawRecords(const XMMATRIX& WorldView, std::vector<DrawRec
 	for (const auto& sortedRecord : sortedRecords)
 	{
 		recordsToSort.emplace_back(sortedRecord.record);
-	}
+	}*/
 }
