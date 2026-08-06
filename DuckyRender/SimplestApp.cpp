@@ -79,6 +79,19 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 
 	InitMaterials(DuckyFile);
 	InitTextures(DuckyFile);
+
+	// init fallback textures
+	DescriptorHeapResource newResource = mDeviceManager->CreateFallbackTexture(L"BaseColorFallbackTexture", BaseColorFallback);
+	if (newResource.buffer == nullptr) return false;
+	mTextures.emplace_back(newResource);
+	mBaseColorFallbackHandle = mTextures.size() - 1;
+
+	newResource = mDeviceManager->CreateFallbackTexture(L"NormalFallbackTexture", NormalFallback);
+	if (newResource.buffer == nullptr) return false;
+	mTextures.emplace_back(newResource);
+	mNormalColorFallbackHandle = mTextures.size() - 1;
+
+
 	InitMeshes(DuckyFile);
 	InitVertexAndIndexMegaBuffer(DuckyFile);
 	
@@ -101,10 +114,6 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 	const UINT64 neededCapacity = AlignConstantBufferSize(sizeof(PerFrameConstants)) +
 								  numInstances * AlignConstantBufferSize(sizeof(PerInstanceConstants)) +
 								  totalPrimitiveDraws * AlignConstantBufferSize(sizeof(MaterialConstants));
-
-	// init fallback textures
-	mBaseColorFallbackHandle = mDeviceManager->InitFallbackTexture(L"BaseColorFallback", BaseColorFallback);
-	mNormalColorFallbackHandle = mDeviceManager->InitFallbackTexture(L"NormalFallback", NormalFallback);
 
 	mDuckyContext = new DuckyGraphicsContext;
 	if(!mDuckyContext->Init(mDeviceManager.get(), neededCapacity, &mLogFile)) return false;
@@ -471,11 +480,18 @@ bool SimplestApp::BindMaterial( ID3D12GraphicsCommandList* commandList, Constant
 	return true;
 }
 
-void SimplestApp::BindTexture(ID3D12GraphicsCommandList* commandList, UINT rootParameter, size_t textureHandle, size_t fallBackHandle)
+void SimplestApp::BindTexture(ID3D12GraphicsCommandList* commandList, UINT rootParameter, int textureHandle, unsigned int fallBackHandle)
 {
 	DescriptorHeapResource* texture = nullptr;
-	if (textureHandle != -1) texture = &mTextures[textureHandle];
-	if (texture == nullptr) texture = mDeviceManager->GetTexture(fallBackHandle); // if texture not found find fallback
+	if (textureHandle == -1)
+	{
+		texture = &mTextures[fallBackHandle];
+	}
+	else
+	{
+		texture = &mTextures[textureHandle];
+	}
+	
 	if (texture == nullptr) return; // if still not found...
 
 	commandList->SetGraphicsRootDescriptorTable(rootParameter,texture->descHandle);

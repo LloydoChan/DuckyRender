@@ -62,7 +62,7 @@ class SimplestApp : public DuckyApp
 		virtual void HandleInput(UINT msg, WPARAM wParam, LPARAM lParam);
 		void UpdateMovementAndRotation(XMVECTOR& ViewVector, MovementStruct& movement, float DeltaTime);
 		bool BindMaterial(ID3D12GraphicsCommandList* commandList, ConstantBufferAllocator* allocator, unsigned int material);
-		void BindTexture(ID3D12GraphicsCommandList* commandList, UINT rootParameter, size_t textureHandle, size_t fallBackHandle);
+		void BindTexture(ID3D12GraphicsCommandList* commandList, UINT rootParameter, int textureHandle, unsigned int fallBackHandle);
 		bool BindInstanceConstants(ID3D12GraphicsCommandList* commandList, ConstantBufferAllocator* allocator, unsigned int instance);
 		virtual void AppMainLoop();
 

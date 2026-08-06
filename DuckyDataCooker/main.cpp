@@ -278,15 +278,15 @@ void WriteOutNodeData(const tinygltf::Node& Node, const tinygltf::Model& Model, 
 	}
 }
 
-void WriteOutTextureData(int index, 
-						 const tinygltf::Model& Model, 
-						 stringstream& MaterialData, 
+void WriteOutTextureData(int index,
+						 const tinygltf::Model& Model,
+						 std::vector<std::string>& orderedNames,
 						 TextureType Type, 
 						 const std::filesystem::path& InputPath, 
 						 const std::filesystem::path& OutputPath)
 {
 	static std::unordered_map<std::string, std::string> assignedNames;
-
+	
 	if (index != -1)
 	{
 		const tinygltf::Texture tex = Model.textures[index];
@@ -308,22 +308,12 @@ void WriteOutTextureData(int index,
 			string expectedDDSPathStr = expectedDdsPath.string();
 			size_t expectedDDSPathLength = expectedDDSPathStr.length();
 
-			MaterialData.write((char*)&expectedDDSPathLength, sizeof(size_t));
-			MaterialData.write((char*)&expectedDDSPathStr[0], expectedDDSPathLength);
-
+			orderedNames[index] = expectedDDSPathStr;
 			const std::filesystem::path expectedInputPath = InputPath / textureName;
 
 			ConvertToDds(Type, "texConv.exe", expectedInputPath.string(), outputDirStr, prefixString);
 
 			assignedNames[textureName] = expectedDDSPathStr;
-		}
-		else
-		{
-			string associatedName = itr->second;
-			size_t length = associatedName.length();
-
-			MaterialData.write((char*)&length, sizeof(size_t));
-			MaterialData.write((char*)&associatedName[0], length);
 		}
 	}
 }
@@ -367,46 +357,36 @@ void ProcessMaterials(const tinygltf::Model& Model,
 }
 
 void ProcessTextures(const tinygltf::Model& Model,
-					 stringstream& MaterialDataStream,
+					 std::vector<std::string>& orderedNames,
 					 const std::filesystem::path& TextureInputAssetPath,
 					 const std::filesystem::path& TextureOutputAssetPath)
 {
-	stringstream tempTextureStream;
-	size_t numTextures = 0;
 	for (const tinygltf::Material& material : Model.materials)
 	{
 		unsigned int textureIndex = material.pbrMetallicRoughness.baseColorTexture.index;
 		if (textureIndex != -1)
 		{
-			WriteOutTextureData(textureIndex, Model, tempTextureStream, TextureType::BASE_COLOR, TextureInputAssetPath, TextureOutputAssetPath);
-			numTextures++;
+			WriteOutTextureData(textureIndex, Model, orderedNames, TextureType::BASE_COLOR, TextureInputAssetPath, TextureOutputAssetPath);
 		}
 
 		textureIndex = material.pbrMetallicRoughness.metallicRoughnessTexture.index;
 		if (textureIndex != -1)
 		{
-			WriteOutTextureData(textureIndex, Model, tempTextureStream, TextureType::METALLIC_ROUGHNESS, TextureInputAssetPath, TextureOutputAssetPath);
-			numTextures++;
+			WriteOutTextureData(textureIndex, Model, orderedNames, TextureType::METALLIC_ROUGHNESS, TextureInputAssetPath, TextureOutputAssetPath);
 		}
 
 		textureIndex = material.normalTexture.index;
 		if (textureIndex != -1)
 		{
-			WriteOutTextureData(textureIndex, Model, tempTextureStream, TextureType::NORMAL, TextureInputAssetPath, TextureOutputAssetPath);
-			numTextures++;
+			WriteOutTextureData(textureIndex, Model, orderedNames, TextureType::NORMAL, TextureInputAssetPath, TextureOutputAssetPath);
 		}
 
 		textureIndex = material.emissiveTexture.index;
 		if (textureIndex != -1)
 		{
-			WriteOutTextureData(textureIndex, Model, tempTextureStream, TextureType::EMISSIVE, TextureInputAssetPath, TextureOutputAssetPath);
-			numTextures++;
+			WriteOutTextureData(textureIndex, Model, orderedNames, TextureType::EMISSIVE, TextureInputAssetPath, TextureOutputAssetPath);
 		}
-		
 	}
-
-	MaterialDataStream.write((const char*)&numTextures, sizeof(size_t));
-	MaterialDataStream << tempTextureStream.rdbuf();
 }
 
 void FindAllIndexData(const tinygltf::Model& Model, stringstream& MeshDataStream, vector<vector<size_t>>& IndexOffsets)
@@ -438,10 +418,23 @@ void FindAllIndexData(const tinygltf::Model& Model, stringstream& MeshDataStream
 				else if (accessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT)   stride = 4;
 
 				const unsigned char* start = &buffer.data[accessor.byteOffset + bufferView.byteOffset];
-				const unsigned char* end = start + accessor.count * stride;
+				
+				for (unsigned int elem = 0; elem < accessor.count; elem++)
+				{
+					if (stride == 2)
+					{
+						unsigned short idx = (unsigned short)(*start);
+						MeshDataStream.write((char*)start, sizeof(unsigned short));
+					}
+					else
+					{
+						unsigned int idx = (unsigned int)(*start);
+						MeshDataStream.write((char*)start, sizeof(unsigned int));
+					}
 
-				size_t size = end - start;
-				MeshDataStream.write((char*)start, size);
+					start += stride;
+				}
+
 				globalIndexOffset += accessor.count;
 			}
 			else
@@ -481,7 +474,7 @@ void FindMeshData(const tinygltf::Model& Model,
 
 	int numMeshes = vertexOffsets.size();
 	OffsetsStream.write((const char*)&numMeshes, sizeof(int));
-	
+	int primOffset = 0;
 	for (int i = 0; i < numMeshes; i++)
 	{
 		int primsSize = vertexOffsets[i].size() -1;
@@ -489,7 +482,7 @@ void FindMeshData(const tinygltf::Model& Model,
 
 		for (int j = 0; j < primsSize; j++)
 		{
-			OffsetsStream.write((const char*)&primMaterials[i], sizeof(int));
+			OffsetsStream.write((const char*)&primMaterials[primOffset++], sizeof(int));
 
 			// vertex number and offset
 			size_t Offset = vertexOffsets[i][j];
@@ -561,7 +554,20 @@ int main(int argc, char** argv)
 	// Textures and Materials
 	string textureOutputPath = outputDirectory.string();
 	ProcessMaterials(model, materialsData);
-	ProcessTextures(model, materialsData, inputDirectory, textureOutputPath);
+
+	std::vector<std::string> orderedNames(model.textures.size());
+
+	ProcessTextures(model, orderedNames, inputDirectory, textureOutputPath);
+
+	size_t numTextures = model.textures.size();
+	materialsData.write((const char*)&numTextures, sizeof(size_t));
+	for (const std::string& str : orderedNames)
+	{
+		size_t strLength = str.length();
+		materialsData.write((const char*)&strLength, sizeof(size_t));
+		materialsData.write((const char*)&str[0], strLength);
+	}
+
 	FindMeshData(model, bufferData, offsetData);
 
 	outputFile << instanceTransformData.rdbuf() << materialsData.rdbuf() << offsetData.rdbuf() << bufferData.rdbuf();

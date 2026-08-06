@@ -57,7 +57,7 @@ protected:
 
 	bool mMinimized = false;
 
-	size_t mBaseColorFallbackHandle = 0;
+	int mBaseColorFallbackHandle = 0;
 	size_t mNormalColorFallbackHandle = 0;
 
 	std::wstring mInputFilePath;

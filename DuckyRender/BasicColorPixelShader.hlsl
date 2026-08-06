@@ -36,17 +36,17 @@ cbuffer InstanceMaterial : register(b2)
     float MetallicFactor;
     float NormalScale;
     
-    uint  HasBaseColorTexture;
-    uint  HasNormalTexture;
-    uint  HasMetallicRoughnessTexture;
-    uint  HasEmissiveTexture;
-    
     uint  alphaMode;
     float alphaCutoff;
     uint  doubleSided;
     
     uint padding1;
     uint padding2;
+    
+    uint  HasBaseColorTexture;
+    uint  HasNormalTexture;
+    uint  HasMetallicRoughnessTexture;
+    uint  HasEmissiveTexture;
 };
 
 Texture2D<float4> tex : register(t0);
