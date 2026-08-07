@@ -133,12 +133,12 @@ float4 main(Input input,
             uint primitiveID : SV_PrimitiveID,
             bool isFrontFace : SV_IsFrontFace) : SV_TARGET
 {
-    //float4 baseColorSample = BaseColorFactor * float4(input.col.rgb, 1.f);
+    float4 baseColorSample = BaseColorFactor * float4(input.col.rgb, 1.f);
     
-    //if (HasBaseColorTexture == 1)
+   // if (HasBaseColorTexture == 1)
     //{
-       float4 baseColorSample = tex.Sample(smp, input.uv);
-    //}
+       baseColorSample *= tex.Sample(smp, input.uv);
+   // }
     
     if (alphaMode == ALPHA_MASK) clip(baseColorSample.a - alphaCutoff);
    
