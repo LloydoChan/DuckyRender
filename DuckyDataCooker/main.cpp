@@ -144,7 +144,11 @@ void MemCpyOverToCookedVertex(BufferStartAndStride& StartAndStride, void* Elem, 
 	StartAndStride.start += StartAndStride.stride;
 }
 
-void FindAllVertexData(const tinygltf::Model& Model, vector<vector<size_t>>& Offsets, vector<int>& PrimitiveMaterials, stringstream& VertexDataStream)
+void FindAllVertexData(const tinygltf::Model& Model, 
+						vector<vector<size_t>>& Offsets, 
+						vector<int>& PrimitiveMaterials, 
+						stringstream& VertexDataStream,
+						stringstream& BoundingBoxStream)
 {
 	size_t currentVertOffset = 0;
 
@@ -189,6 +193,21 @@ void FindAllVertexData(const tinygltf::Model& Model, vector<vector<size_t>>& Off
 
 			std::cout << "found vertex data " << Count << " vertices " << std::endl;
 
+			// get min / max bounding box points for primitive
+			AABB localBoundingBox;
+			localBoundingBox.mMin.x = static_cast<float>(posBuffer.outAccessor->minValues[0]);
+			localBoundingBox.mMin.y = static_cast<float>(posBuffer.outAccessor->minValues[1]);
+			localBoundingBox.mMin.z = static_cast<float>(posBuffer.outAccessor->minValues[2]);
+			localBoundingBox.mMin.w = 1.f;
+
+			localBoundingBox.mMax.x = static_cast<float>(posBuffer.outAccessor->maxValues[0]);
+			localBoundingBox.mMax.y = static_cast<float>(posBuffer.outAccessor->maxValues[1]);
+			localBoundingBox.mMax.z = static_cast<float>(posBuffer.outAccessor->maxValues[2]);
+			localBoundingBox.mMax.w = 1.f;
+
+			// write out localBoundingBox
+			BoundingBoxStream.write(reinterpret_cast<const char*>(&localBoundingBox), sizeof(AABB));
+
 			for (int elem = 0; elem < Count; elem++)
 			{
 				CookedVertex cookedVertex{};
@@ -208,26 +227,7 @@ void FindAllVertexData(const tinygltf::Model& Model, vector<vector<size_t>>& Off
 	}
 	PrimitiveMaterials.push_back(-1);
 
-	//TODO this is temp
-	//DataToFlushOut.write((const char*)&CookedVertexSize, sizeof(unsigned int));
-	//DataToFlushOut.write((const char*)&BufferInfoSize, sizeof(size_t));
 
-	
-
-	//// get min / max bounding box points for primitive
-	//AABB localBoundingBox;
-	//localBoundingBox.mMin.x = static_cast<float>(posBuffer.outAccessor->minValues[0]);
-	//localBoundingBox.mMin.y = static_cast<float>(posBuffer.outAccessor->minValues[1]);
-	//localBoundingBox.mMin.z = static_cast<float>(posBuffer.outAccessor->minValues[2]);
-	//localBoundingBox.mMin.w = 1.f;
-
-	//localBoundingBox.mMax.x = static_cast<float>(posBuffer.outAccessor->maxValues[0]);
-	//localBoundingBox.mMax.y = static_cast<float>(posBuffer.outAccessor->maxValues[1]);
-	//localBoundingBox.mMax.z = static_cast<float>(posBuffer.outAccessor->maxValues[2]);
-	//localBoundingBox.mMax.w = 1.f;
-	//
-	//// write out localBoundingBox
-	//DataToFlushOut.write(reinterpret_cast<const char*>(&localBoundingBox), sizeof(AABB));
 }
 
 void CountMeshNodes(const tinygltf::Node& Node, const tinygltf::Model& Model, size_t& numMeshNodes)
@@ -462,14 +462,15 @@ void FindAllIndexData(const tinygltf::Model& Model, stringstream& MeshDataStream
 
 void FindMeshData(const tinygltf::Model& Model, 
 				  stringstream& MeshDataStream,
-				  stringstream& OffsetsStream)
+				  stringstream& OffsetsStream,
+				  stringstream& BoundingBoxStream)
 {
 	//write out a mega buffer of mesh data!
 	vector<vector<size_t>> vertexOffsets;
 	vector<vector<size_t>> indexOffsets;
 	vector<int> primMaterials;
 
-	FindAllVertexData(Model, vertexOffsets, primMaterials,MeshDataStream);
+	FindAllVertexData(Model, vertexOffsets, primMaterials, MeshDataStream, BoundingBoxStream);
 	FindAllIndexData(Model, MeshDataStream, indexOffsets);
 
 	int numMeshes = vertexOffsets.size();
@@ -497,6 +498,10 @@ void FindMeshData(const tinygltf::Model& Model,
 
 			OffsetsStream.write((const char*)&Num, sizeof(size_t));
 			OffsetsStream.write((const char*)&Offset, sizeof(size_t));
+
+			AABB nextBB;
+			BoundingBoxStream.read((char*)&nextBB, sizeof(AABB));
+			OffsetsStream.write((const char*)&nextBB, sizeof(AABB));
 		}
 	}
 }
@@ -539,6 +544,7 @@ int main(int argc, char** argv)
 	stringstream materialsData;
 	stringstream offsetData;
 	stringstream bufferData;
+	stringstream boundingBoxData;
 
 	const tinygltf::Scene& scene = model.scenes[model.defaultScene];
 	const tinygltf::Node& rootNode = model.nodes[scene.nodes[0]];
@@ -568,7 +574,7 @@ int main(int argc, char** argv)
 		materialsData.write((const char*)&str[0], strLength);
 	}
 
-	FindMeshData(model, bufferData, offsetData);
+	FindMeshData(model, bufferData, offsetData, boundingBoxData);
 
 	outputFile << instanceTransformData.rdbuf() << materialsData.rdbuf() << offsetData.rdbuf() << bufferData.rdbuf();
 	outputFile.close();

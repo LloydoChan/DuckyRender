@@ -18,10 +18,10 @@ namespace MaterialVisualization
 
 struct DrawRecord
 {
-	const unsigned int mInstanceIndex;
-	const unsigned int mMeshIndex;
-	const unsigned int mPrimitiveIndex;
-	const unsigned int mMaterialIndex;
+	unsigned int mInstanceIndex;
+	unsigned int mMeshIndex;
+	unsigned int mPrimitiveIndex;
+	unsigned int mMaterialIndex;
 };
 
 struct MovementStruct

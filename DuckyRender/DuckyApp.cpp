@@ -387,12 +387,19 @@ bool DuckyApp::InitMeshes(std::ifstream& ModelFile)
 			ModelFile.read((char*)&numberIndices, sizeof(size_t));
 			ModelFile.read((char*)&indexOffset, sizeof(size_t));
 
-			DuckyPrimitive newPrimitive(numberIndices, numberVertices, indexOffset, vertexOffset, materialIndex);
+			XMFLOAT4 min, max;
+			ModelFile.read((char*)&min, sizeof(XMFLOAT4));
+			ModelFile.read((char*)&max, sizeof(XMFLOAT4));
+
+			AABB newBB(min, max);
+
+			DuckyPrimitive newPrimitive(numberIndices, numberVertices, indexOffset, vertexOffset, materialIndex, newBB);
 			newMesh.AddPrimitive(newPrimitive);
 		}
 
 		mMeshes.emplace_back(newMesh);
 	}
+
 	return true;
 }
 

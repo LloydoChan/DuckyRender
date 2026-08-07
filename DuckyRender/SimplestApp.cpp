@@ -531,12 +531,12 @@ void SimplestApp::AppMainLoop()
 	XMFLOAT4 min;
 	XMFLOAT4 max;
 
-	XMStoreFloat4(&min, mGlobalAABB.GetMin());
-	XMStoreFloat4(&max, mGlobalAABB.GetMax());
+	//XMStoreFloat4(&min, mGlobalAABB.GetMin());
+	//XMStoreFloat4(&max, mGlobalAABB.GetMax());
 
-	float lengthX = max.x - min.x;
-	float lengthY = max.y - min.y;
-	float lengthZ = max.z - min.z;
+	float lengthX = 0.f;//max.x - min.x;
+	float lengthY = 0.f;//max.y - min.y;
+	float lengthZ = 0.f;//max.z - min.z;
 
 	float xDiff = 0.f, zDiff = 0.f;
 	float viewLength = 5.f; //0.f;
@@ -554,9 +554,9 @@ void SimplestApp::AppMainLoop()
 
 	MOVEMENT_SPEED = viewLength;
 
-	float sceneMidPoint[3] = { min.x + lengthX * 0.5f,
+	/*float sceneMidPoint[3] = { min.x + lengthX * 0.5f,
 							   min.y + lengthY * 0.5f,
-							   min.z + lengthZ * 0.5f };
+							   min.z + lengthZ * 0.5f };*/
 
 
 
@@ -792,21 +792,28 @@ void SimplestApp::WorkOutGlobalBoundingBoxCenter()
 				{
 					for (int z = 0; z < 2; ++z)
 					{
-						const XMVECTOR& min = box.GetMin();
-						const XMVECTOR& max = box.GetMax();
+						const XMFLOAT4& min = box.GetMin();
+						const XMFLOAT4& max = box.GetMax();
 
 						const XMVECTOR localCorner = XMVectorSet(
-							x ? XMVectorGetX(max) : XMVectorGetX(min),
-							y ? XMVectorGetY(max) : XMVectorGetY(min),
-							z ? XMVectorGetZ(max) : XMVectorGetZ(min),
+							x ? max.x : min.x,
+							y ? max.y : min.y,
+							z ? max.z : min.z,
 							1.0f);
 
 						const XMVECTOR worldCorner = XMVector3TransformCoord( localCorner, instance.mTransform);
 
-						XMVECTOR globalMin = XMVectorMin(mGlobalAABB.GetMin(), worldCorner);
-						XMVECTOR globalMax = XMVectorMax(mGlobalAABB.GetMax(), worldCorner);
+						XMFLOAT4 transformedCorner;
+						XMStoreFloat4(&transformedCorner, worldCorner);
+						XMFLOAT4 globalMin = mGlobalAABB.GetMin();
+						XMFLOAT4 globalMax = mGlobalAABB.GetMax();
 
-						mGlobalAABB.SetNewMinMax(globalMin, globalMax);
+
+						XMFLOAT4 newMin { min(globalMin.x, transformedCorner.x) , min(globalMin.y, transformedCorner.y), min(globalMin.z, transformedCorner.z), 1.f};
+						XMFLOAT4 newMax{ min(globalMax.x, transformedCorner.x) , min(globalMax.y, transformedCorner.y), min(globalMax.z, transformedCorner.z), 1.f };
+
+
+						mGlobalAABB.SetNewMinMax(newMin, newMax);
 					}
 				}
 			}
@@ -905,7 +912,8 @@ bool SimplestApp::Resize(UINT WindowWidth, UINT WindowHeight)
 
 void SimplestApp::SortDrawRecords(const XMMATRIX& WorldView, std::vector<DrawRecord>& recordsToSort, bool bAlphaPass)
 {
-	/*PIXScopedEvent(PIX_COLOR(255, 0, 0), "SortDrawRecords");
+	PIXScopedEvent(PIX_COLOR(255, 0, 0), "SortDrawRecords");
+
 	struct SortRecord
 	{
 		DrawRecord record;
@@ -916,17 +924,19 @@ void SimplestApp::SortDrawRecords(const XMMATRIX& WorldView, std::vector<DrawRec
 	sortedRecords.reserve(recordsToSort.size());
 	for (const DrawRecord& record : recordsToSort)
 	{
-		XMMATRIX transform = record.mInstanceIndex->mTransform * WorldView;
+		DuckyMeshInstance& inst = mInstances[record.mInstanceIndex];
+		XMMATRIX transform = inst.mTransform * WorldView;
 
-		const AABB& boundingBox = record.mPrimitiveIndex->GetBoundingBox();
-		XMVECTOR const * points = boundingBox.GetPointsAddress();
+		DuckyMeshData& meshData = mMeshes[record.mMeshIndex];
+		const AABB& boundingBox = meshData.GetPrimitives()[record.mPrimitiveIndex].GetBoundingBox();
+		XMFLOAT4 const * points = boundingBox.GetPointsAddress();
 
 		SortRecord newRecord;
 		newRecord.record = record;
 
 		for (int i = 0; i < 8; i++)
 		{
-			XMVECTOR vec = points[i];
+			XMVECTOR vec = XMLoadFloat4(&points[i]);
 			XMVECTOR resultPoint = XMVector4Transform(vec, transform);
 			float resultZ = XMVectorGetZ(resultPoint);
 			if (resultZ < newRecord.minZ)
@@ -946,5 +956,5 @@ void SimplestApp::SortDrawRecords(const XMMATRIX& WorldView, std::vector<DrawRec
 	for (const auto& sortedRecord : sortedRecords)
 	{
 		recordsToSort.emplace_back(sortedRecord.record);
-	}*/
+	}
 }

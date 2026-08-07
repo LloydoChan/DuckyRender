@@ -1,5 +1,5 @@
 #pragma once
-
+#include "pch.h"
 #include "DuckyMaterial.h"
 
 using Microsoft::WRL::ComPtr;
@@ -21,42 +21,53 @@ struct CookedVertex
 	XMFLOAT4 color0{ 1.f,1.f,1.f,1.f };
 };
 
+const float stdMax = (std::numeric_limits<float>::max)();
+const float stdMin = std::numeric_limits<float>::lowest();
+
+
 class AABB
 {
 	public:
 		AABB();
-		AABB(const XMVECTOR& Min, const XMVECTOR& Max);
+		AABB(const XMFLOAT4& Min, const XMFLOAT4& Max) : mVertices { Min, Max } { RegenerateBox(); }
 
-		const XMVECTOR& GetMin() const { return mVertices[AABB_MIN]; }
-		const XMVECTOR& GetMax() const { return mVertices[AABB_MAX]; }
+		const XMFLOAT4& GetMin() const { return mVertices[AABB_MIN]; }
+		const XMFLOAT4& GetMax() const { return mVertices[AABB_MAX]; }
 
-		void SetNewMinMax(const XMVECTOR& newMin, const XMVECTOR& newMax) {
+		void SetNewMinMax(const XMFLOAT4& newMin, const XMFLOAT4& newMax) {
 			mVertices[AABB_MIN] = newMin;
 			mVertices[AABB_MAX] = newMax;
-			RegenerateBox(newMin, newMax);
+			RegenerateBox();
 		}
 
-		XMVECTOR const * GetPointsAddress() const { return &mVertices[0]; }
+		XMFLOAT4 const * GetPointsAddress() const { return &mVertices[0]; }
 
 	private:
-		void RegenerateBox(const XMVECTOR& newMin, const XMVECTOR& newMax);
-		XMVECTOR mVertices[8] {};
+		void RegenerateBox();
+		XMFLOAT4 mVertices[8];
 };
 
 
 class DuckyPrimitive
 {
 	public:
-		DuckyPrimitive(size_t NumIndices, size_t NumVertices, size_t IndexOffset, size_t VertexOffset, unsigned int MaterialIndex) : mNumIndices(NumIndices),
-																																	 mNumVertices(NumVertices),
-																																     mVertexOffset(VertexOffset),
-																																     mIndexOffset(IndexOffset),
-																																     mMaterialIndex(MaterialIndex){};
+		DuckyPrimitive(size_t NumIndices, 
+			size_t NumVertices, 
+			size_t IndexOffset, 
+			size_t VertexOffset, 
+			unsigned int MaterialIndex, 
+			AABB& BoundingBox) : mNumIndices(NumIndices),
+								 mNumVertices(NumVertices),
+								 mVertexOffset(VertexOffset),
+								 mIndexOffset(IndexOffset),
+								 mMaterialIndex(MaterialIndex),
+								 mPrimitiveAABB(BoundingBox) {};
 	
 		void Draw(ID3D12GraphicsCommandList* commandList) const;
 
 		uint32_t GetMaterialIndex() const { return mMaterialIndex; }
 		const AABB& GetBoundingBox() const { return mPrimitiveAABB; }
+		void SetBoundingBox(const AABB& NewBB) { mPrimitiveAABB = NewBB; }
 
 		size_t GetNumVertices() const { return mNumVertices; }
 		size_t GetNumIndices() const { return mNumIndices; }
