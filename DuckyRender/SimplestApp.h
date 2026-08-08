@@ -86,7 +86,10 @@ class SimplestApp : public DuckyApp
 
 		std::vector<TransformedDrawRecord> TransformAABBsToOBBs(std::vector<DrawRecord>& recordsToSort);
 		std::vector<SortRecord> SortDrawRecords(const XMMATRIX& View, const std::vector<TransformedDrawRecord>& RecordsToSort, bool bAlphaPass = false);
-		void CopyOBBsToGPU(const std::vector<TransformedDrawRecord>& TransformedAABBs, unsigned int CurrentFrame);
+		void CopyOBBsToGPU(const std::vector<TransformedDrawRecord>& TransformedOBBs, unsigned int CurrentFrame);
+
+		std::vector<TransformedDrawRecord> FrustumCullUsingOBBs(const std::vector<TransformedDrawRecord>& TransformedOBBs, const DuckyFrustum& Frustum);
+		DuckyFrustum ExtractFrustumFromViewProjection(const XMFLOAT4X4& ViewProjection);
 
 	private:
 		bool mKeys[256] = {};
@@ -134,4 +137,6 @@ class SimplestApp : public DuckyApp
 		AABB mGlobalAABB;
 
 		DuckyImGui mImGui;
+
+		unsigned int mNumMeshes = 0;
 };

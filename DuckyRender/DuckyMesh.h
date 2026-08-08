@@ -67,6 +67,10 @@ struct GPUOBB
 	XMFLOAT4 Orientation; // quaternion
 };
 
+struct DuckyFrustum
+{
+	XMFLOAT4 mPlanes[6];
+};
 
 class DuckyPrimitive
 {

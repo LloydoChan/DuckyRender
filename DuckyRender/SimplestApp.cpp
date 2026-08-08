@@ -97,6 +97,8 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 	InitDebugDrawsVBAndIB();
 	CreateDrawRecords();
 
+	mNumMeshes = mMeshes.size();
+
 	if (mMeshes.empty()) return false;
 
 	WorkOutGlobalBoundingBoxCenter();
@@ -667,13 +669,22 @@ void SimplestApp::AppMainLoop()
 		eye = XMVectorAdd(at, XMVectorScale(viewVector, viewLength));
 
 		XMMATRIX view = XMMatrixLookAtLH(eye, at, up);
+		// per frame matrix buffer setting
+		XMMATRIX vp = view * projection;
 
 		mMouseDeltaX = mMouseDeltaY = 0;
 		mScrollAmount = 0;
 
 		std::vector<TransformedDrawRecord> transformedRecords = TransformAABBsToOBBs(mOpaqueDblDraws);
-		std::vector<SortRecord> sortedRecordsOpaqueDbl = SortDrawRecords(view, transformedRecords);
+		
 		CopyOBBsToGPU(transformedRecords, currentFrame);
+
+		XMFLOAT4X4 viewProj;
+		XMStoreFloat4x4(&viewProj, vp);
+		DuckyFrustum frameFrustum = ExtractFrustumFromViewProjection(viewProj);
+		std::vector<TransformedDrawRecord> nonCulledRecords = FrustumCullUsingOBBs(transformedRecords, frameFrustum);
+		unsigned int numDrawableMeshes = nonCulledRecords.size();
+		std::vector<SortRecord> sortedRecordsOpaqueDbl = SortDrawRecords(view, nonCulledRecords);
 
 		//transformedRecords = TransformAABBs(mMaskedDblDraws);
 		//std::vector<SortRecord> sortedRecordsMaskedDbl = SortDrawRecords(view, transformedRecords);
@@ -714,6 +725,8 @@ void SimplestApp::AppMainLoop()
 		ImGui::Text("VS Invocations: %d ", gpuStats.VSInvocations);
 		ImGui::Text("IA Vertices: %d", gpuStats.IAVertices);
 		ImGui::Text("IA Primitives: %d", gpuStats.IAPrimitives);
+		ImGui::Text("Number Meshes Pre-cull: %d", mNumMeshes);
+		ImGui::Text("Number Drawable Meshes: %d", numDrawableMeshes);
 
 		ImGui::End();
 
@@ -746,8 +759,7 @@ void SimplestApp::AppMainLoop()
 		static int currentInstance = 0;
 		static int frameCnt = 0;
 		
-		// per frame matrix buffer setting
-		XMMATRIX vp = view * projection;
+		
 		ConstantBufferAllocation constantAllocation = cbvAllocator->AllocateConstantBuffer(sizeof(PerFrameConstants));
 		PerFrameConstants* asFrameConstants = reinterpret_cast<PerFrameConstants*>(constantAllocation.mCpuAddress);
 		XMStoreFloat4x4(static_cast<XMFLOAT4X4*>(&asFrameConstants->mViewProjection), XMMatrixTranspose(vp));
@@ -1088,4 +1100,75 @@ void SimplestApp::CopyOBBsToGPU(const std::vector<TransformedDrawRecord>& Transf
 		const GPUOBB& box = TransformedOBBs[i].mOBB;
 		dst[i] = box;
 	}
+}
+
+std::vector<TransformedDrawRecord> SimplestApp::FrustumCullUsingOBBs(const std::vector<TransformedDrawRecord>& TransformedOBBs, const DuckyFrustum& Frustum)
+{
+	std::vector<TransformedDrawRecord> nonCulledRecords;
+	nonCulledRecords.reserve(TransformedOBBs.size());
+
+	for (const auto& record : TransformedOBBs)
+	{
+		const GPUOBB& obb = record.mOBB;
+
+		XMVECTOR q = XMLoadFloat4(&obb.Orientation);
+
+		XMVECTOR axisX = XMVector3Rotate( XMVectorSet(1, 0, 0, 0), q);
+		XMVECTOR axisY = XMVector3Rotate( XMVectorSet(0, 1, 0, 0), q);
+		XMVECTOR axisZ = XMVector3Rotate( XMVectorSet(0, 0, 1, 0), q);
+
+		bool bPass = true;
+
+		for (int i = 0; i < 6; ++i)
+		{
+			XMVECTOR plane = XMLoadFloat4(&Frustum.mPlanes[i]);
+			XMVECTOR normal = XMVectorSet(Frustum.mPlanes[i].x, Frustum.mPlanes[i].y, Frustum.mPlanes[i].z, 0.0f);
+			XMVECTOR center = XMLoadFloat3(&obb.Center);
+
+			float distance = XMVectorGetX(XMVector3Dot(center, normal)) + Frustum.mPlanes[i].w;
+
+			float radius = obb.Extents.x * std::abs(XMVectorGetX( XMVector3Dot(axisX, normal))) +
+							obb.Extents.y * std::abs(XMVectorGetX( XMVector3Dot(axisY, normal))) +
+							obb.Extents.z * std::abs(XMVectorGetX( XMVector3Dot(axisZ, normal)));
+
+			if (distance + radius < 0.0f) bPass = false;
+		}
+
+		if (bPass) nonCulledRecords.emplace_back(record);
+	}
+
+	return nonCulledRecords;
+}
+
+DuckyFrustum SimplestApp::ExtractFrustumFromViewProjection(const XMFLOAT4X4& ViewProjection)
+{
+	DuckyFrustum frustum;
+	const XMFLOAT4X4& m = ViewProjection;
+
+	// left
+	frustum.mPlanes[0] ={ m._14 + m._11, m._24 + m._21, m._34 + m._31, m._44 + m._41};
+
+	// right
+	frustum.mPlanes[1] = { m._14 - m._11, m._24 - m._21, m._34 - m._31, m._44 - m._41};
+
+	// bottom
+	frustum.mPlanes[2] = { m._14 + m._12, m._24 + m._22, m._34 + m._32, m._44 + m._42};
+
+	// top
+	frustum.mPlanes[3] = { m._14 - m._12, m._24 - m._22, m._34 - m._32, m._44 - m._42};
+
+	// near
+	frustum.mPlanes[4] = { m._13, m._23, m._33, m._43 };
+
+	// far
+	frustum.mPlanes[5] = { m._14 - m._13, m._24 - m._23, m._34 - m._33, m._44 - m._43};
+
+	for (int i = 0; i < 6; ++i)
+	{
+		XMVECTOR p = XMLoadFloat4(&frustum.mPlanes[i]);
+		p = XMPlaneNormalize(p);
+		XMStoreFloat4(&frustum.mPlanes[i], p);
+	}
+
+	return frustum;
 }
