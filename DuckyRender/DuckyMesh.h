@@ -21,6 +21,11 @@ struct CookedVertex
 	XMFLOAT4 color0{ 1.f,1.f,1.f,1.f };
 };
 
+struct DebugVertex
+{
+	XMFLOAT3 position;
+};
+
 const float stdMax = (std::numeric_limits<float>::max)();
 const float stdMin = std::numeric_limits<float>::lowest();
 
@@ -30,6 +35,13 @@ class AABB
 	public:
 		AABB();
 		AABB(const XMFLOAT4& Min, const XMFLOAT4& Max) : mVertices { Min, Max } { RegenerateBox(); }
+		AABB(const XMFLOAT4* Points)
+		{
+			for (int i = 0; i < 8; i++)
+			{
+				mVertices[i] = Points[i];
+			}
+		}
 
 		const XMFLOAT4& GetMin() const { return mVertices[AABB_MIN]; }
 		const XMFLOAT4& GetMax() const { return mVertices[AABB_MAX]; }
@@ -45,6 +57,12 @@ class AABB
 	private:
 		void RegenerateBox();
 		XMFLOAT4 mVertices[8];
+};
+
+struct GPUAABB
+{
+	DirectX::XMFLOAT4 Center;
+	DirectX::XMFLOAT4 Extents;
 };
 
 

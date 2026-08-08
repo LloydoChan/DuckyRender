@@ -36,6 +36,8 @@ D3D12_GRAPHICS_PIPELINE_STATE_DESC MakeOpaquePipelineState()
     result.SampleMask = D3D12_DEFAULT_SAMPLE_MASK;
     result.RasterizerState = rasterizerDesc;
 
+    result.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+
     return result;
 }
 
@@ -65,6 +67,8 @@ D3D12_GRAPHICS_PIPELINE_STATE_DESC MakeTransparentPipelineState()
 
     newState.BlendState.RenderTarget[0] = renderTargetBlendDesc;
 
+    newState.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+
     return newState;
 }
 
@@ -82,6 +86,7 @@ D3D12_GRAPHICS_PIPELINE_STATE_DESC MakeDoubleSidedMaskedPipelineState()
     D3D12_GRAPHICS_PIPELINE_STATE_DESC dblPipeline = MakeMaskedPipelineState();
 
     dblPipeline.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
+    dblPipeline.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
 
     return dblPipeline;
 }
@@ -91,8 +96,21 @@ D3D12_GRAPHICS_PIPELINE_STATE_DESC MakeDoubleSidedTransparentPipelineState()
     D3D12_GRAPHICS_PIPELINE_STATE_DESC dblPipeline = MakeTransparentPipelineState();
 
     dblPipeline.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
+    dblPipeline.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
 
     return dblPipeline;
+}
+
+D3D12_GRAPHICS_PIPELINE_STATE_DESC MakeDebugDrawPipelineState()
+{
+    D3D12_GRAPHICS_PIPELINE_STATE_DESC dbgPipeline = MakeOpaquePipelineState();
+    dbgPipeline.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_NONE;
+    dbgPipeline.DepthStencilState.DepthEnable = false;
+    dbgPipeline.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
+
+    dbgPipeline.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE;
+
+    return dbgPipeline;
 }
 
 
@@ -102,6 +120,7 @@ D3D12_GRAPHICS_PIPELINE_STATE_DESC MakeMaskedPipelineState()
 
     // Masked materials are not blended.
     newState.BlendState.RenderTarget[0].BlendEnable = FALSE;
+    newState.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
 
     return newState;
 }

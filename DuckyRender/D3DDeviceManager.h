@@ -28,6 +28,14 @@ struct DescriptorHeapResource
 	D3D12_GPU_DESCRIPTOR_HANDLE descHandle;
 };
 
+struct MappedDescriptorHeapResource
+{
+	ComPtr<ID3D12Resource> buffer;
+	UINT heapOffset = 0;
+	D3D12_GPU_DESCRIPTOR_HANDLE descHandle;
+	void* mapped = nullptr;
+};
+
 struct ViewportScissor
 {
 	// default - wholescreen
@@ -83,6 +91,8 @@ class D3DDeviceManager
 
 		ComPtr<ID3D12Resource> CreateBuffer(size_t bufferSize);
 		DescriptorHeapResource CreateConstantBuffer(size_t bufferSize);
+		MappedDescriptorHeapResource CreateStructuredBuffer(size_t BufferSize, size_t ElementSize);
+
 		PipelineAndRootSig CreatePSO(LPCWSTR vertexShader, LPCWSTR vertexEntry, LPCWSTR pixelShader, LPCWSTR pixelEntry, RootSignatureDesc& NewRootSigDesc, D3D12_GRAPHICS_PIPELINE_STATE_DESC& desc);
 		std::vector<D3D12_INPUT_ELEMENT_DESC> CreateInputLayout(ShaderCompilationOutput& shaderCompData);
 

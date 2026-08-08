@@ -101,6 +101,11 @@ std::vector<D3D12_INPUT_ELEMENT_DESC> D3DDeviceManager::CreateInputLayout(Shader
 		D3D12_SIGNATURE_PARAMETER_DESC paramDesc;
 		vertReflectionData->GetInputParameterDesc(i, &paramDesc);
 		
+		if (paramDesc.SystemValueType != D3D_NAME_UNDEFINED)
+		{
+			continue;
+		}
+
 		// assume is a position and just change where needed
 		D3D12_INPUT_ELEMENT_DESC currentDesc = {
 				"POSITION",
@@ -250,6 +255,68 @@ DescriptorHeapResource D3DDeviceManager::CreateConstantBuffer(size_t bufferSize)
 	return constantBuffer;
 }
 
+MappedDescriptorHeapResource D3DDeviceManager::CreateStructuredBuffer(size_t BufferSize, size_t ElementSize)
+{
+	// new for creating triangle data
+	D3D12_HEAP_PROPERTIES heapprop = {};
+
+	heapprop.Type = D3D12_HEAP_TYPE_UPLOAD;
+	heapprop.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
+	heapprop.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
+
+	D3D12_RESOURCE_DESC resdesc = {};
+
+	resdesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+	resdesc.Width = BufferSize;
+	resdesc.Height = 1;
+	resdesc.DepthOrArraySize = 1;
+	resdesc.MipLevels = 1;
+	resdesc.Format = DXGI_FORMAT_UNKNOWN;
+	resdesc.SampleDesc.Count = 1;
+	resdesc.Flags = D3D12_RESOURCE_FLAG_NONE;
+	resdesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+
+	MappedDescriptorHeapResource newBuff;
+
+	HRESULT hResult;
+
+	hResult = mDevice->CreateCommittedResource(
+		&heapprop,
+		D3D12_HEAP_FLAG_NONE,
+		&resdesc,
+		D3D12_RESOURCE_STATE_GENERIC_READ,
+		nullptr,
+		IID_PPV_ARGS(&newBuff.buffer)
+	);
+
+	if (FAILED(hResult) && !OutputErrorFromHResult(hResult, "problem creating committed resource : ", *mLogFilePtr)) return {};
+
+	D3D12_RANGE readRange = { 0, 0 };
+
+	HRESULT hr = newBuff.buffer->Map(
+		0,
+		&readRange,
+		&newBuff.mapped);
+
+	// create the resource view
+	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+	srvDesc.Format = DXGI_FORMAT_UNKNOWN;
+	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+	srvDesc.Buffer.FirstElement = 0;
+	srvDesc.Buffer.NumElements = BufferSize/ ElementSize;
+	srvDesc.Buffer.StructureByteStride = ElementSize;
+	srvDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
+
+	DescriptorAllocation allocation = AllocateCbvSrvUavDescriptor(mCbvUavSrvDescriptorHandle);
+
+	mDevice->CreateShaderResourceView(newBuff.buffer.Get(), &srvDesc, allocation.cpu);
+	newBuff.heapOffset = allocation.descriptorIndex;
+	newBuff.descHandle = allocation.gpu;
+
+	return newBuff;
+}
+
 PipelineAndRootSig D3DDeviceManager::CreatePSO(LPCWSTR vertexShader, 
 												LPCWSTR vertexEntry, 
 												LPCWSTR pixelShader, 
@@ -299,7 +366,6 @@ PipelineAndRootSig D3DDeviceManager::CreatePSO(LPCWSTR vertexShader,
 	PipelineDesc.InputLayout.NumElements = elems.size();
 	PipelineDesc.IBStripCutValue = D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED;
 
-	PipelineDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
 	PipelineDesc.NumRenderTargets = 1;
 	PipelineDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
 	PipelineDesc.SampleDesc.Count = 1;

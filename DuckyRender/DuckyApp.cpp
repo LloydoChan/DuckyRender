@@ -2,6 +2,28 @@
 #include "DuckyApp.h"
 #include "D3DDeviceManager.h"
 
+DebugVertex boxVertices[8] =
+{
+	{{-1,-1,-1}},
+	{{ 1,-1,-1}},
+	{{ 1, 1,-1}},
+	{{-1, 1,-1}},
+
+	{{-1,-1, 1}},
+	{{ 1,-1, 1}},
+	{{ 1, 1, 1}},
+	{{-1, 1, 1}},
+};
+
+
+uint16_t boxIndices[24] =
+{
+	0,1, 1,2, 2,3, 3,0,
+	4,5, 5,6, 6,7, 7,4,
+	0,4, 1,5, 2,6, 3,7
+};
+
+
 DuckyApp::~DuckyApp() = default;
 
 bool DuckyApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* WindowName)
@@ -453,6 +475,47 @@ bool DuckyApp::InitVertexAndIndexMegaBuffer(std::ifstream& ModelFile)
 	mIbView.BufferLocation = mIndices->GetGPUVirtualAddress();
 	mIbView.SizeInBytes = indexBufferSize;
 	mIbView.Format = DXGI_FORMAT_R32_UINT;
+
+	return true;
+}
+
+bool DuckyApp::InitDebugDrawsVBAndIB()
+{
+	
+	size_t vertexBufferSize = 8 * sizeof(DebugVertex);
+	size_t indexBufferSize = 24 * sizeof(uint16_t);
+
+	//now create vertex and index buffers
+	mDebugVertices = mDeviceManager->CreateBuffer(vertexBufferSize);
+	mDebugIndices = mDeviceManager->CreateBuffer(indexBufferSize);
+
+	void* mappedVertices = nullptr;
+	HRESULT result = mDebugVertices->Map(0, nullptr, &mappedVertices);
+
+	if (FAILED(result)) return false;
+
+	memcpy(mappedVertices, &boxVertices[0], sizeof(DebugVertex) * 8);
+
+	mDebugVertices->Unmap(0, nullptr);
+
+
+	void* mappedIndices = nullptr;
+
+	result = mDebugIndices->Map(0, nullptr, &mappedIndices);
+
+	if (FAILED(result)) return false;
+	memcpy(mappedIndices, &boxIndices[0], sizeof(uint16_t) * 24);
+
+	mDebugIndices->Unmap(0, nullptr);
+
+
+	mVbDebugView.BufferLocation = mDebugVertices->GetGPUVirtualAddress();
+	mVbDebugView.SizeInBytes = vertexBufferSize;
+	mVbDebugView.StrideInBytes = sizeof(DebugVertex);
+
+	mIbDebugView.BufferLocation = mDebugIndices->GetGPUVirtualAddress();
+	mIbDebugView.SizeInBytes = indexBufferSize;
+	mIbDebugView.Format = DXGI_FORMAT_R16_UINT;
 
 	return true;
 }

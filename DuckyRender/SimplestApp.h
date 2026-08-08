@@ -24,6 +24,12 @@ struct DrawRecord
 	unsigned int mMaterialIndex;
 };
 
+struct TransformedDrawRecord
+{
+	DrawRecord mDrawRecord;
+	AABB mTransformedAABB;
+};
+
 struct MovementStruct
 {
 	float xMovement = 0.f;
@@ -52,6 +58,12 @@ struct PerInstanceConstants
 	XMFLOAT4X4 normal;
 };
 
+struct SortRecord
+{
+	DrawRecord record;
+	float minZ = (std::numeric_limits<float>::max)();
+};
+
 class SimplestApp : public DuckyApp
 {
 	public:
@@ -68,11 +80,13 @@ class SimplestApp : public DuckyApp
 
 		void WorkOutGlobalBoundingBoxCenter();
 		void CreateDrawRecords();
-		void DrawRecords(const std::vector<DrawRecord>& Draws, ConstantBufferAllocator* Allocator, ID3D12GraphicsCommandList* List);
+		void DrawRecords(const std::vector<SortRecord>& Draws, ConstantBufferAllocator* Allocator, ID3D12GraphicsCommandList* List);
 
 		bool Resize(UINT WindowWidth, UINT WindowHeight);
 
-		void SortDrawRecords(const XMMATRIX& WorldView, std::vector<DrawRecord>& recordsToSort, bool bAlphaPass = false);
+		std::vector<TransformedDrawRecord> TransformAABBs(std::vector<DrawRecord>& recordsToSort);
+		std::vector<SortRecord> SortDrawRecords(const XMMATRIX& View, const std::vector<TransformedDrawRecord>& RecordsToSort, bool bAlphaPass = false);
+		void CopyAABBsToGPU(const std::vector<TransformedDrawRecord>& TransformedAABBs, unsigned int CurrentFrame);
 
 	private:
 		bool mKeys[256] = {};
@@ -81,6 +95,7 @@ class SimplestApp : public DuckyApp
 		bool mRightButtonDown = false;
 		bool mLeftButtonDown = false;
 		int  mScrollAmount = 0;
+		bool bDrawDebug = false;
 
 		ViewportScissor mWholeScreenViewPortScissor;
 
@@ -90,6 +105,7 @@ class SimplestApp : public DuckyApp
 
 		DescriptorHeapResource mMatrixBuffer[2];
 		XMFLOAT4X4* mMappedTransform[2] = {};
+		MappedDescriptorHeapResource mStructuredBufferAABBs[2];
 
 		PipelineAndRootSig mOpaquePipeline;
 		std::vector<DrawRecord> mOpaqueDraws;
@@ -108,6 +124,8 @@ class SimplestApp : public DuckyApp
 
 		PipelineAndRootSig mMaskedDblPipeline;
 		std::vector<DrawRecord> mMaskedDblDraws;
+
+		PipelineAndRootSig mDebugPipeline;
 
 		DuckyGraphicsContext* mDuckyContext;
 

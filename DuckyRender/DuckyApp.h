@@ -40,6 +40,8 @@ public:
 	bool InitMeshes(std::ifstream& ModelFile);
 	bool InitVertexAndIndexMegaBuffer(std::ifstream& ModelFile);
 
+	bool InitDebugDrawsVBAndIB();
+
 protected:
 	
 	std::unique_ptr<D3DDeviceManager> mDeviceManager;
@@ -90,4 +92,10 @@ protected:
 
 	D3D12_VERTEX_BUFFER_VIEW mVbView;
 	D3D12_INDEX_BUFFER_VIEW mIbView;
+
+	Microsoft::WRL::ComPtr<ID3D12Resource> mDebugVertices;
+	Microsoft::WRL::ComPtr<ID3D12Resource> mDebugIndices;
+
+	D3D12_VERTEX_BUFFER_VIEW mVbDebugView;
+	D3D12_INDEX_BUFFER_VIEW mIbDebugView;
 };
