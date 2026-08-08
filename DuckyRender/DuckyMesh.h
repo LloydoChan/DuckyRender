@@ -59,10 +59,12 @@ class AABB
 		XMFLOAT4 mVertices[8];
 };
 
-struct GPUAABB
+struct GPUOBB
 {
-	DirectX::XMFLOAT4 Center;
-	DirectX::XMFLOAT4 Extents;
+	XMFLOAT3 Center;
+	XMFLOAT3 Extents;
+
+	XMFLOAT4 Orientation; // quaternion
 };
 
 

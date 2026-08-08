@@ -27,7 +27,7 @@ struct DrawRecord
 struct TransformedDrawRecord
 {
 	DrawRecord mDrawRecord;
-	AABB mTransformedAABB;
+	GPUOBB mOBB;
 };
 
 struct MovementStruct
@@ -84,9 +84,9 @@ class SimplestApp : public DuckyApp
 
 		bool Resize(UINT WindowWidth, UINT WindowHeight);
 
-		std::vector<TransformedDrawRecord> TransformAABBs(std::vector<DrawRecord>& recordsToSort);
+		std::vector<TransformedDrawRecord> TransformAABBsToOBBs(std::vector<DrawRecord>& recordsToSort);
 		std::vector<SortRecord> SortDrawRecords(const XMMATRIX& View, const std::vector<TransformedDrawRecord>& RecordsToSort, bool bAlphaPass = false);
-		void CopyAABBsToGPU(const std::vector<TransformedDrawRecord>& TransformedAABBs, unsigned int CurrentFrame);
+		void CopyOBBsToGPU(const std::vector<TransformedDrawRecord>& TransformedAABBs, unsigned int CurrentFrame);
 
 	private:
 		bool mKeys[256] = {};
@@ -105,7 +105,7 @@ class SimplestApp : public DuckyApp
 
 		DescriptorHeapResource mMatrixBuffer[2];
 		XMFLOAT4X4* mMappedTransform[2] = {};
-		MappedDescriptorHeapResource mStructuredBufferAABBs[2];
+		MappedDescriptorHeapResource mStructuredBufferOBBs[2];
 
 		PipelineAndRootSig mOpaquePipeline;
 		std::vector<DrawRecord> mOpaqueDraws;

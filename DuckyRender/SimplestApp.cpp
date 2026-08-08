@@ -267,7 +267,7 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 
 		if (FAILED(hResult))return false;
 
-		mStructuredBufferAABBs[i] = mDeviceManager->CreateStructuredBuffer(totalPrimitiveDraws * sizeof(GPUAABB), sizeof(GPUAABB));
+		mStructuredBufferOBBs[i] = mDeviceManager->CreateStructuredBuffer(totalPrimitiveDraws * sizeof(GPUOBB), sizeof(GPUOBB));
 	}
 
 	if (!mImGui.Init(
@@ -671,9 +671,9 @@ void SimplestApp::AppMainLoop()
 		mMouseDeltaX = mMouseDeltaY = 0;
 		mScrollAmount = 0;
 
-		std::vector<TransformedDrawRecord> transformedRecords = TransformAABBs(mOpaqueDblDraws);
+		std::vector<TransformedDrawRecord> transformedRecords = TransformAABBsToOBBs(mOpaqueDblDraws);
 		std::vector<SortRecord> sortedRecordsOpaqueDbl = SortDrawRecords(view, transformedRecords);
-		CopyAABBsToGPU(transformedRecords, currentFrame);
+		CopyOBBsToGPU(transformedRecords, currentFrame);
 
 		//transformedRecords = TransformAABBs(mMaskedDblDraws);
 		//std::vector<SortRecord> sortedRecordsMaskedDbl = SortDrawRecords(view, transformedRecords);
@@ -793,7 +793,7 @@ void SimplestApp::AppMainLoop()
 			list->SetGraphicsRootSignature(mDebugPipeline.rootSig.Get());
 			list->SetPipelineState(mDebugPipeline.pipeLineState.Get());
 			list->SetGraphicsRootConstantBufferView(0,mMatrixBuffer[currentFrame].buffer->GetGPUVirtualAddress());
-			list->SetGraphicsRootShaderResourceView(1,mStructuredBufferAABBs[currentFrame].buffer->GetGPUVirtualAddress());
+			list->SetGraphicsRootShaderResourceView(1,mStructuredBufferOBBs[currentFrame].buffer->GetGPUVirtualAddress());
 			list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_LINELIST);
 			list->IASetVertexBuffers(0,1,&mVbDebugView);
 			list->IASetIndexBuffer(&mIbDebugView);
@@ -984,7 +984,7 @@ bool SimplestApp::Resize(UINT WindowWidth, UINT WindowHeight)
 }
 
 
-std::vector<TransformedDrawRecord> SimplestApp::TransformAABBs(std::vector<DrawRecord>& recordsToSort)
+std::vector<TransformedDrawRecord> SimplestApp::TransformAABBsToOBBs(std::vector<DrawRecord>& recordsToSort)
 {
 	PIXScopedEvent(PIX_COLOR(255, 0, 0), "TrasnformAABBs");
 
@@ -998,53 +998,40 @@ std::vector<TransformedDrawRecord> SimplestApp::TransformAABBs(std::vector<DrawR
 
 		DuckyMeshData& meshData = mMeshes[record.mMeshIndex];
 		const AABB& boundingBox = meshData.GetPrimitives()[record.mPrimitiveIndex].GetBoundingBox();
-		XMFLOAT4 const* points = boundingBox.GetPointsAddress();
 
-		XMFLOAT4 newPoints[8];
+		const XMFLOAT4& min = boundingBox.GetMin();
+		const XMFLOAT4& max = boundingBox.GetMax();
 
-		for (int i = 0; i < 8; i++)
-		{
-			XMVECTOR vec = XMLoadFloat4(&points[i]);
-			XMVECTOR resultPoint = XMVector4Transform(vec, transform);
-			XMStoreFloat4(&newPoints[i], resultPoint);
-		}
+		XMVECTOR localCenter = XMVectorSet(
+			(min.x + max.x) * 0.5f,
+			(min.y + max.y) * 0.5f,
+			(min.z + max.z) * 0.5f,
+			1.0f);
 
-		// construct new AABB
+		XMVECTOR localExtents = XMVectorSet(
+			(max.x - min.x) * 0.5f,
+			(max.y - min.y) * 0.5f,
+			(max.z - min.z) * 0.5f,
+			0.0f);
 
-		XMFLOAT4 newMin
-		{
-			FLT_MAX,
-			FLT_MAX,
-			FLT_MAX,
-			1.0f
-		};
+		XMVECTOR scale;
+		XMVECTOR rotation;
+		XMVECTOR translation;
 
-		XMFLOAT4 newMax
-		{
-			-FLT_MAX,
-			-FLT_MAX,
-			-FLT_MAX,
-			1.0f
-		};
+		XMMatrixDecompose(&scale, &rotation, &translation, transform);
 
-		for (int i = 0; i < 8; ++i)
-		{
+		XMVECTOR worldCenter = XMVector3TransformCoord(localCenter, inst.mTransform);
+		XMVECTOR worldExtents = XMVectorMultiply(localExtents, XMVectorAbs(scale));
 
-			const XMFLOAT4& p = newPoints[i];
+		GPUOBB gpuOBB{};
 
-			newMin.x = (std::min)(newMin.x, p.x);
-			newMin.y = (std::min)(newMin.y, p.y);
-			newMin.z = (std::min)(newMin.z, p.z);
+		XMStoreFloat3(&gpuOBB.Center, worldCenter);
+		XMStoreFloat3(&gpuOBB.Extents, worldExtents);
+		XMStoreFloat4(&gpuOBB.Orientation, rotation);
 
-			newMax.x = (std::max)(newMax.x, p.x);
-			newMax.y = (std::max)(newMax.y, p.y);
-			newMax.z = (std::max)(newMax.z, p.z);
-		}
-
-		AABB transformedAABB(newMin, newMax);
 		TransformedDrawRecord newRecord;
 		newRecord.mDrawRecord = record;
-		newRecord.mTransformedAABB = transformedAABB;
+		newRecord.mOBB = gpuOBB;
 		transformedRecords.emplace_back(newRecord);
 	}
 
@@ -1062,19 +1049,25 @@ std::vector<SortRecord> SimplestApp::SortDrawRecords(const XMMATRIX& View, const
 	{
 		SortRecord newRecord;
 		newRecord.record = record.mDrawRecord;
-		const XMFLOAT4* points = record.mTransformedAABB.GetPointsAddress();
-		XMFLOAT4 newPoints[8];
+		const XMFLOAT3& center = record.mOBB.Center;
+		const XMFLOAT3& extents = record.mOBB.Extents;
+		XMFLOAT3 newPoints[8] = {
 
-		for (int i = 0; i < 8; i++)
-		{
-			XMVECTOR vec = XMLoadFloat4(&points[i]);
-			XMVECTOR resultPoint = XMVector4Transform(vec, View);
-			XMStoreFloat4(&newPoints[i], resultPoint);
-		}
+			{center.x + extents.x, center.y - extents.y, center.z - extents.z},
+			{center.x + extents.x, center.y - extents.y, center.z + extents.z},
+			{center.x + extents.x, center.y + extents.y, center.z - extents.z},
+			{center.x + extents.x, center.y + extents.y, center.z + extents.z},
+
+			{center.x - extents.x, center.y - extents.y, center.z - extents.z},
+			{center.x - extents.x, center.y - extents.y, center.z + extents.z},
+			{center.x - extents.x, center.y + extents.y, center.z - extents.z},
+			{center.x - extents.x, center.y + extents.y, center.z + extents.z}
+
+		};
 
 		for (int i = 0; i < 8; ++i)
 		{
-			if(newPoints[i].z < newRecord.minZ) newRecord.minZ = points[i].z;
+			if(newPoints[i].z < newRecord.minZ) newRecord.minZ = newPoints[i].z;
 		}
 
 		sortedRecords.emplace_back(std::move(newRecord));
@@ -1086,31 +1079,13 @@ std::vector<SortRecord> SimplestApp::SortDrawRecords(const XMMATRIX& View, const
 	return sortedRecords;
 }
 
-void SimplestApp::CopyAABBsToGPU(const std::vector<TransformedDrawRecord>& TransformedAABBs, unsigned int CurrentFrame)
+void SimplestApp::CopyOBBsToGPU(const std::vector<TransformedDrawRecord>& TransformedOBBs, unsigned int CurrentFrame)
 {
-	auto* dst = static_cast<GPUAABB*>(mStructuredBufferAABBs[CurrentFrame].mapped);
+	auto* dst = static_cast<GPUOBB*>(mStructuredBufferOBBs[CurrentFrame].mapped);
 
-	for (size_t i = 0; i < TransformedAABBs.size(); ++i)
+	for (size_t i = 0; i < TransformedOBBs.size(); ++i)
 	{
-		const AABB& box = TransformedAABBs[i].mTransformedAABB;
-
-		const XMFLOAT4& min = box.GetMin();
-		const XMFLOAT4& max = box.GetMax();
-
-		dst[i].Center =
-		{
-			(min.x + max.x) * 0.5f,
-			(min.y + max.y) * 0.5f,
-			(min.z + max.z) * 0.5f,
-			1.0f
-		};
-
-		dst[i].Extents =
-		{
-			(max.x - min.x) * 0.5f,
-			(max.y - min.y) * 0.5f,
-			(max.z - min.z) * 0.5f,
-			0.0f
-		};
+		const GPUOBB& box = TransformedOBBs[i].mOBB;
+		dst[i] = box;
 	}
 }
