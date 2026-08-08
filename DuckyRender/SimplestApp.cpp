@@ -457,7 +457,7 @@ void SimplestApp::UpdateMovementAndRotation(XMVECTOR& ViewVector, MovementStruct
 
 	if (mKeys['W'] || mScrollAmount > 0)
 	{
-		movement.zMovement -= MOVEMENT_SPEED * DeltaTime;
+		movement.zMovement += MOVEMENT_SPEED * DeltaTime;
 	}
 
 	if (mKeys['S'] || mScrollAmount < 0)
@@ -467,12 +467,12 @@ void SimplestApp::UpdateMovementAndRotation(XMVECTOR& ViewVector, MovementStruct
 	
 	if (mKeys['a'] || mKeys['A'])
 	{
-		movement.xMovement += MOVEMENT_SPEED * DeltaTime;
+		movement.xMovement -= MOVEMENT_SPEED * DeltaTime;
 	}
 
 	if (mKeys['d'] || mKeys['D'])
 	{
-		movement.xMovement -= MOVEMENT_SPEED * DeltaTime;
+		movement.xMovement += MOVEMENT_SPEED * DeltaTime;
 	}
 
 	if (mKeys['q'] || mKeys['Q'])
