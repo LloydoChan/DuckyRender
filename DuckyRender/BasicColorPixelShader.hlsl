@@ -28,31 +28,34 @@ cbuffer PerFrameConstants : register(b0)
     uint visualisationMode;
 };
 
-cbuffer InstanceMaterial : register(b2)
+cbuffer DrawConstants : register(b2)
+{
+    uint materialIndex;
+};
+
+struct InstanceMaterial
 {
     float4 BaseColorFactor;
 
     float RoughnessFactor;
     float MetallicFactor;
     float NormalScale;
-    
-    uint  alphaMode;
+
+    uint alphaMode;
     float alphaCutoff;
-    uint  doubleSided;
-    
-    uint padding1;
-    uint padding2;
-    
-    uint  HasBaseColorTexture;
-    uint  HasNormalTexture;
-    uint  HasMetallicRoughnessTexture;
-    uint  HasEmissiveTexture;
+    uint doubleSided;
+
+    uint BaseColorTexture;
+    uint NormalTexture;
+    uint MetallicRoughnessTexture;
+    uint EmissiveTexture;
 };
 
 Texture2D<float4> tex : register(t0);
 Texture2D<float4> NormalMapTexture : register(t1);
 Texture2D<float4> MetallicRoughnessTexture : register(t2);
 Texture2D<float4> EmissiveTexture : register(t3);
+StructuredBuffer<InstanceMaterial> Materials : register(t4);
 
 SamplerState smp : register(s0);
 
@@ -133,53 +136,49 @@ float4 main(Input input,
             uint primitiveID : SV_PrimitiveID,
             bool isFrontFace : SV_IsFrontFace) : SV_TARGET
 {
-    float4 baseColorSample = BaseColorFactor * float4(input.col.rgb, 1.f);
+    InstanceMaterial mat = Materials[materialIndex];
+    float4 baseColorSample = mat.BaseColorFactor * float4(input.col.rgb, 1.f);
     
-   // if (HasBaseColorTexture == 1)
-    //{
-       baseColorSample *= tex.Sample(smp, input.uv);
-   // }
+    Texture2D<float4> base = ResourceDescriptorHeap[mat.BaseColorTexture];
+    baseColorSample *= base.Sample(smp, input.uv);
     
-    if (alphaMode == ALPHA_MASK) clip(baseColorSample.a - alphaCutoff);
+    if (mat.alphaMode == ALPHA_MASK) clip(baseColorSample.a - mat.alphaCutoff);
    
     float3 baseColor = baseColorSample.rgb;
     float3 V = normalize(cameraPosition.xyz - input.worldPos);
     // create tangent space
     
-    float faceSign = doubleSided != 0 && !isFrontFace ? -1.0f : 1.0f;
+    float faceSign = mat.doubleSided != 0 && !isFrontFace ? -1.0f : 1.0f;
 
     float3 N = normalize(input.normal) * faceSign;
     float3 T = normalize(input.tangent.xyz) * faceSign;
     float3 B = cross(N, T) * input.tangent.w;
     
-     float3 L = normalize(-lightDirection.xyz);
+    float3 L = normalize(-lightDirection.xyz);
     
-     if (HasNormalTexture == 1)
-     {
-         float3 NormalMapSample = NormalMapTexture.Sample(smp, input.uv).rgb * 2.f - 1.f;
-         NormalMapSample.xy *= NormalScale;
-         NormalMapSample = normalize(NormalMapSample);
-         float3x3 TangentToWorld = float3x3(T, B, N);
-         N = normalize(mul(NormalMapSample, TangentToWorld)).rgb;
-     }
     
-     float roughness = RoughnessFactor;
-     float metallic = MetallicFactor;
+     Texture2D<float3> normalMap = ResourceDescriptorHeap[mat.NormalTexture];
     
-     if (HasMetallicRoughnessTexture == 1)
-     {
-      // roughness
-         float4 metallicRoughnessSample = MetallicRoughnessTexture.Sample(smp, input.uv);
-         roughness = saturate(RoughnessFactor * metallicRoughnessSample.g);
-         metallic = saturate(MetallicFactor * metallicRoughnessSample.b);
-     }
+     float3 NormalMapSample = normalMap.Sample(smp, input.uv).rgb * 2.f - 1.f;
+     NormalMapSample.xy *= mat.NormalScale;
+     NormalMapSample = normalize(NormalMapSample);
+     float3x3 TangentToWorld = float3x3(T, B, N);
+     N = normalize(mul(NormalMapSample, TangentToWorld)).rgb;
+     N = normalize(N);
+   
+     float roughness = mat.RoughnessFactor;
+     float metallic = mat.MetallicFactor;
+    
+     // roughness
+     Texture2D<float4> metallicTex = ResourceDescriptorHeap[mat.MetallicRoughnessTexture];
+     float4 metallicRoughnessSample = metallicTex.Sample(smp, input.uv);
+     roughness = saturate(mat.RoughnessFactor * metallicRoughnessSample.g);
+     metallic = saturate(mat.MetallicFactor * metallicRoughnessSample.b);
     
      float3 emissive = float3(0.f, 0.f, 0.f);
 
-     if (HasEmissiveTexture == 1)
-     {
-         emissive = EmissiveTexture.Sample(smp, input.uv).rgb;
-     }
+     Texture2D<float3> emissiveTex = ResourceDescriptorHeap[mat.EmissiveTexture];
+     emissive += emissiveTex.Sample(smp, input.uv).rgb;
     
      roughness = max(roughness, 0.045f);
     
@@ -214,7 +213,7 @@ float4 main(Input input,
         return float4(roughness.xxx, 1.f);
     
     if (visualisationMode == NORMAL)
-        return float4(N * 0.5f + 0.5f, 1.f);
+        return float4(N, 1.f);
     
     if (visualisationMode == METAL)
         return float4(metallic.xxx, 1.f);

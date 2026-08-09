@@ -558,11 +558,10 @@ int main(int argc, char** argv)
 	WriteOutNodeData(rootNode, model, instanceTransformData, Transform);
 
 	// Textures and Materials
-	string textureOutputPath = outputDirectory.string();
-	ProcessMaterials(model, materialsData);
 
 	std::vector<std::string> orderedNames(model.textures.size());
 
+	string textureOutputPath = outputDirectory.string();
 	ProcessTextures(model, orderedNames, inputDirectory, textureOutputPath);
 
 	size_t numTextures = model.textures.size();
@@ -574,6 +573,7 @@ int main(int argc, char** argv)
 		materialsData.write((const char*)&str[0], strLength);
 	}
 
+	ProcessMaterials(model, materialsData);
 	FindMeshData(model, bufferData, offsetData, boundingBoxData);
 
 	outputFile << instanceTransformData.rdbuf() << materialsData.rdbuf() << offsetData.rdbuf() << bufferData.rdbuf();

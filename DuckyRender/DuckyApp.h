@@ -60,7 +60,7 @@ protected:
 	bool mMinimized = false;
 
 	int mBaseColorFallbackHandle = 0;
-	size_t mNormalColorFallbackHandle = 0;
+	int mNormalColorFallbackHandle = 0;
 
 	std::wstring mInputFilePath;
 
@@ -81,7 +81,8 @@ protected:
 	UINT64 mFrameCount = 0;
 	UINT64 mTimeStampFrequency = 0;
 
-	std::vector<DuckyMaterial> mMaterials;
+	std::vector<DuckyMaterial> mMaterialsCPU;
+	MappedDescriptorHeapResource mMaterialBuffer;
 	std::vector<DescriptorHeapResource> mTextures;
 
 	std::vector<DuckyMeshData> mMeshes;
@@ -91,7 +92,7 @@ protected:
 	Microsoft::WRL::ComPtr<ID3D12Resource> mIndices;
 
 	D3D12_VERTEX_BUFFER_VIEW mVbView;
-	D3D12_INDEX_BUFFER_VIEW mIbView;
+	D3D12_INDEX_BUFFER_VIEW  mIbView;
 
 	Microsoft::WRL::ComPtr<ID3D12Resource> mDebugVertices;
 	Microsoft::WRL::ComPtr<ID3D12Resource> mDebugIndices;

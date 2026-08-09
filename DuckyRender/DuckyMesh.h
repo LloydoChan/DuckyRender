@@ -95,6 +95,7 @@ class DuckyPrimitive
 
 		size_t GetNumVertices() const { return mNumVertices; }
 		size_t GetNumIndices() const { return mNumIndices; }
+		AlphaMode GetAlphaMode() const { return mode; }
 	private:
 		size_t mNumIndices = 0;
 		size_t mNumVertices = 0;
@@ -104,6 +105,8 @@ class DuckyPrimitive
 		UINT mMaterialIndex = 0;
 
 		AABB mPrimitiveAABB;
+
+		AlphaMode mode = AlphaMode::Opaque;
 };
 
 class DuckyMeshData

@@ -40,3 +40,21 @@ struct DuckyMaterial
    int mMetallicRoughnessTexture = INVALID_HANDLE;
    int mEmissive                 = INVALID_HANDLE;
 };
+
+struct GPUMaterial
+{
+    XMFLOAT4 BaseColorFactor;
+
+    float RoughnessFactor;
+    float MetallicFactor;
+    float NormalScale;
+
+    uint32_t alphaMode;
+    float alphaCutoff;
+    uint32_t doubleSided;
+
+    uint32_t BaseColorTexture;
+    uint32_t NormalTexture;
+    uint32_t MetallicRoughnessTexture;
+    uint32_t EmissiveTexture;
+};

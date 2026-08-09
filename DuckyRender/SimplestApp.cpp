@@ -26,13 +26,10 @@ namespace RootParameter
 {
 	constexpr UINT PerFrame = 0;
 	constexpr UINT PerInstance = 1;
-	constexpr UINT PerMaterial = 2;
-	constexpr UINT BaseColorTexture = 3;
-	constexpr UINT NormalTexture = 4;
-	constexpr UINT MetallicRoughnessTexture = 5;
-	constexpr UINT EmissiveTexture = 6;
-	constexpr UINT Count = 7;
-}
+	constexpr UINT Materials = 2;
+	constexpr UINT MaterialIndex = 3;
+	constexpr UINT Count = 4;
+};
 
 SimplestApp::~SimplestApp()
 {
@@ -77,7 +74,6 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 	}
 
 
-	InitMaterials(DuckyFile);
 	InitTextures(DuckyFile);
 
 	// init fallback textures
@@ -92,6 +88,7 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 	mNormalColorFallbackHandle = mTextures.size() - 1;
 
 
+	InitMaterials(DuckyFile);
 	InitMeshes(DuckyFile);
 	InitVertexAndIndexMegaBuffer(DuckyFile);
 	InitDebugDrawsVBAndIB();
@@ -124,54 +121,33 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 
 	D3D12_ROOT_PARAMETER rootParams[RootParameter::Count]{};
 
-	// Root parameter 0:
-	// Direct root CBV at b0 for the vertex shader.
+	// b0 - per frame
 	rootParams[RootParameter::PerFrame].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
 	rootParams[RootParameter::PerFrame].Descriptor.ShaderRegister = 0;
 	rootParams[RootParameter::PerFrame].Descriptor.RegisterSpace = 0;
 	rootParams[RootParameter::PerFrame].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
 
-	// Root parameter 1:
-	// Direct root CBV at b0 for the vertex shader.
+
+	// b1 - per instance
 	rootParams[RootParameter::PerInstance].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
 	rootParams[RootParameter::PerInstance].Descriptor.ShaderRegister = 1;
 	rootParams[RootParameter::PerInstance].Descriptor.RegisterSpace = 0;
 	rootParams[RootParameter::PerInstance].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
 
-	// Root parameter 2:
-	// SRV descriptor table at t0 for the pixel shader.
-	D3D12_DESCRIPTOR_RANGE srvRange = {};
+	// t4 - material structured buffer
+	rootParams[RootParameter::Materials].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
+	rootParams[RootParameter::Materials].Descriptor.ShaderRegister = 4;
+	rootParams[RootParameter::Materials].Descriptor.RegisterSpace = 0;
+	rootParams[RootParameter::Materials].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
-	srvRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-	srvRange.NumDescriptors = 1;
-	srvRange.BaseShaderRegister = 0;
-	srvRange.RegisterSpace = 0;
-	srvRange.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
 
-	rootParams[RootParameter::PerMaterial].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
-	rootParams[RootParameter::PerMaterial].Descriptor.ShaderRegister = 2;
-	rootParams[RootParameter::PerMaterial].Descriptor.RegisterSpace = 0;
-	rootParams[RootParameter::PerMaterial].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+	// b2 - one uint material index
+	rootParams[RootParameter::MaterialIndex].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
+	rootParams[RootParameter::MaterialIndex].Constants.ShaderRegister = 2;
+	rootParams[RootParameter::MaterialIndex].Constants.RegisterSpace = 0;
+	rootParams[RootParameter::MaterialIndex].Constants.Num32BitValues = 1;
+	rootParams[RootParameter::MaterialIndex].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
-	D3D12_DESCRIPTOR_RANGE textureRanges[4]{};
-
-	for (UINT index = 0; index < 4; ++index)
-	{
-		textureRanges[index].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-		textureRanges[index].NumDescriptors = 1;
-		textureRanges[index].BaseShaderRegister = index;
-		textureRanges[index].RegisterSpace = 0;
-		textureRanges[index].OffsetInDescriptorsFromTableStart =D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
-	}
-
-	for (UINT index = 0; index < 4; ++index)
-	{
-		const UINT rootIndex = RootParameter::BaseColorTexture + index;
-		rootParams[rootIndex].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-		rootParams[rootIndex].DescriptorTable.NumDescriptorRanges = 1;
-		rootParams[rootIndex].DescriptorTable.pDescriptorRanges = &textureRanges[index];
-		rootParams[rootIndex].ShaderVisibility =D3D12_SHADER_VISIBILITY_PIXEL;
-	}
 
 	for (const auto& param : rootParams)
 	{
@@ -457,7 +433,7 @@ void SimplestApp::UpdateMovementAndRotation(XMVECTOR& ViewVector, MovementStruct
 
 	if (mKeys['W'] || mScrollAmount > 0)
 	{
-		movement.zMovement += MOVEMENT_SPEED * DeltaTime;
+		movement.zMovement -= MOVEMENT_SPEED * DeltaTime;
 	}
 
 	if (mKeys['S'] || mScrollAmount < 0)
@@ -498,7 +474,7 @@ void SimplestApp::UpdateMovementAndRotation(XMVECTOR& ViewVector, MovementStruct
 
 bool SimplestApp::BindMaterial( ID3D12GraphicsCommandList* commandList, ConstantBufferAllocator* allocator, unsigned int material)
 {
-	ConstantBufferAllocation allocation = allocator->AllocateConstantBuffer(sizeof(MaterialConstants));
+	/*ConstantBufferAllocation allocation = allocator->AllocateConstantBuffer(sizeof(MaterialConstants));
 
 	if (allocation.mCpuAddress == nullptr) return false;
 
@@ -511,7 +487,7 @@ bool SimplestApp::BindMaterial( ID3D12GraphicsCommandList* commandList, Constant
 	BindTexture( commandList, RootParameter::BaseColorTexture, materialRef.mBaseColorTexture, mBaseColorFallbackHandle);
 	BindTexture(commandList, RootParameter::NormalTexture, materialRef.mNormalTexture, mNormalColorFallbackHandle);
 	BindTexture(commandList, RootParameter::MetallicRoughnessTexture, materialRef.mMetallicRoughnessTexture, mBaseColorFallbackHandle);
-	BindTexture(commandList, RootParameter::EmissiveTexture, materialRef.mEmissive, mBaseColorFallbackHandle);
+	BindTexture(commandList, RootParameter::EmissiveTexture, materialRef.mEmissive, mBaseColorFallbackHandle);*/
 
 	return true;
 }
@@ -773,6 +749,8 @@ void SimplestApp::AppMainLoop()
 		list->IASetVertexBuffers(0, 1, &mVbView);
 		list->IASetIndexBuffer(&mIbView);
 
+		list->SetGraphicsRootShaderResourceView(RootParameter::Materials, mMaterialBuffer.buffer->GetGPUVirtualAddress());
+
 		PIXBeginEvent(list, PIX_COLOR(0, 255, 0), "DRAW");
 		PIXScopedEvent(PIX_COLOR(0, 255, 255), "DRAW");
 
@@ -919,11 +897,11 @@ void SimplestApp::CreateDrawRecords()
 		for (int primitive = 0; primitive < primitives.size(); primitive++)
 		{
 			const DuckyPrimitive* primPtr = &primitives[primitive];
-			const DuckyMaterial*  matPtr =  &mMaterials[primPtr->GetMaterialIndex()];
+			const DuckyMaterial*  matPtr =  &mMaterialsCPU[primPtr->GetMaterialIndex()];
 
 			DrawRecord newRecord{ instance, instancePtr->mMeshDataIndex, primitive, primPtr->GetMaterialIndex() };
 
-			AlphaMode mode = matPtr->constants.alphaMode;
+			AlphaMode mode = primPtr->GetAlphaMode();
 
 			if (matPtr->constants.doubleSided)
 			{
@@ -963,7 +941,11 @@ void SimplestApp::DrawRecords(const std::vector<SortRecord>& Draws, ConstantBuff
 	for (const SortRecord& draw : Draws)
 	{
 		BindInstanceConstants(List, Allocator, draw.record.mInstanceIndex);
-		BindMaterial(List, Allocator, draw.record.mMaterialIndex);
+		//BindMaterial(List, Allocator, draw.record.mMaterialIndex);
+		List->SetGraphicsRoot32BitConstant(
+			RootParameter::MaterialIndex,
+			draw.record.mMaterialIndex,
+			0);
 		const DuckyPrimitive& prim = mMeshes[draw.record.mMeshIndex].GetPrimitive(draw.record.mPrimitiveIndex);
 		prim.Draw(List);
 	}

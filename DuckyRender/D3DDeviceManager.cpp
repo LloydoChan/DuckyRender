@@ -327,12 +327,13 @@ PipelineAndRootSig D3DDeviceManager::CreatePSO(LPCWSTR vertexShader,
 	PipelineAndRootSig newPipeline;
 	
 	ShaderCompilationOutput vertexShaderOutput;
-	if(!mCompiler->CompileShaderDXC(vertexShader, vertexEntry, L"vs_6_0", vertexShaderOutput)) return newPipeline;
+	if(!mCompiler->CompileShaderDXC(vertexShader, vertexEntry, L"vs_6_6", vertexShaderOutput)) return newPipeline;
 	ShaderCompilationOutput pixelShaderOutput;
-	if (!mCompiler->CompileShaderDXC(pixelShader, pixelEntry, L"ps_6_0", pixelShaderOutput)) return newPipeline;
+	if (!mCompiler->CompileShaderDXC(pixelShader, pixelEntry, L"ps_6_6", pixelShaderOutput)) return newPipeline;
 	
 	D3D12_ROOT_SIGNATURE_DESC rootSigDesc = {};
-	rootSigDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
+	rootSigDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
+						D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED;
 	rootSigDesc.NumParameters = static_cast<UINT>(NewRootSigDesc.parameters.size());
 	rootSigDesc.pParameters = NewRootSigDesc.parameters.empty() ? nullptr : NewRootSigDesc.parameters.data();
 	rootSigDesc.NumStaticSamplers = static_cast<UINT>(NewRootSigDesc.staticSamplers.size());
