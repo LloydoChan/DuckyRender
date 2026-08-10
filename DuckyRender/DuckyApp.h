@@ -6,7 +6,7 @@ using namespace DirectX;
 
 const XMFLOAT4 BaseColorFallback{ 1.f, 1.f, 1.f, 1.f };
 const XMFLOAT4 NormalFallback{ 0.5f, 0.5f, 1.f, 1.f };
-const XMFLOAT4 EmissiveFallback{ 1.f, 1.f, 1.f, 1.f };
+const XMFLOAT4 EmissiveFallback{ 0.f,0.f,0.f, 0.f };
 
 class DuckyApp
 {
@@ -61,6 +61,8 @@ protected:
 
 	int mBaseColorFallbackHandle = 0;
 	int mNormalColorFallbackHandle = 0;
+	int mEmissiveColorFallbackHandle = 0;
+	int mMetallicRougnessFallbackHandle = 0;
 
 	std::wstring mInputFilePath;
 

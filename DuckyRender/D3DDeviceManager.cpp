@@ -144,46 +144,6 @@ std::vector<D3D12_INPUT_ELEMENT_DESC> D3DDeviceManager::CreateInputLayout(Shader
 	return Elems;
 }
 
-size_t D3DDeviceManager::InitTexture(const wchar_t* Filepath)
-{
-	// Alternative: Inline instantiation and call
-	std::size_t quickHash = std::hash<std::wstring>{}(Filepath);
-
-	/*if(!mTextures.contains(quickHash))
-	{ 
-		DescriptorHeapResource newResource = CreateTexture(Filepath);
-		if (newResource.buffer == nullptr) return INVALID_HANDLE;
-		mTextures[quickHash] = newResource;
-		return quickHash;
-	}
-	*/
-	return quickHash;
-}
-
-size_t D3DDeviceManager::InitFallbackTexture(const wchar_t* Name, const XMFLOAT4& InputColor)
-{
-	std::size_t quickHash = std::hash<std::wstring>{}(Name);
-
-	/*if (!mTextures.contains(quickHash))
-	{
-		DescriptorHeapResource newResource = CreateFallbackTexture(Name, InputColor);
-		if (newResource.buffer == nullptr) return INVALID_HANDLE;
-		mTextures[quickHash] = newResource;
-		return quickHash;
-	}*/
-
-	return quickHash;
-}
-
-DescriptorHeapResource* D3DDeviceManager::GetTexture(size_t HashedInput)
-{
-	/*auto it = mTextures.find(HashedInput);
-
-	if (it == mTextures.end()) return nullptr;
-
-	return &it->second;*/
-	return 0;
-}
 
 ComPtr<ID3D12Resource> D3DDeviceManager::CreateBuffer(size_t bufferSize)
 {
@@ -585,7 +545,7 @@ DescriptorHeapResource D3DDeviceManager::CreateTexture(const wchar_t* Filepath)
 	return newTexture;
 }
 
-DescriptorHeapResource D3DDeviceManager::CreateFallbackTexture(const wchar_t* Name, const XMFLOAT4& Color)
+DescriptorHeapResource D3DDeviceManager::CreateFallbackTexture(const wchar_t* Name, const XMFLOAT4& Color, DXGI_FORMAT Format)
 {
 	DescriptorHeapResource newTexture;
 
@@ -598,8 +558,8 @@ DescriptorHeapResource D3DDeviceManager::CreateFallbackTexture(const wchar_t* Na
 
 	D3D12_RESOURCE_DESC resDesc = {};
 
-	resDesc.Format = DXGI_FORMAT_BC7_UNORM_SRGB;
-	resDesc.Width = 4;
+	resDesc.Format = Format;
+	resDesc.Width = 1;
 	resDesc.Height =1;
 	resDesc.DepthOrArraySize = 1;
 	resDesc.SampleDesc.Count = 1;
@@ -619,14 +579,22 @@ DescriptorHeapResource D3DDeviceManager::CreateFallbackTexture(const wchar_t* Na
 
 	if (FAILED(hResult) && !OutputErrorFromHResult(hResult, "couldn't create texture ", *mLogFilePtr)) return newTexture;
 
-	hResult = newTexture.buffer->WriteToSubresource(0, nullptr, &Color, 1, 1);
+	uint8_t pixel[4] =
+	{
+		static_cast<uint8_t>(Color.x * 255.0f),
+		static_cast<uint8_t>(Color.y * 255.0f),
+		static_cast<uint8_t>(Color.z * 255.0f),
+		static_cast<uint8_t>(Color.w * 255.0f)
+	};
+
+	hResult = newTexture.buffer->WriteToSubresource(0, nullptr, pixel, 4, 4);
 	newTexture.buffer->SetName(Name);
 
 	if (FAILED(hResult) && !OutputErrorFromHResult(hResult, "couldn't write to subresource ", *mLogFilePtr)) return newTexture;
 
 	// create the resource view
 	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-	srvDesc.Format = DXGI_FORMAT_BC7_UNORM_SRGB;
+	srvDesc.Format = Format;
 	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
 	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
 	srvDesc.Texture2D.MipLevels = 1;

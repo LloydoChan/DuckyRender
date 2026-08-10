@@ -23,6 +23,7 @@ struct CookedVertex
 struct MaterialInfo
 {
 	XMFLOAT4 baseColor{1.f,1.f,1.f,1.f};
+	XMFLOAT3 emissiveColor{ 1.f,1.f,1.f};
 
 	float normalScale = 0.f;
 	float roughness = 0.f; 
@@ -345,6 +346,8 @@ void ProcessMaterials(const tinygltf::Model& Model,
 
 		const std::vector<double>& baseColorValues = pbrValues.baseColorFactor;
 		newMaterial.baseColor =	XMFLOAT4 ((float)baseColorValues[0], (float)baseColorValues[1], (float)baseColorValues[2], (float)baseColorValues[3]);
+		const std::vector<double>& emissiveColorValues = material.emissiveFactor;
+		newMaterial.emissiveColor = XMFLOAT3((float)emissiveColorValues[0], (float)emissiveColorValues[1], (float)emissiveColorValues[2]);
 		newMaterial.roughness = static_cast<float>(pbrValues.roughnessFactor);
 		newMaterial.metal	  = static_cast<float>(pbrValues.metallicFactor);
 	

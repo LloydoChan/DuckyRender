@@ -77,15 +77,25 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 	InitTextures(DuckyFile);
 
 	// init fallback textures
-	DescriptorHeapResource newResource = mDeviceManager->CreateFallbackTexture(L"BaseColorFallbackTexture", BaseColorFallback);
+	DescriptorHeapResource newResource = mDeviceManager->CreateFallbackTexture(L"BaseColorFallbackTexture", BaseColorFallback, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB);
 	if (newResource.buffer == nullptr) return false;
 	mTextures.emplace_back(newResource);
 	mBaseColorFallbackHandle = mTextures.size() - 1;
 
-	newResource = mDeviceManager->CreateFallbackTexture(L"NormalFallbackTexture", NormalFallback);
+	newResource = mDeviceManager->CreateFallbackTexture(L"NormalFallbackTexture", NormalFallback, DXGI_FORMAT_R8G8B8A8_UNORM);
 	if (newResource.buffer == nullptr) return false;
 	mTextures.emplace_back(newResource);
 	mNormalColorFallbackHandle = mTextures.size() - 1;
+
+	newResource = mDeviceManager->CreateFallbackTexture(L"EmissiveFallbackTexture", EmissiveFallback, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB);
+	if (newResource.buffer == nullptr) return false;
+	mTextures.emplace_back(newResource);
+	mEmissiveColorFallbackHandle = mTextures.size() - 1;
+
+	newResource = mDeviceManager->CreateFallbackTexture(L"MetallicRoughnessFallbackTexture", BaseColorFallback, DXGI_FORMAT_R8G8B8A8_UNORM);
+	if (newResource.buffer == nullptr) return false;
+	mTextures.emplace_back(newResource);
+	mMetallicRougnessFallbackHandle = mTextures.size() - 1;
 
 
 	InitMaterials(DuckyFile);
@@ -651,24 +661,22 @@ void SimplestApp::AppMainLoop()
 		mMouseDeltaX = mMouseDeltaY = 0;
 		mScrollAmount = 0;
 
-		std::vector<TransformedDrawRecord> transformedRecords = TransformAABBsToOBBs(mOpaqueDblDraws);
 		
-		CopyOBBsToGPU(transformedRecords, currentFrame);
 
 		XMFLOAT4X4 viewProj;
 		XMStoreFloat4x4(&viewProj, vp);
 		DuckyFrustum frameFrustum = ExtractFrustumFromViewProjection(viewProj);
-		std::vector<TransformedDrawRecord> nonCulledRecords = FrustumCullUsingOBBs(transformedRecords, frameFrustum);
-		unsigned int numDrawableMeshes = nonCulledRecords.size();
-		std::vector<SortRecord> sortedRecordsOpaqueDbl = SortDrawRecords(view, nonCulledRecords);
 
-		//transformedRecords = TransformAABBs(mMaskedDblDraws);
-		//std::vector<SortRecord> sortedRecordsMaskedDbl = SortDrawRecords(view, transformedRecords);
-		////CopyAABBsToGPU(transformedRecords, currentFrame);
+		unsigned int numDrawableMeshes = 0;
+	
+		std::vector<SortRecord> sortedRecordsOpaqueDbl = SortAndCull(mOpaqueDblDraws, frameFrustum, vp, currentFrame);
+		numDrawableMeshes += sortedRecordsOpaqueDbl.size();
 
-		//transformedRecords = TransformAABBs(mBlendedDblDraws);
-		//std::vector<SortRecord> sortedRecordsBlendedDbl = SortDrawRecords(view, transformedRecords, true);
-		////CopyAABBsToGPU(transformedRecords, currentFrame);
+		std::vector<SortRecord> sortedRecordsMaskedDbl = SortAndCull(mMaskedDblDraws, frameFrustum, vp, currentFrame);
+		numDrawableMeshes += sortedRecordsMaskedDbl.size();
+
+		std::vector<SortRecord> sortedRecordsBlendedDbl = SortAndCull(mBlendedDblDraws, frameFrustum, vp, currentFrame);
+		numDrawableMeshes += sortedRecordsBlendedDbl.size();
 
 		//transformedRecords = TransformAABBs(mOpaqueDraws);
 		//std::vector<SortRecord> sortedRecordsOpaque = SortDrawRecords(view, transformedRecords);
@@ -681,7 +689,7 @@ void SimplestApp::AppMainLoop()
 		//transformedRecords = TransformAABBs(mMaskedDraws);
 		//std::vector<SortRecord> sortedRecordsMasked = SortDrawRecords(view, transformedRecords);
 		////CopyAABBsToGPU(transformedRecords, currentFrame);
-		
+		//
 
 		float clearColor[] = { 0.5f, 0.8f, 0.9f, 1.f };
 
@@ -759,6 +767,12 @@ void SimplestApp::AppMainLoop()
 		list->SetPipelineState(mOpaqueDblPipeline.pipeLineState.Get());
 		DrawRecords(sortedRecordsOpaqueDbl, cbvAllocator, list);
 
+		list->SetPipelineState(mMaskedDblPipeline.pipeLineState.Get());
+		DrawRecords(sortedRecordsMaskedDbl, cbvAllocator, list);
+
+		list->SetPipelineState(mTransparentDblPipeline.pipeLineState.Get());
+		DrawRecords(sortedRecordsBlendedDbl, cbvAllocator, list);
+
 		/*list->SetPipelineState(mMaskedDblPipeline.pipeLineState.Get());
 		DrawRecords(sortedRecordsMaskedDbl, cbvAllocator, list);
 
@@ -787,7 +801,7 @@ void SimplestApp::AppMainLoop()
 			list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_LINELIST);
 			list->IASetVertexBuffers(0,1,&mVbDebugView);
 			list->IASetIndexBuffer(&mIbDebugView);
-			list->DrawIndexedInstanced(24, transformedRecords.size(), 0, 0, 0);
+			list->DrawIndexedInstanced(24, sortedRecordsOpaqueDbl.size(), 0, 0, 0);
 		}
 
 
@@ -901,7 +915,7 @@ void SimplestApp::CreateDrawRecords()
 
 			DrawRecord newRecord{ instance, instancePtr->mMeshDataIndex, primitive, primPtr->GetMaterialIndex() };
 
-			AlphaMode mode = primPtr->GetAlphaMode();
+			AlphaMode mode = matPtr->constants.alphaMode;
 
 			if (matPtr->constants.doubleSided)
 			{
@@ -978,7 +992,7 @@ bool SimplestApp::Resize(UINT WindowWidth, UINT WindowHeight)
 }
 
 
-std::vector<TransformedDrawRecord> SimplestApp::TransformAABBsToOBBs(std::vector<DrawRecord>& recordsToSort)
+std::vector<TransformedDrawRecord> SimplestApp::TransformAABBsToOBBs(const std::vector<DrawRecord>& recordsToSort)
 {
 	PIXScopedEvent(PIX_COLOR(255, 0, 0), "TrasnformAABBs");
 
@@ -1082,6 +1096,15 @@ void SimplestApp::CopyOBBsToGPU(const std::vector<TransformedDrawRecord>& Transf
 		const GPUOBB& box = TransformedOBBs[i].mOBB;
 		dst[i] = box;
 	}
+}
+
+std::vector<SortRecord> SimplestApp::SortAndCull(const std::vector<DrawRecord>& DrawRecords, const DuckyFrustum& Frustum, const XMMATRIX& View, int CurrentFrame)
+{
+	std::vector<TransformedDrawRecord> transformedRecords = TransformAABBsToOBBs(DrawRecords);
+	CopyOBBsToGPU(transformedRecords, CurrentFrame);
+	std::vector<TransformedDrawRecord> nonCulledRecords = FrustumCullUsingOBBs(transformedRecords, Frustum);
+	std::vector<SortRecord> sortedRecords = SortDrawRecords(View, nonCulledRecords);
+	return sortedRecords;
 }
 
 std::vector<TransformedDrawRecord> SimplestApp::FrustumCullUsingOBBs(const std::vector<TransformedDrawRecord>& TransformedOBBs, const DuckyFrustum& Frustum)

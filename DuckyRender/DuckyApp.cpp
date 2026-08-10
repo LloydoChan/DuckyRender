@@ -398,7 +398,7 @@ bool DuckyApp::InitMaterials(std::ifstream& ModelFile)
 			}
 			else
 			{
-				gpuFriendly.MetallicRoughnessTexture = mTextures[mBaseColorFallbackHandle].heapOffset;
+				gpuFriendly.MetallicRoughnessTexture = mTextures[mMetallicRougnessFallbackHandle].heapOffset;
 			}
 
 			if (nextMaterial.mEmissive != -1)
@@ -407,7 +407,7 @@ bool DuckyApp::InitMaterials(std::ifstream& ModelFile)
 			}
 			else
 			{
-				gpuFriendly.EmissiveTexture = mTextures[mBaseColorFallbackHandle].heapOffset;
+				gpuFriendly.EmissiveTexture = mTextures[mEmissiveColorFallbackHandle].heapOffset;
 			}
 
 			memcpy(dst, &gpuFriendly, sizeof(GPUMaterial));

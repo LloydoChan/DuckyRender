@@ -31,7 +31,7 @@ Output main(float3 pos : POSITION, float3 normal : NORMAL, float4 tangent : TANG
     result.worldPos = worldPos.xyz;
     result.svpos    = mul(worldPos, viewProj);
     
-    result.normal    = mul(float4(normal, 0.f), normalTransform).xyz;
+    result.normal = mul(float4(normal, 0.f), normalTransform).xyz;
     float3 tangentWs = normalize(mul(tangent.xyz, (float3x3) instanceTransform));
     
     result.tangent = float4(tangentWs, tangent.w);

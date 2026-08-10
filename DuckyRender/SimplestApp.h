@@ -13,7 +13,9 @@ namespace MaterialVisualization
 	static const unsigned int ROUGHNESS = 2;
 	static const unsigned int METAL = 3;
 	static const unsigned int NORMAL = 4;
-	static const unsigned int VIS_MAX = 5;
+	static const unsigned int UV = 5;
+	static const unsigned int BASE = 6;
+	static const unsigned int VIS_MAX = 7;
 };
 
 struct DrawRecord
@@ -84,9 +86,10 @@ class SimplestApp : public DuckyApp
 
 		bool Resize(UINT WindowWidth, UINT WindowHeight);
 
-		std::vector<TransformedDrawRecord> TransformAABBsToOBBs(std::vector<DrawRecord>& recordsToSort);
+		std::vector<TransformedDrawRecord> TransformAABBsToOBBs(const std::vector<DrawRecord>& recordsToSort);
 		std::vector<SortRecord> SortDrawRecords(const XMMATRIX& View, const std::vector<TransformedDrawRecord>& RecordsToSort, bool bAlphaPass = false);
 		void CopyOBBsToGPU(const std::vector<TransformedDrawRecord>& TransformedOBBs, unsigned int CurrentFrame);
+		std::vector<SortRecord> SortAndCull(const std::vector<DrawRecord>& DrawRecords, const DuckyFrustum& Frustum, const XMMATRIX& View, int CurrentFrame);
 
 		std::vector<TransformedDrawRecord> FrustumCullUsingOBBs(const std::vector<TransformedDrawRecord>& TransformedOBBs, const DuckyFrustum& Frustum);
 		DuckyFrustum ExtractFrustumFromViewProjection(const XMFLOAT4X4& ViewProjection);

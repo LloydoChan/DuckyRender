@@ -15,13 +15,17 @@ struct MaterialConstants
 {
     XMFLOAT4 mBaseColorFactor =
     {
-        1.0f, 1.0f, 1.0f, 1.0f
+        1.f, 1.f, 1.f, 1.f
     };
 
+    XMFLOAT3 mEmissiveColorFactor =
+    {
+        0.f, 0.f, 0.f
+    };
+
+    float mNormalScale = 1.0f;
     float mRoughnessFactor = 1.0f;
     float mMetallicFactor = 1.0f;
-    float mNormalScale = 1.0f;
-
 
     AlphaMode alphaMode = AlphaMode::Opaque;
     float alphaCutoff = 0.5f;
@@ -44,10 +48,11 @@ struct DuckyMaterial
 struct GPUMaterial
 {
     XMFLOAT4 BaseColorFactor;
+    XMFLOAT3 EmissiveFactor;
 
+    float NormalScale;
     float RoughnessFactor;
     float MetallicFactor;
-    float NormalScale;
 
     uint32_t alphaMode;
     float alphaCutoff;
