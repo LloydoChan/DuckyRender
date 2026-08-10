@@ -672,11 +672,20 @@ void SimplestApp::AppMainLoop()
 		std::vector<SortRecord> sortedRecordsOpaqueDbl = SortAndCull(mOpaqueDblDraws, frameFrustum, vp, currentFrame);
 		numDrawableMeshes += sortedRecordsOpaqueDbl.size();
 
+		std::vector<SortRecord> sortedRecordsOpaque = SortAndCull(mOpaqueDraws, frameFrustum, vp, currentFrame);
+		numDrawableMeshes += sortedRecordsOpaque.size();
+
 		std::vector<SortRecord> sortedRecordsMaskedDbl = SortAndCull(mMaskedDblDraws, frameFrustum, vp, currentFrame);
 		numDrawableMeshes += sortedRecordsMaskedDbl.size();
 
+		std::vector<SortRecord> sortedRecordsMasked = SortAndCull(mMaskedDraws, frameFrustum, vp, currentFrame);
+		numDrawableMeshes += sortedRecordsMasked.size();
+
 		std::vector<SortRecord> sortedRecordsBlendedDbl = SortAndCull(mBlendedDblDraws, frameFrustum, vp, currentFrame);
 		numDrawableMeshes += sortedRecordsBlendedDbl.size();
+
+		std::vector<SortRecord> sortedRecordsBlended = SortAndCull(mBlendedDraws, frameFrustum, vp, currentFrame);
+		numDrawableMeshes += sortedRecordsBlended.size();
 
 		//transformedRecords = TransformAABBs(mOpaqueDraws);
 		//std::vector<SortRecord> sortedRecordsOpaque = SortDrawRecords(view, transformedRecords);
@@ -773,20 +782,14 @@ void SimplestApp::AppMainLoop()
 		list->SetPipelineState(mTransparentDblPipeline.pipeLineState.Get());
 		DrawRecords(sortedRecordsBlendedDbl, cbvAllocator, list);
 
-		/*list->SetPipelineState(mMaskedDblPipeline.pipeLineState.Get());
-		DrawRecords(sortedRecordsMaskedDbl, cbvAllocator, list);
-
 		list->SetPipelineState(mOpaquePipeline.pipeLineState.Get());
 		DrawRecords(sortedRecordsOpaque, cbvAllocator, list);
 
 		list->SetPipelineState(mMaskedPipeline.pipeLineState.Get());
 		DrawRecords(sortedRecordsMasked, cbvAllocator, list);
 
-		list->SetPipelineState(mTransparentDblPipeline.pipeLineState.Get());
-		DrawRecords(sortedRecordsBlendedDbl, cbvAllocator, list);
-
 		list->SetPipelineState(mTransparentPipeline.pipeLineState.Get());
-		DrawRecords(sortedRecordsBlended, cbvAllocator, list);*/
+		DrawRecords(sortedRecordsBlended, cbvAllocator, list);
 
 		if (bDrawDebug)
 		{

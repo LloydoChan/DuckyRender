@@ -287,7 +287,7 @@ void WriteOutTextureData(int index,
 						 const std::filesystem::path& OutputPath)
 {
 	static std::unordered_map<std::string, std::string> assignedNames;
-	
+
 	if (index != -1)
 	{
 		const tinygltf::Texture tex = Model.textures[index];
@@ -315,6 +315,10 @@ void WriteOutTextureData(int index,
 			ConvertToDds(Type, "texConv.exe", expectedInputPath.string(), outputDirStr, prefixString);
 
 			assignedNames[textureName] = expectedDDSPathStr;
+		}
+		else
+		{
+			orderedNames[index] = itr->second;
 		}
 	}
 }

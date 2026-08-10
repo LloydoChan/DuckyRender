@@ -435,6 +435,14 @@ bool DuckyApp::InitTextures(std::ifstream& ModelFile)
 		size_t textureNameLength = 0;
 		ModelFile.read((char*)&textureNameLength, sizeof(size_t));
 		std::string fileName(textureNameLength, '\0');
+
+		if (textureNameLength == 0)
+		{
+			DescriptorHeapResource dummyResource;
+			mTextures.emplace_back(dummyResource);
+			continue;
+		}
+
 		ModelFile.read((char*)&fileName[0], textureNameLength);
 
 		if (!ModelFile) return false;
