@@ -49,9 +49,12 @@ struct PerFrameConstants
 
 	unsigned int mVisualisationMode = 0;
 
+	uint32_t mInstanceBufferIndex;
+	uint32_t mMaterialBufferIndex;
+
 // put this in here to pad out entire struct to 128 bytes
 private:
-	XMFLOAT3 mDummyPadding;
+	float mDummyPadding;
 };
 
 struct PerInstanceConstants

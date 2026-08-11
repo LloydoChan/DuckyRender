@@ -25,10 +25,8 @@ const float ROTATIONAL_SPEED_PITCH = 2.f * 3.141f;
 namespace RootParameter
 {
 	constexpr UINT PerFrame = 0;
-	constexpr UINT Instances = 1;
-	constexpr UINT Materials = 2;
-	constexpr UINT DrawConstants = 3;
-	constexpr UINT Count = 4;
+	constexpr UINT DrawConstants = 1;
+	constexpr UINT Count = 2;
 };
 
 SimplestApp::~SimplestApp()
@@ -49,8 +47,6 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 		mLogFile << ec.message().c_str() << std::endl;
 		return false;
 	}
-
-	
 
 	InitInstanceData(DuckyFile);
 	InitTextures(DuckyFile);
@@ -112,20 +108,6 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 	rootParams[RootParameter::PerFrame].Descriptor.ShaderRegister = 0;
 	rootParams[RootParameter::PerFrame].Descriptor.RegisterSpace = 0;
 	rootParams[RootParameter::PerFrame].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
-
-
-	// b1 - per instance
-	rootParams[RootParameter::Instances].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
-	rootParams[RootParameter::Instances].Descriptor.ShaderRegister = 3;
-	rootParams[RootParameter::Instances].Descriptor.RegisterSpace = 0;
-	rootParams[RootParameter::Instances].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
-
-	// t4 - material structured buffer
-	rootParams[RootParameter::Materials].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
-	rootParams[RootParameter::Materials].Descriptor.ShaderRegister = 4;
-	rootParams[RootParameter::Materials].Descriptor.RegisterSpace = 0;
-	rootParams[RootParameter::Materials].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-
 
 	// b2 - one uint material index
 	rootParams[RootParameter::DrawConstants].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
@@ -682,14 +664,13 @@ void SimplestApp::AppMainLoop()
 		asFrameConstants->mLightColor = XMFLOAT4(1.f, 1.f, 1.f, 1.f);
 		asFrameConstants->mLightDirection = XMFLOAT4(-0.4f, -1.0f, 0.2f, 0.f);
 		asFrameConstants->mVisualisationMode = mVisualizationMode;
+		asFrameConstants->mMaterialBufferIndex = mMaterialBuffer.heapOffset;
+		asFrameConstants->mInstanceBufferIndex = mInstanceBuffer.heapOffset;
 		list->SetGraphicsRootConstantBufferView(0, constantAllocation.mGpuAddress);
 
 		list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 		list->IASetVertexBuffers(0, 1, &mVbView);
 		list->IASetIndexBuffer(&mIbView);
-
-		list->SetGraphicsRootShaderResourceView(RootParameter::Instances, mInstanceBuffer.buffer->GetGPUVirtualAddress());
-		list->SetGraphicsRootShaderResourceView(RootParameter::Materials, mMaterialBuffer.buffer->GetGPUVirtualAddress());
 
 		PIXBeginEvent(list, PIX_COLOR(0, 255, 0), "DRAW");
 		PIXScopedEvent(PIX_COLOR(0, 255, 255), "DRAW");

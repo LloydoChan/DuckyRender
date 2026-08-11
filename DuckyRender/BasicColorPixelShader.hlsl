@@ -22,12 +22,15 @@ static const uint ALPHA_BLEND = 2;
 cbuffer PerFrameConstants : register(b0)
 {
     matrix viewProj;
-    
+
     float4 cameraPosition;
     float4 lightDirection;
     float4 lightColor;
-    
+
     uint visualisationMode;
+
+    uint InstanceBufferIndex;
+    uint MaterialBufferIndex;
 };
 
 cbuffer DrawConstants : register(b2)
@@ -54,12 +57,6 @@ struct InstanceMaterial
     uint MetallicRoughnessTexture;
     uint EmissiveTexture;
 };
-
-Texture2D<float4> tex : register(t0);
-Texture2D<float4> NormalMapTexture : register(t1);
-Texture2D<float4> MetallicRoughnessTexture : register(t2);
-Texture2D<float4> EmissiveTexture : register(t3);
-StructuredBuffer<InstanceMaterial> Materials : register(t4);
 
 SamplerState smp : register(s0);
 
@@ -122,7 +119,8 @@ float4 main(Input input,
             uint primitiveID : SV_PrimitiveID,
             bool isFrontFace : SV_IsFrontFace) : SV_TARGET
 {
-    InstanceMaterial mat = Materials[MaterialIndex];
+    StructuredBuffer<InstanceMaterial> materials = ResourceDescriptorHeap[MaterialBufferIndex];
+    InstanceMaterial mat = materials[MaterialIndex];
     float4 baseColor = mat.BaseColorFactor * float4(input.col.rgb, 1.f);
     
     Texture2D<float4> base = ResourceDescriptorHeap[mat.BaseColorTexture];

@@ -8,13 +8,18 @@ struct Output
     float4 col : COLOR;
 };
 
-cbuffer cbuff0 : register(b0)
+cbuffer PerFrameConstants : register(b0)
 {
     matrix viewProj;
-    
+
     float4 cameraPosition;
     float4 lightDirection;
     float4 lightColor;
+
+    uint visualisationMode;
+
+    uint InstanceBufferIndex;
+    uint MaterialBufferIndex;
 };
 
 struct GPUInstance
@@ -23,17 +28,18 @@ struct GPUInstance
     float4x4 Normal;
 };
 
-StructuredBuffer<GPUInstance> Instances : register(t3);
-
 cbuffer DrawConstants : register(b2)
 {
     uint InstanceIndex;
     uint MaterialIndex;
 };
 
+
 Output main(float3 pos : POSITION, float3 normal : NORMAL, float4 tangent : TANGENT, float2 uv : TEXCOORD, float4 col : COLOR) 
 {
-    GPUInstance instance = Instances[InstanceIndex];
+    StructuredBuffer<GPUInstance> instances = ResourceDescriptorHeap[InstanceBufferIndex];
+    GPUInstance instance = instances[InstanceIndex];
+    
     Output result;
     
     float4 worldPos = mul(float4(pos, 1.0f), instance.World);
