@@ -126,3 +126,9 @@ struct DuckyMeshInstance
 	int mMeshDataIndex = -1;
 	XMMATRIX mTransform = XMMatrixIdentity();
 };
+
+struct GPUInstance
+{
+	XMFLOAT4X4 World;
+	XMFLOAT4X4 Normal;
+};

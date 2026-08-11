@@ -32,7 +32,8 @@ cbuffer PerFrameConstants : register(b0)
 
 cbuffer DrawConstants : register(b2)
 {
-    uint materialIndex;
+    uint InstanceIndex;
+    uint MaterialIndex;
 };
 
 struct InstanceMaterial
@@ -121,7 +122,7 @@ float4 main(Input input,
             uint primitiveID : SV_PrimitiveID,
             bool isFrontFace : SV_IsFrontFace) : SV_TARGET
 {
-    InstanceMaterial mat = Materials[materialIndex];
+    InstanceMaterial mat = Materials[MaterialIndex];
     float4 baseColor = mat.BaseColorFactor * float4(input.col.rgb, 1.f);
     
     Texture2D<float4> base = ResourceDescriptorHeap[mat.BaseColorTexture];
@@ -204,7 +205,7 @@ float4 main(Input input,
         return float4(roughness.xxx, 1.f);
     
     if (visualisationMode == NORMAL)
-        return float4(N, 1.f);
+        return float4(N * 0.5f + 0.5f, 1.f);
     
     if (visualisationMode == METAL)
         return float4(metallic.xxx, 1.f);

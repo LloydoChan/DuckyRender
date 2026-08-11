@@ -345,6 +345,47 @@ D3D12_QUERY_DATA_PIPELINE_STATISTICS DuckyApp::WriteOutGPUStats(UINT FrameIndex)
 	return stats;
 }
 
+bool DuckyApp::InitInstanceData(std::ifstream& ModelFile)
+{
+	size_t numInstances = 0;
+
+	ModelFile.read(reinterpret_cast<char*>(&numInstances), sizeof(numInstances));
+
+	if (!ModelFile) return false;
+
+	for (size_t instanceIndex = 0; instanceIndex < numInstances; ++instanceIndex)
+	{
+		DuckyMeshInstance instance;
+
+		ModelFile.read(reinterpret_cast<char*>(&instance.mMeshDataIndex), sizeof(instance.mMeshDataIndex));
+		ModelFile.read(reinterpret_cast<char*>(&instance.mTransform), sizeof(instance.mTransform));
+
+		if (!ModelFile) return false;
+
+		mInstances.emplace_back(std::move(instance));
+	}
+
+	const size_t bufferSize = mInstances.size() * sizeof(GPUInstance);
+	mInstanceBuffer = mDeviceManager->CreateStructuredBuffer(bufferSize, sizeof(GPUInstance));
+
+	HRESULT result = mInstanceBuffer.buffer->Map(0, nullptr, &mInstanceBuffer.mapped);
+
+	if (FAILED(result)) return false;
+
+	GPUInstance* dst = static_cast<GPUInstance*>(mInstanceBuffer.mapped);
+
+	for (const DuckyMeshInstance& instance : mInstances)
+	{
+		XMMATRIX normal = XMMatrixInverse(nullptr, instance.mTransform);
+		XMMATRIX world  = XMMatrixTranspose(instance.mTransform);
+		XMStoreFloat4x4(&dst->World, world);
+		XMStoreFloat4x4(&dst->Normal, normal);
+		++dst;
+	}
+
+	return true;
+}
+
 bool DuckyApp::InitMaterials(std::ifstream& ModelFile)
 {
 	size_t numMaterials = 0;

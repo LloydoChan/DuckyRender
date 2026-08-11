@@ -35,6 +35,7 @@ public:
 	D3D12_QUERY_DATA_PIPELINE_STATISTICS WriteOutGPUStats(UINT FrameIndex);
 
 	// materials and mesh data
+	bool InitInstanceData(std::ifstream& ModelFile);
 	bool InitMaterials(std::ifstream& ModelFile);
 	bool InitTextures(std::ifstream& ModelFile);
 	bool InitMeshes(std::ifstream& ModelFile);
@@ -85,6 +86,7 @@ protected:
 
 	std::vector<DuckyMaterial> mMaterialsCPU;
 	MappedDescriptorHeapResource mMaterialBuffer;
+	MappedDescriptorHeapResource mInstanceBuffer;
 	std::vector<DescriptorHeapResource> mTextures;
 
 	std::vector<DuckyMeshData> mMeshes;

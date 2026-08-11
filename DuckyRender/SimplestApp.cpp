@@ -25,9 +25,9 @@ const float ROTATIONAL_SPEED_PITCH = 2.f * 3.141f;
 namespace RootParameter
 {
 	constexpr UINT PerFrame = 0;
-	constexpr UINT PerInstance = 1;
+	constexpr UINT Instances = 1;
 	constexpr UINT Materials = 2;
-	constexpr UINT MaterialIndex = 3;
+	constexpr UINT DrawConstants = 3;
 	constexpr UINT Count = 4;
 };
 
@@ -50,30 +50,9 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 		return false;
 	}
 
-	size_t numInstances = 0;
+	
 
-	DuckyFile.read(
-		reinterpret_cast<char*>(&numInstances),
-		sizeof(numInstances));
-
-	if (!DuckyFile)
-	{
-		return false;
-	}
-
-	for (size_t instanceIndex = 0; instanceIndex < numInstances; ++instanceIndex)
-	{
-		DuckyMeshInstance instance;
-
-		DuckyFile.read( reinterpret_cast<char*>(&instance.mMeshDataIndex), sizeof(instance.mMeshDataIndex));
-		DuckyFile.read( reinterpret_cast<char*>(&instance.mTransform), sizeof(instance.mTransform));
-
-		if (!DuckyFile) return false;
-
-		mInstances.emplace_back(std::move(instance));
-	}
-
-
+	InitInstanceData(DuckyFile);
 	InitTextures(DuckyFile);
 
 	// init fallback textures
@@ -119,10 +98,7 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 		totalPrimitiveDraws += mMeshes[instance.mMeshDataIndex].GetPrimitiveCount();
 	}
 
-	// work out number of bytes for matrices needed - instances plus the world proj matrix
-	const UINT64 neededCapacity = AlignConstantBufferSize(sizeof(PerFrameConstants)) +
-								  numInstances * AlignConstantBufferSize(sizeof(PerInstanceConstants)) +
-								  totalPrimitiveDraws * AlignConstantBufferSize(sizeof(MaterialConstants));
+	UINT64 neededCapacity = AlignConstantBufferSize(sizeof(PerFrameConstants));
 
 	mDuckyContext = new DuckyGraphicsContext;
 	if(!mDuckyContext->Init(mDeviceManager.get(), neededCapacity, &mLogFile)) return false;
@@ -139,10 +115,10 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 
 
 	// b1 - per instance
-	rootParams[RootParameter::PerInstance].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
-	rootParams[RootParameter::PerInstance].Descriptor.ShaderRegister = 1;
-	rootParams[RootParameter::PerInstance].Descriptor.RegisterSpace = 0;
-	rootParams[RootParameter::PerInstance].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
+	rootParams[RootParameter::Instances].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
+	rootParams[RootParameter::Instances].Descriptor.ShaderRegister = 3;
+	rootParams[RootParameter::Instances].Descriptor.RegisterSpace = 0;
+	rootParams[RootParameter::Instances].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
 
 	// t4 - material structured buffer
 	rootParams[RootParameter::Materials].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
@@ -152,11 +128,11 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 
 
 	// b2 - one uint material index
-	rootParams[RootParameter::MaterialIndex].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
-	rootParams[RootParameter::MaterialIndex].Constants.ShaderRegister = 2;
-	rootParams[RootParameter::MaterialIndex].Constants.RegisterSpace = 0;
-	rootParams[RootParameter::MaterialIndex].Constants.Num32BitValues = 1;
-	rootParams[RootParameter::MaterialIndex].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+	rootParams[RootParameter::DrawConstants].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
+	rootParams[RootParameter::DrawConstants].Constants.ShaderRegister = 2;
+	rootParams[RootParameter::DrawConstants].Constants.RegisterSpace = 0;
+	rootParams[RootParameter::DrawConstants].Constants.Num32BitValues = 2;
+	rootParams[RootParameter::DrawConstants].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
 
 
 	for (const auto& param : rootParams)
@@ -482,60 +458,6 @@ void SimplestApp::UpdateMovementAndRotation(XMVECTOR& ViewVector, MovementStruct
 	}
 }
 
-bool SimplestApp::BindMaterial( ID3D12GraphicsCommandList* commandList, ConstantBufferAllocator* allocator, unsigned int material)
-{
-	/*ConstantBufferAllocation allocation = allocator->AllocateConstantBuffer(sizeof(MaterialConstants));
-
-	if (allocation.mCpuAddress == nullptr) return false;
-
-	const DuckyMaterial& materialRef = mMaterials[material];
-
-	std::memcpy(allocation.mCpuAddress, &materialRef.constants, sizeof(MaterialConstants));
-
-	commandList->SetGraphicsRootConstantBufferView(RootParameter::PerMaterial, allocation.mGpuAddress);
-
-	BindTexture( commandList, RootParameter::BaseColorTexture, materialRef.mBaseColorTexture, mBaseColorFallbackHandle);
-	BindTexture(commandList, RootParameter::NormalTexture, materialRef.mNormalTexture, mNormalColorFallbackHandle);
-	BindTexture(commandList, RootParameter::MetallicRoughnessTexture, materialRef.mMetallicRoughnessTexture, mBaseColorFallbackHandle);
-	BindTexture(commandList, RootParameter::EmissiveTexture, materialRef.mEmissive, mBaseColorFallbackHandle);*/
-
-	return true;
-}
-
-void SimplestApp::BindTexture(ID3D12GraphicsCommandList* commandList, UINT rootParameter, int textureHandle, unsigned int fallBackHandle)
-{
-	DescriptorHeapResource* texture = nullptr;
-	if (textureHandle == -1)
-	{
-		texture = &mTextures[fallBackHandle];
-	}
-	else
-	{
-		texture = &mTextures[textureHandle];
-	}
-	
-	if (texture == nullptr) return; // if still not found...
-
-	commandList->SetGraphicsRootDescriptorTable(rootParameter,texture->descHandle);
-}
-
-bool SimplestApp::BindInstanceConstants( ID3D12GraphicsCommandList* commandList, ConstantBufferAllocator* allocator, unsigned int instance)
-{
-	ConstantBufferAllocation allocation = allocator->AllocateConstantBuffer( sizeof(PerInstanceConstants));
-
-	if (allocation.mCpuAddress == nullptr) return false;
-
-	auto* constants = static_cast<PerInstanceConstants*>(allocation.mCpuAddress);
-
-	XMMATRIX normalMatrix = XMMatrixInverse(nullptr, mInstances[instance].mTransform);
-
-	XMStoreFloat4x4(&constants->normal,normalMatrix);
-	XMStoreFloat4x4(&constants->world, XMMatrixTranspose(mInstances[instance].mTransform));
-	commandList->SetGraphicsRootConstantBufferView(RootParameter::PerInstance, allocation.mGpuAddress);
-
-	return true;
-}
-
 void SimplestApp::AppMainLoop()
 {
 	float fov = XMConvertToRadians(60.0f);
@@ -766,6 +688,7 @@ void SimplestApp::AppMainLoop()
 		list->IASetVertexBuffers(0, 1, &mVbView);
 		list->IASetIndexBuffer(&mIbView);
 
+		list->SetGraphicsRootShaderResourceView(RootParameter::Instances, mInstanceBuffer.buffer->GetGPUVirtualAddress());
 		list->SetGraphicsRootShaderResourceView(RootParameter::Materials, mMaterialBuffer.buffer->GetGPUVirtualAddress());
 
 		PIXBeginEvent(list, PIX_COLOR(0, 255, 0), "DRAW");
@@ -957,13 +880,16 @@ void SimplestApp::DrawRecords(const std::vector<SortRecord>& Draws, ConstantBuff
 {
 	for (const SortRecord& draw : Draws)
 	{
-		BindInstanceConstants(List, Allocator, draw.record.mInstanceIndex);
-		//BindMaterial(List, Allocator, draw.record.mMaterialIndex);
-		List->SetGraphicsRoot32BitConstant(
-			RootParameter::MaterialIndex,
-			draw.record.mMaterialIndex,
-			0);
+		const UINT constants[2] =
+		{
+			draw.record.mInstanceIndex,
+			draw.record.mMaterialIndex
+		};
+
+		List->SetGraphicsRoot32BitConstants( RootParameter::DrawConstants, 2, constants, 0);
+
 		const DuckyPrimitive& prim = mMeshes[draw.record.mMeshIndex].GetPrimitive(draw.record.mPrimitiveIndex);
+
 		prim.Draw(List);
 	}
 }
