@@ -1,6 +1,6 @@
 #pragma once
 #include "DuckyDescriptor.h"
-#include "SimplestApp.h"
+#include "DuckyRenderTypes.h"
 
 using Microsoft::WRL::ComPtr;
 

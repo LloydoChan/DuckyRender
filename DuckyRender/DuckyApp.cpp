@@ -1,6 +1,7 @@
 #include "pch.h"
 #include "DuckyApp.h"
 #include "D3DDeviceManager.h"
+#include "DuckyRenderTypes.h"
 
 DebugVertex boxVertices[8] =
 {
@@ -378,8 +379,8 @@ bool DuckyApp::InitInstanceData(std::ifstream& ModelFile)
 	{
 		XMMATRIX normal = XMMatrixInverse(nullptr, instance.mTransform);
 		XMMATRIX world  = XMMatrixTranspose(instance.mTransform);
-		XMStoreFloat4x4(&dst->World, world);
-		XMStoreFloat4x4(&dst->Normal, normal);
+		XMStoreFloat4x4(&dst->mWorld, world);
+		XMStoreFloat4x4(&dst->mNormal, normal);
 		++dst;
 	}
 

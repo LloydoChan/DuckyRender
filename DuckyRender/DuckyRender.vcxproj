@@ -239,6 +239,7 @@
     <ClInclude Include="DuckyMaterial.h" />
     <ClInclude Include="DuckyMesh.h" />
     <ClInclude Include="DuckyPipelineStates.h" />
+    <ClInclude Include="DuckyRenderTypes.h" />
     <ClInclude Include="DuckySwapChain.h" />
     <ClInclude Include="DuckyTools.h" />
     <ClInclude Include="Imgui\imconfig.h" />

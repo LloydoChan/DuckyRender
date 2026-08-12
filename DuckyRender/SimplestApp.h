@@ -3,6 +3,7 @@
 #include "D3DDeviceManager.h"
 #include "DuckyMesh.h"
 #include "DuckyImGui.h"
+#include "DuckyRenderTypes.h"
 
 class DuckyGraphicsContext;
 struct ConstantBufferAllocator;
@@ -67,11 +68,6 @@ struct SortRecord
 	float minZ = (std::numeric_limits<float>::max)();
 };
 
-struct IndirectCommand
-{
-	uint32_t mDrawIndex;
-	D3D12_DRAW_INDEXED_ARGUMENTS Draw;
-};
 
 class SimplestApp : public DuckyApp
 {

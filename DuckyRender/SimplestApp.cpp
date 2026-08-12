@@ -919,8 +919,8 @@ void SimplestApp::CreateDrawRecords()
 	for (const DrawRecord& record : tempRecords)
 	{
 		GPUDrawData newData;
-		newData.InstanceIndex = record.mInstanceIndex;
-		newData.MaterialIndex = record.mMaterialIndex;
+		newData.mInstanceIndex = record.mInstanceIndex;
+		newData.mMaterialIndex = record.mMaterialIndex;
 		*dst = newData;
 		dst++;
 	}
@@ -1091,11 +1091,11 @@ uint32_t SimplestApp::BuildIndirectCommands(const std::vector<SortRecord>& draws
 
 		cmd.mDrawIndex = record.record.mGPUDrawIndex;
 
-		cmd.Draw.IndexCountPerInstance = static_cast<UINT>(primitive.GetNumIndices());
-		cmd.Draw.InstanceCount = 1;
-		cmd.Draw.StartIndexLocation = static_cast<UINT>(primitive.GetIndexOffset());
-		cmd.Draw.BaseVertexLocation =static_cast<INT>(primitive.GetVertexOffset());
-		cmd.Draw.StartInstanceLocation = 0;
+		cmd.mDraw.IndexCountPerInstance = static_cast<UINT>(primitive.GetNumIndices());
+		cmd.mDraw.InstanceCount = 1;
+		cmd.mDraw.StartIndexLocation = static_cast<UINT>(primitive.GetIndexOffset());
+		cmd.mDraw.BaseVertexLocation =static_cast<INT>(primitive.GetVertexOffset());
+		cmd.mDraw.StartInstanceLocation = 0;
 	}
 
 	return static_cast<uint32_t>(draws.size());
