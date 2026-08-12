@@ -24,6 +24,7 @@ struct DrawRecord
 	unsigned int mMeshIndex;
 	unsigned int mPrimitiveIndex;
 	unsigned int mMaterialIndex;
+	unsigned int mGPUDrawIndex;
 };
 
 struct TransformedDrawRecord
@@ -51,10 +52,7 @@ struct PerFrameConstants
 
 	uint32_t mInstanceBufferIndex;
 	uint32_t mMaterialBufferIndex;
-
-// put this in here to pad out entire struct to 128 bytes
-private:
-	float mDummyPadding;
+	uint32_t mDrawBufferIndex;
 };
 
 struct PerInstanceConstants
@@ -67,6 +65,12 @@ struct SortRecord
 {
 	DrawRecord record;
 	float minZ = (std::numeric_limits<float>::max)();
+};
+
+struct IndirectCommand
+{
+	uint32_t mDrawIndex;
+	D3D12_DRAW_INDEXED_ARGUMENTS Draw;
 };
 
 class SimplestApp : public DuckyApp
@@ -90,6 +94,8 @@ class SimplestApp : public DuckyApp
 		std::vector<SortRecord> SortDrawRecords(const XMMATRIX& View, const std::vector<TransformedDrawRecord>& RecordsToSort, bool bAlphaPass = false);
 		void CopyOBBsToGPU(const std::vector<TransformedDrawRecord>& TransformedOBBs, unsigned int CurrentFrame);
 		std::vector<SortRecord> SortAndCull(const std::vector<DrawRecord>& DrawRecords, const DuckyFrustum& Frustum, const XMMATRIX& View, int CurrentFrame);
+
+		uint32_t BuildIndirectCommands(const std::vector<SortRecord>& draws, IndirectCommand* destination);
 
 		std::vector<TransformedDrawRecord> FrustumCullUsingOBBs(const std::vector<TransformedDrawRecord>& TransformedOBBs, const DuckyFrustum& Frustum);
 		DuckyFrustum ExtractFrustumFromViewProjection(const XMFLOAT4X4& ViewProjection);

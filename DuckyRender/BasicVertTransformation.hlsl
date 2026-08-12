@@ -15,11 +15,11 @@ cbuffer PerFrameConstants : register(b0)
     float4 cameraPosition;
     float4 lightDirection;
     float4 lightColor;
-
     uint visualisationMode;
 
     uint InstanceBufferIndex;
     uint MaterialBufferIndex;
+    uint DrawBufferIndex;
 };
 
 struct GPUInstance
@@ -28,7 +28,13 @@ struct GPUInstance
     float4x4 Normal;
 };
 
+
 cbuffer DrawConstants : register(b2)
+{
+    uint DrawIndex;
+};
+
+struct GPUDrawData
 {
     uint InstanceIndex;
     uint MaterialIndex;
@@ -37,8 +43,13 @@ cbuffer DrawConstants : register(b2)
 
 Output main(float3 pos : POSITION, float3 normal : NORMAL, float4 tangent : TANGENT, float2 uv : TEXCOORD, float4 col : COLOR) 
 {
+    StructuredBuffer<GPUDrawData> draws = ResourceDescriptorHeap[DrawBufferIndex];
+
+    GPUDrawData draw = draws[DrawIndex];
+
     StructuredBuffer<GPUInstance> instances = ResourceDescriptorHeap[InstanceBufferIndex];
-    GPUInstance instance = instances[InstanceIndex];
+
+    GPUInstance instance = instances[draw.InstanceIndex];
     
     Output result;
     

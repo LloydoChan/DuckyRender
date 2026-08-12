@@ -10,8 +10,8 @@ void DuckyPrimitive::Draw(ID3D12GraphicsCommandList* commandList) const
 
 AABB::AABB()
 {
-	mVertices[AABB_MAX] = {(std::numeric_limits<float>::max)(), (std::numeric_limits<float>::max)(), (std::numeric_limits<float>::max)(), 1.f};
-	mVertices[AABB_MIN] = {(std::numeric_limits<float>::lowest)(), (std::numeric_limits<float>::lowest)(), (std::numeric_limits<float>::lowest)(), 1.f};
+	mVertices[AABB_MAX] = {(std::numeric_limits<float>::lowest)(), (std::numeric_limits<float>::lowest)(), (std::numeric_limits<float>::lowest)(), 1.f};
+	mVertices[AABB_MIN] = {(std::numeric_limits<float>::max)(), (std::numeric_limits<float>::max)(), (std::numeric_limits<float>::max)(), 1.f};
 	RegenerateBox();
 }
 

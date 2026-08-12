@@ -97,7 +97,7 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 	UINT64 neededCapacity = AlignConstantBufferSize(sizeof(PerFrameConstants));
 
 	mDuckyContext = new DuckyGraphicsContext;
-	if(!mDuckyContext->Init(mDeviceManager.get(), neededCapacity, &mLogFile)) return false;
+	if(!mDuckyContext->Init(mDeviceManager.get(), neededCapacity, totalPrimitiveDraws, &mLogFile)) return false;
 
 	RootSignatureDesc drawSig = {};
 
@@ -113,7 +113,7 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 	rootParams[RootParameter::DrawConstants].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
 	rootParams[RootParameter::DrawConstants].Constants.ShaderRegister = 2;
 	rootParams[RootParameter::DrawConstants].Constants.RegisterSpace = 0;
-	rootParams[RootParameter::DrawConstants].Constants.Num32BitValues = 2;
+	rootParams[RootParameter::DrawConstants].Constants.Num32BitValues = 1;
 	rootParams[RootParameter::DrawConstants].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
 
 
@@ -162,6 +162,24 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 
 	mMaskedDblPipeline = mDeviceManager->CreatePSO(L"BasicVertTransformation.hlsl", L"main", L"BasicColorPixelShader.hlsl", L"main", drawSig, dblMaskedState);
 	if (mMaskedDblPipeline.rootSig == nullptr || mMaskedDblPipeline.pipeLineState == nullptr) return false;
+
+	// CREATE DRAW ARGUMENTS--------------------------------------------------------------------------------------------------------------
+
+	D3D12_INDIRECT_ARGUMENT_DESC indirectDescs[2] {};
+	indirectDescs[0].Type = D3D12_INDIRECT_ARGUMENT_TYPE_CONSTANT;
+	indirectDescs[0].Constant.RootParameterIndex = RootParameter::DrawConstants;
+	indirectDescs[0].Constant.DestOffsetIn32BitValues = 0;
+	indirectDescs[0].Constant.Num32BitValuesToSet = 1;
+
+	indirectDescs[1].Type = D3D12_INDIRECT_ARGUMENT_TYPE_DRAW_INDEXED;
+
+	D3D12_COMMAND_SIGNATURE_DESC signatureDesc{};
+	signatureDesc.NumArgumentDescs = 2;
+	signatureDesc.pArgumentDescs = indirectDescs;
+	signatureDesc.ByteStride = sizeof(IndirectCommand);
+
+	HRESULT hResult = mDeviceManager->GetDevice()->CreateCommandSignature(&signatureDesc, mOpaquePipeline.rootSig.Get(), IID_PPV_ARGS(&mDrawCommandSignature));
+	if (FAILED(hResult)) return false;
 
 	// DEBUG DRAW PSO START----------------------------------------------------------------------------------------------------------------
 	RootSignatureDesc debugSig = {};
@@ -454,39 +472,27 @@ void SimplestApp::AppMainLoop()
 
 	float angle = 0.f;
 
-	XMFLOAT4 min;
-	XMFLOAT4 max;
+	XMFLOAT4 min = mGlobalAABB.GetMin();
+	XMFLOAT4 max = mGlobalAABB.GetMax();
 
-	//XMStoreFloat4(&min, mGlobalAABB.GetMin());
-	//XMStoreFloat4(&max, mGlobalAABB.GetMax());
+	float lengthX = max.x - min.x;
+	float lengthY = max.y - min.y;
+	float lengthZ = max.z - min.z;
 
-	float lengthX = 0.f;//max.x - min.x;
-	float lengthY = 0.f;//max.y - min.y;
-	float lengthZ = 0.f;//max.z - min.z;
+	float sceneSize = (std::max)({ lengthX, lengthY, lengthZ });
 
-	float xDiff = 0.f, zDiff = 0.f;
-	float viewLength = 5.f; //0.f;
+	float viewLength =
+		sceneSize * 1.5f;
 
-	/*if (lengthX < lengthZ)
-	{
-		xDiff = lengthX;
-		viewLength = xDiff * 0.5f;
-	}
-	else
-	{
-		zDiff = lengthZ;
-		viewLength = zDiff * 0.5f;
-	}*/
+	MOVEMENT_SPEED = sceneSize;
 
-	MOVEMENT_SPEED = viewLength;
-
-	/*float sceneMidPoint[3] = { min.x + lengthX * 0.5f,
+	float sceneMidPoint[3] = { min.x + lengthX * 0.5f,
 							   min.y + lengthY * 0.5f,
-							   min.z + lengthZ * 0.5f };*/
+							   min.z + lengthZ * 0.5f };
 
 
 
-	XMVECTOR at = XMVectorSet(0.f, 0.f, 0.0f, 1.f);//XMVectorSet(sceneMidPoint[0], sceneMidPoint[1], sceneMidPoint[2], 1.f);
+	XMVECTOR at = XMVectorSet(sceneMidPoint[0], sceneMidPoint[1], sceneMidPoint[2], 1.f);
 	XMVECTOR eye = XMVectorSet(5.f, viewLength, 5.f, 1.f);
 	const XMVECTOR up = XMVectorSet(0.f, 1.f, 0.f, 0.f);
 
@@ -565,8 +571,6 @@ void SimplestApp::AppMainLoop()
 		mMouseDeltaX = mMouseDeltaY = 0;
 		mScrollAmount = 0;
 
-		
-
 		XMFLOAT4X4 viewProj;
 		XMStoreFloat4x4(&viewProj, vp);
 		DuckyFrustum frameFrustum = ExtractFrustumFromViewProjection(viewProj);
@@ -591,18 +595,6 @@ void SimplestApp::AppMainLoop()
 		std::vector<SortRecord> sortedRecordsBlended = SortAndCull(mBlendedDraws, frameFrustum, vp, currentFrame);
 		numDrawableMeshes += sortedRecordsBlended.size();
 
-		//transformedRecords = TransformAABBs(mOpaqueDraws);
-		//std::vector<SortRecord> sortedRecordsOpaque = SortDrawRecords(view, transformedRecords);
-		////CopyAABBsToGPU(transformedRecords, currentFrame);
-
-		//transformedRecords = TransformAABBs(mBlendedDraws);
-		//std::vector<SortRecord> sortedRecordsBlended = SortDrawRecords(view, transformedRecords, true);
-		////CopyAABBsToGPU(transformedRecords, currentFrame);
-
-		//transformedRecords = TransformAABBs(mMaskedDraws);
-		//std::vector<SortRecord> sortedRecordsMasked = SortDrawRecords(view, transformedRecords);
-		////CopyAABBsToGPU(transformedRecords, currentFrame);
-		//
 
 		float clearColor[] = { 0.5f, 0.8f, 0.9f, 1.f };
 
@@ -629,6 +621,27 @@ void SimplestApp::AppMainLoop()
 
 		if (!mDuckyContext->BeginFrame(currentFrame, mFence.Get(), mOpaquePipeline.pipeLineState.Get(), mFenceEvent, &mLogFile)) break;
 		ConstantBufferAllocator* cbvAllocator = mDuckyContext->GetBufferAllocator(currentFrame);
+
+		IndirectCommand* indirectDst = mDuckyContext->GetIndirectCommandPtr(currentFrame);
+		uint32_t commandOffset = 0;
+
+		const uint32_t opaqueDblOffset = commandOffset;
+		commandOffset += BuildIndirectCommands(sortedRecordsOpaqueDbl, indirectDst + commandOffset);
+
+		const uint32_t maskedDblOffset = commandOffset;
+		commandOffset += BuildIndirectCommands(sortedRecordsMaskedDbl, indirectDst + commandOffset);
+
+		const uint32_t blendedDblOffset = commandOffset;
+		commandOffset += BuildIndirectCommands(sortedRecordsBlendedDbl, indirectDst + commandOffset);
+
+		const uint32_t opaqueOffset = commandOffset;
+		commandOffset += BuildIndirectCommands(sortedRecordsOpaque, indirectDst + commandOffset);
+
+		const uint32_t maskedOffset = commandOffset;
+		commandOffset += BuildIndirectCommands(sortedRecordsMasked, indirectDst + commandOffset);
+
+		const uint32_t blendedOffset = commandOffset;
+		commandOffset += BuildIndirectCommands(sortedRecordsBlended, indirectDst + commandOffset);
 
 		gpuTime = GetGPUFrameMilliSeconds(currentFrame);
 
@@ -666,6 +679,7 @@ void SimplestApp::AppMainLoop()
 		asFrameConstants->mVisualisationMode = mVisualizationMode;
 		asFrameConstants->mMaterialBufferIndex = mMaterialBuffer.heapOffset;
 		asFrameConstants->mInstanceBufferIndex = mInstanceBuffer.heapOffset;
+		asFrameConstants->mDrawBufferIndex = mDrawsBuffer.heapOffset;
 		list->SetGraphicsRootConstantBufferView(0, constantAllocation.mGpuAddress);
 
 		list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -677,10 +691,49 @@ void SimplestApp::AppMainLoop()
 
 		StartGpuStats(list, currentFrame);
 
-		list->SetPipelineState(mOpaqueDblPipeline.pipeLineState.Get());
-		DrawRecords(sortedRecordsOpaqueDbl, cbvAllocator, list);
+		ComPtr<ID3D12Resource> indirectBuffer = mDuckyContext->GetIndirectBuffer(currentFrame);
 
-		list->SetPipelineState(mMaskedDblPipeline.pipeLineState.Get());
+		list->SetPipelineState(mOpaqueDblPipeline.pipeLineState.Get());
+		list->ExecuteIndirect(
+			mDrawCommandSignature.Get(),
+			static_cast<UINT>(sortedRecordsOpaqueDbl.size()),
+			indirectBuffer.Get(),
+			static_cast<UINT64>(opaqueDblOffset) *
+			sizeof(IndirectCommand),
+			nullptr,
+			0);
+
+		list->SetPipelineState(mOpaquePipeline.pipeLineState.Get());
+		list->ExecuteIndirect(
+			mDrawCommandSignature.Get(),
+			static_cast<UINT>(sortedRecordsOpaque.size()),
+			indirectBuffer.Get(),
+			static_cast<UINT64>(opaqueOffset) *
+			sizeof(IndirectCommand),
+			nullptr,
+			0);
+
+		list->SetPipelineState(mTransparentPipeline.pipeLineState.Get());
+		list->ExecuteIndirect(
+			mDrawCommandSignature.Get(),
+			static_cast<UINT>(sortedRecordsBlended.size()),
+			indirectBuffer.Get(),
+			static_cast<UINT64>(blendedOffset) *
+			sizeof(IndirectCommand),
+			nullptr,
+			0);
+
+		list->SetPipelineState(mTransparentDblPipeline.pipeLineState.Get());
+		list->ExecuteIndirect(
+			mDrawCommandSignature.Get(),
+			static_cast<UINT>(sortedRecordsBlendedDbl.size()),
+			indirectBuffer.Get(),
+			static_cast<UINT64>(blendedDblOffset) *
+			sizeof(IndirectCommand),
+			nullptr,
+			0);
+
+		/*list->SetPipelineState(mMaskedDblPipeline.pipeLineState.Get());
 		DrawRecords(sortedRecordsMaskedDbl, cbvAllocator, list);
 
 		list->SetPipelineState(mTransparentDblPipeline.pipeLineState.Get());
@@ -693,7 +746,7 @@ void SimplestApp::AppMainLoop()
 		DrawRecords(sortedRecordsMasked, cbvAllocator, list);
 
 		list->SetPipelineState(mTransparentPipeline.pipeLineState.Get());
-		DrawRecords(sortedRecordsBlended, cbvAllocator, list);
+		DrawRecords(sortedRecordsBlended, cbvAllocator, list);*/
 
 		if (bDrawDebug)
 		{
@@ -794,7 +847,7 @@ void SimplestApp::WorkOutGlobalBoundingBoxCenter()
 
 
 						XMFLOAT4 newMin { min(globalMin.x, transformedCorner.x) , min(globalMin.y, transformedCorner.y), min(globalMin.z, transformedCorner.z), 1.f};
-						XMFLOAT4 newMax{ min(globalMax.x, transformedCorner.x) , min(globalMax.y, transformedCorner.y), min(globalMax.z, transformedCorner.z), 1.f };
+						XMFLOAT4 newMax{  max(globalMax.x, transformedCorner.x) , max(globalMax.y, transformedCorner.y), max(globalMax.z, transformedCorner.z), 1.f };
 
 
 						mGlobalAABB.SetNewMinMax(newMin, newMax);
@@ -808,19 +861,23 @@ void SimplestApp::WorkOutGlobalBoundingBoxCenter()
 
 void SimplestApp::CreateDrawRecords()
 {
+	size_t numDraws = 0;
+	std::vector<DrawRecord> tempRecords;
 	for (int instance = 0; instance < mInstances.size(); instance++)
 	{
 		const DuckyMeshInstance* instancePtr = &mInstances[instance];
-		const DuckyMeshData&	 meshData = mMeshes[instancePtr->mMeshDataIndex];
-		
+		const DuckyMeshData& meshData = mMeshes[instancePtr->mMeshDataIndex];
+
 		const std::vector<DuckyPrimitive>& primitives = meshData.GetPrimitives();
 
 		for (int primitive = 0; primitive < primitives.size(); primitive++)
 		{
 			const DuckyPrimitive* primPtr = &primitives[primitive];
-			const DuckyMaterial*  matPtr =  &mMaterialsCPU[primPtr->GetMaterialIndex()];
+			const DuckyMaterial* matPtr = &mMaterialsCPU[primPtr->GetMaterialIndex()];
 
-			DrawRecord newRecord{ instance, instancePtr->mMeshDataIndex, primitive, primPtr->GetMaterialIndex() };
+			DrawRecord newRecord{ instance, instancePtr->mMeshDataIndex, primitive, primPtr->GetMaterialIndex(), numDraws };
+			numDraws++;
+			tempRecords.push_back(newRecord);
 
 			AlphaMode mode = matPtr->constants.alphaMode;
 
@@ -828,32 +885,44 @@ void SimplestApp::CreateDrawRecords()
 			{
 				switch (mode)
 				{
-					case AlphaMode::Blend:
-						mBlendedDblDraws.push_back(newRecord);
-						break;
-					case AlphaMode::Mask:
-						mMaskedDblDraws.push_back(newRecord);
-						break;
-					default:
-						mOpaqueDblDraws.push_back(newRecord);
+				case AlphaMode::Blend:
+					mBlendedDblDraws.push_back(newRecord);
+					break;
+				case AlphaMode::Mask:
+					mMaskedDblDraws.push_back(newRecord);
+					break;
+				default:
+					mOpaqueDblDraws.push_back(newRecord);
 				}
 			}
 			else
 			{
 				switch (mode)
 				{
-					case AlphaMode::Blend:
-						mBlendedDraws.push_back(newRecord);
-						break;
-					case AlphaMode::Mask:
-						mMaskedDraws.push_back(newRecord);
-						break;
-					default:
-						mOpaqueDraws.push_back(newRecord);
+				case AlphaMode::Blend:
+					mBlendedDraws.push_back(newRecord);
+					break;
+				case AlphaMode::Mask:
+					mMaskedDraws.push_back(newRecord);
+					break;
+				default:
+					mOpaqueDraws.push_back(newRecord);
 				}
 			}
 		}
+	}
 
+	mDrawsBuffer = mDeviceManager->CreateStructuredBuffer(sizeof(GPUDrawData) * numDraws, sizeof(GPUDrawData));
+	mDrawsBuffer.buffer->Map(0, nullptr, &mDrawsBuffer.mapped);
+
+	GPUDrawData* dst = (GPUDrawData*)mDrawsBuffer.mapped;
+	for (const DrawRecord& record : tempRecords)
+	{
+		GPUDrawData newData;
+		newData.InstanceIndex = record.mInstanceIndex;
+		newData.MaterialIndex = record.mMaterialIndex;
+		*dst = newData;
+		dst++;
 	}
 }
 
@@ -861,14 +930,7 @@ void SimplestApp::DrawRecords(const std::vector<SortRecord>& Draws, ConstantBuff
 {
 	for (const SortRecord& draw : Draws)
 	{
-		const UINT constants[2] =
-		{
-			draw.record.mInstanceIndex,
-			draw.record.mMaterialIndex
-		};
-
-		List->SetGraphicsRoot32BitConstants( RootParameter::DrawConstants, 2, constants, 0);
-
+		List->SetGraphicsRoot32BitConstant( RootParameter::DrawConstants, draw.record.mGPUDrawIndex, 0);
 		const DuckyPrimitive& prim = mMeshes[draw.record.mMeshIndex].GetPrimitive(draw.record.mPrimitiveIndex);
 
 		prim.Draw(List);
@@ -1015,6 +1077,28 @@ std::vector<SortRecord> SimplestApp::SortAndCull(const std::vector<DrawRecord>& 
 	std::vector<TransformedDrawRecord> nonCulledRecords = FrustumCullUsingOBBs(transformedRecords, Frustum);
 	std::vector<SortRecord> sortedRecords = SortDrawRecords(View, nonCulledRecords);
 	return sortedRecords;
+}
+
+uint32_t SimplestApp::BuildIndirectCommands(const std::vector<SortRecord>& draws, IndirectCommand* destination)
+{
+	for (uint32_t i = 0; i < draws.size(); ++i)
+	{
+		const SortRecord& record = draws[i];
+
+		const DuckyPrimitive& primitive = mMeshes[record.record.mMeshIndex].GetPrimitive(record.record.mPrimitiveIndex);
+
+		IndirectCommand& cmd = destination[i];
+
+		cmd.mDrawIndex = record.record.mGPUDrawIndex;
+
+		cmd.Draw.IndexCountPerInstance = static_cast<UINT>(primitive.GetNumIndices());
+		cmd.Draw.InstanceCount = 1;
+		cmd.Draw.StartIndexLocation = static_cast<UINT>(primitive.GetIndexOffset());
+		cmd.Draw.BaseVertexLocation =static_cast<INT>(primitive.GetVertexOffset());
+		cmd.Draw.StartInstanceLocation = 0;
+	}
+
+	return static_cast<uint32_t>(draws.size());
 }
 
 std::vector<TransformedDrawRecord> SimplestApp::FrustumCullUsingOBBs(const std::vector<TransformedDrawRecord>& TransformedOBBs, const DuckyFrustum& Frustum)

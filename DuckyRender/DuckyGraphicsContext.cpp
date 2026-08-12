@@ -3,8 +3,10 @@
 #include "D3DDeviceManager.h"
 #include "DuckyTools.h"
 
-bool DuckyGraphicsContext::Init(D3DDeviceManager* DeviceManager, UINT64 CBVCapacity, std::wofstream* LogFile)
+bool DuckyGraphicsContext::Init(D3DDeviceManager* DeviceManager, UINT64 CBVCapacity, UINT64 NumPossibleDraws, std::wofstream* LogFile)
 {
+	const size_t indirectBufferSize = NumPossibleDraws * sizeof(IndirectCommand);
+
 	for (auto& frame : mFrames)
 	{
 		frame.mCmdAllocator = DeviceManager->CreateCommandAllocator();
@@ -12,6 +14,14 @@ bool DuckyGraphicsContext::Init(D3DDeviceManager* DeviceManager, UINT64 CBVCapac
 
 		frame.mBufferAllocator.Init(DeviceManager->GetDevice(), CBVCapacity);
 		if (frame.mBufferAllocator.mResourceBuffer.Get() == nullptr) return false;
+
+		frame.mIndirectBuffer = DeviceManager->CreateBuffer(indirectBufferSize);
+
+		if (!frame.mIndirectBuffer) return false;
+
+		HRESULT hr = frame.mIndirectBuffer->Map(0, nullptr, reinterpret_cast<void**>(&frame.mMappedIndirectCommand));
+
+		if (FAILED(hr)) return false;
 	}
 
 	HRESULT hResult = DeviceManager->GetDevice()->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, mFrames[0].mCmdAllocator.Get(), nullptr, IID_PPV_ARGS(&mCommandList));

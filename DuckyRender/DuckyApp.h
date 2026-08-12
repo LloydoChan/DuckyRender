@@ -87,7 +87,10 @@ protected:
 	std::vector<DuckyMaterial> mMaterialsCPU;
 	MappedDescriptorHeapResource mMaterialBuffer;
 	MappedDescriptorHeapResource mInstanceBuffer;
+	MappedDescriptorHeapResource mDrawsBuffer;
 	std::vector<DescriptorHeapResource> mTextures;
+
+	ComPtr<ID3D12CommandSignature> mDrawCommandSignature;
 
 	std::vector<DuckyMeshData> mMeshes;
 	std::vector<DuckyMeshInstance> mInstances;

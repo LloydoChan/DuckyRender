@@ -96,6 +96,9 @@ class DuckyPrimitive
 		size_t GetNumVertices() const { return mNumVertices; }
 		size_t GetNumIndices() const { return mNumIndices; }
 		AlphaMode GetAlphaMode() const { return mode; }
+
+		size_t GetVertexOffset() const { return mVertexOffset; }
+		size_t GetIndexOffset() const { return mIndexOffset; }
 	private:
 		size_t mNumIndices = 0;
 		size_t mNumVertices = 0;
@@ -131,4 +134,10 @@ struct GPUInstance
 {
 	XMFLOAT4X4 World;
 	XMFLOAT4X4 Normal;
+};
+
+struct GPUDrawData
+{
+	uint32_t InstanceIndex;
+	uint32_t MaterialIndex;
 };

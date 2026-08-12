@@ -19,6 +19,12 @@ static const uint ALPHA_OPAQUE = 0;
 static const uint ALPHA_MASK = 1;
 static const uint ALPHA_BLEND = 2;
 
+struct GPUDrawData
+{
+    uint InstanceIndex;
+    uint MaterialIndex;
+};
+
 cbuffer PerFrameConstants : register(b0)
 {
     matrix viewProj;
@@ -31,12 +37,12 @@ cbuffer PerFrameConstants : register(b0)
 
     uint InstanceBufferIndex;
     uint MaterialBufferIndex;
+    uint DrawBufferIndex;
 };
 
 cbuffer DrawConstants : register(b2)
 {
-    uint InstanceIndex;
-    uint MaterialIndex;
+    uint DrawIndex;
 };
 
 struct InstanceMaterial
@@ -119,8 +125,15 @@ float4 main(Input input,
             uint primitiveID : SV_PrimitiveID,
             bool isFrontFace : SV_IsFrontFace) : SV_TARGET
 {
+    
+    StructuredBuffer<GPUDrawData> draws = ResourceDescriptorHeap[DrawBufferIndex];
+
+    GPUDrawData draw = draws[DrawIndex];
+    
     StructuredBuffer<InstanceMaterial> materials = ResourceDescriptorHeap[MaterialBufferIndex];
-    InstanceMaterial mat = materials[MaterialIndex];
+
+    InstanceMaterial mat = materials[draw.MaterialIndex];
+    
     float4 baseColor = mat.BaseColorFactor * float4(input.col.rgb, 1.f);
     
     Texture2D<float4> base = ResourceDescriptorHeap[mat.BaseColorTexture];
