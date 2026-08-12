@@ -5,6 +5,7 @@
 #include "DuckyImGui.h"
 #include "DuckyRenderTypes.h"
 #include "DuckyCamera.h"
+#include "DuckyUploadContext.h"
 
 class DuckyGraphicsContext;
 struct ConstantBufferAllocator;
@@ -116,6 +117,8 @@ class SimplestApp : public DuckyApp
 		AABB mGlobalAABB;
 
 		DuckyImGui mImGui;
+
+		DuckyUploadContext mUploadContext;
 
 		unsigned int mNumMeshes = 0;
 };

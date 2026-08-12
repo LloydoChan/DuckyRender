@@ -48,7 +48,12 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 		return false;
 	}
 
-	mScene.Init(DuckyFile, mDeviceManager.get());
+	if (!mUploadContext.Init( mDeviceManager->GetDevice(), mDeviceManager->GetCommandQueue())) return false;
+
+	if (!mUploadContext.Begin()) return false;
+
+	mScene.Init(DuckyFile, mDeviceManager.get(), mUploadContext);
+
 	InitDebugDrawsVBAndIB();
 	CreateDrawRecords();
 
@@ -734,7 +739,7 @@ void SimplestApp::CreateDrawRecords()
 		}
 	}
 
-	mDrawsBuffer = mDeviceManager->CreateStructuredBuffer(sizeof(GPUDrawData) * numDraws, sizeof(GPUDrawData));
+	mDrawsBuffer =  mDeviceManager->CreateStructuredBuffer(sizeof(GPUDrawData) * numDraws, sizeof(GPUDrawData));
 	mDrawsBuffer.buffer->Map(0, nullptr, &mDrawsBuffer.mapped);
 
 	GPUDrawData* dst = (GPUDrawData*)mDrawsBuffer.mapped;
@@ -788,7 +793,7 @@ bool SimplestApp::Resize(UINT WindowWidth, UINT WindowHeight)
 
 std::vector<TransformedDrawRecord> SimplestApp::TransformAABBsToOBBs(const std::vector<DrawRecord>& recordsToSort)
 {
-	PIXScopedEvent(PIX_COLOR(255, 0, 0), "TrasnformAABBs");
+	PIXScopedEvent(PIX_COLOR(255, 0, 0), "TransformAABBs");
 
 	std::vector<TransformedDrawRecord> transformedRecords;
 	transformedRecords.reserve(recordsToSort.size());
@@ -883,6 +888,7 @@ std::vector<SortRecord> SimplestApp::SortDrawRecords(const XMMATRIX& View, const
 
 void SimplestApp::CopyOBBsToGPU(const std::vector<TransformedDrawRecord>& TransformedOBBs, unsigned int CurrentFrame)
 {
+	mStructuredBufferOBBs[CurrentFrame].buffer->Map(0, nullptr, &mStructuredBufferOBBs[CurrentFrame].mapped);
 	auto* dst = static_cast<GPUOBB*>(mStructuredBufferOBBs[CurrentFrame].mapped);
 
 	for (size_t i = 0; i < TransformedOBBs.size(); ++i)

@@ -2,13 +2,13 @@
 #include "DuckyScene.h"
 #include "DuckyRenderTypes.h"
 
-bool DuckyScene::Init(std::ifstream& InFile, D3DDeviceManager* DeviceManager)
+bool DuckyScene::Init(std::ifstream& InFile, D3DDeviceManager* DeviceManager, DuckyUploadContext& UploadContext)
 {
 	InitInstanceData(InFile, DeviceManager);
 	InitTextures(InFile, DeviceManager);
 	InitMaterials(InFile, DeviceManager);
 	InitMeshes(InFile, DeviceManager);
-	InitVertexAndIndexMegaBuffer(InFile, DeviceManager);
+	InitVertexAndIndexMegaBuffer(InFile, DeviceManager, UploadContext);
     return true;
 }
 
@@ -60,6 +60,7 @@ bool DuckyScene::InitMaterials(std::ifstream& InFile, D3DDeviceManager* DeviceMa
 
 	// get a buffer for the materials and copy into mapped dest
 	size_t bufferSize = numMaterials * sizeof(GPUMaterial);
+	
 	mGPUMaterials = DeviceManager->CreateStructuredBuffer(bufferSize, sizeof(GPUMaterial));
 
 	HRESULT result = mGPUMaterials.buffer->Map(0, nullptr, &mGPUMaterials.mapped);
@@ -228,7 +229,7 @@ bool DuckyScene::InitMeshes(std::ifstream& InFile, D3DDeviceManager* DeviceManag
 	return true;
 }
 
-bool DuckyScene::InitVertexAndIndexMegaBuffer(std::ifstream& ModelFile, D3DDeviceManager* DeviceManager)
+bool DuckyScene::InitVertexAndIndexMegaBuffer(std::ifstream& ModelFile, D3DDeviceManager* DeviceManager, DuckyUploadContext& UploadContext)
 {
 	size_t numVertices = 0;
 	size_t numIndices = 0;
@@ -245,31 +246,54 @@ bool DuckyScene::InitVertexAndIndexMegaBuffer(std::ifstream& ModelFile, D3DDevic
 	size_t vertexBufferSize = numVertices * sizeof(CookedVertex);
 	size_t indexBufferSize = numIndices * sizeof(unsigned int);
 	//now create vertex and index buffers
-	mVertices = DeviceManager->CreateBuffer(vertexBufferSize);
-	mIndices = DeviceManager->CreateBuffer(indexBufferSize);
+	ComPtr<ID3D12Resource> tempVertexBuffer = DeviceManager->CreateUploadBuffer(vertexBufferSize);
+	ComPtr<ID3D12Resource> tempIdxBuffer = DeviceManager->CreateUploadBuffer(indexBufferSize);
 
 	void* mappedVertices = nullptr;
-	HRESULT result = mVertices->Map(0, nullptr, &mappedVertices);
+	HRESULT result = tempVertexBuffer->Map(0, nullptr, &mappedVertices);
 
 	if (FAILED(result)) return false;
 
 	ModelFile.read(static_cast<char*>(mappedVertices), static_cast<std::streamsize>(vertexBufferSize));
 
-	mVertices->Unmap(0, nullptr);
+	tempVertexBuffer->Unmap(0, nullptr);
 
 	if (!ModelFile) return false;
 
+	mVertices = DeviceManager->CreateDefaultBuffer(vertexBufferSize, D3D12_RESOURCE_STATE_COPY_DEST);
+
 	void* mappedIndices = nullptr;
 
-	result = mIndices->Map(0, nullptr, &mappedIndices);
+	result = tempIdxBuffer->Map(0, nullptr, &mappedIndices);
 
 	if (FAILED(result)) return false;
 
 	ModelFile.read(static_cast<char*>(mappedIndices), static_cast<std::streamsize>(indexBufferSize));
 
-	mIndices->Unmap(0, nullptr);
+	tempIdxBuffer->Unmap(0, nullptr);
 
 	if (!ModelFile) return false;
+
+	mIndices = DeviceManager->CreateDefaultBuffer(indexBufferSize, D3D12_RESOURCE_STATE_COPY_DEST);
+
+	ID3D12GraphicsCommandList* list = UploadContext.GetCommandList();
+	list->CopyBufferRegion(mVertices.Get(), 0, tempVertexBuffer.Get(), 0, vertexBufferSize);
+	list->CopyBufferRegion(mIndices.Get(), 0, tempIdxBuffer.Get(), 0, indexBufferSize);
+
+	auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(mVertices.Get(),
+														D3D12_RESOURCE_STATE_COPY_DEST,
+														D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
+
+	list->ResourceBarrier(1, &barrier);
+
+	auto barrier2 = CD3DX12_RESOURCE_BARRIER::Transition(mIndices.Get(),
+														 D3D12_RESOURCE_STATE_COPY_DEST,
+														 D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
+
+	list->ResourceBarrier(1, &barrier2);
+
+	if (!UploadContext.SubmitAndWait()) return false;
+
 
 	mVbView.BufferLocation = mVertices->GetGPUVirtualAddress();
 	mVbView.SizeInBytes = vertexBufferSize;

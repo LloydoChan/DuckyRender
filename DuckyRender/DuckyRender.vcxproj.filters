@@ -109,6 +109,9 @@
     <ClCompile Include="DuckyCamera.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="DuckyUploadContext.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="BasicVertTransformation.hlsl">
@@ -199,6 +202,9 @@
       <Filter>Header Files\Resources</Filter>
     </ClInclude>
     <ClInclude Include="DuckyCamera.h">
+      <Filter>Header Files\Core</Filter>
+    </ClInclude>
+    <ClInclude Include="DuckyUploadContext.h">
       <Filter>Header Files\Core</Filter>
     </ClInclude>
   </ItemGroup>
