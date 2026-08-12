@@ -111,47 +111,15 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 	mainDesc.Samplers = &samplerDesc;
 	mainDesc.NumSamplers = 1;
 
-	mainDesc.Type = PipelineType::OPAQUE;
-	mOpaquePipeline = mPipelineManager.CreatePSO(mainDesc);
-	if (mOpaquePipeline.rootSig == nullptr || mOpaquePipeline.pipeLineState == nullptr) return false;
+	GraphicsPipelineDesc descs[7] = { mainDesc ,mainDesc ,mainDesc ,mainDesc ,mainDesc ,mainDesc , mainDesc };
 
-	mainDesc.Type = PipelineType::ALPHA;
-	mTransparentPipeline = mPipelineManager.CreatePSO(mainDesc);
-	if (mTransparentPipeline.rootSig == nullptr || mTransparentPipeline.pipeLineState == nullptr) return false;
+	descs[0].Type = PipelineType::OPAQUE;
+	descs[1].Type = PipelineType::ALPHA;
+	descs[2].Type = PipelineType::MASKED;
+	descs[3].Type = PipelineType::OPAQUE_DBL;
+	descs[4].Type = PipelineType::MASKED_DBL;
+	descs[5].Type = PipelineType::ALPHA_DBL;
 
-	mainDesc.Type = PipelineType::MASKED;
-	mMaskedPipeline = mPipelineManager.CreatePSO(mainDesc);
-	if (mMaskedPipeline.rootSig == nullptr || mMaskedPipeline.pipeLineState == nullptr) return false;
-
-	mainDesc.Type = PipelineType::OPAQUE_DBL;
-	mOpaqueDblPipeline = mPipelineManager.CreatePSO(mainDesc);
-	if (mOpaqueDblPipeline.rootSig == nullptr || mOpaqueDblPipeline.pipeLineState == nullptr) return false;
-
-	mainDesc.Type = PipelineType::ALPHA_DBL;
-	mTransparentDblPipeline = mPipelineManager.CreatePSO(mainDesc);
-	if (mTransparentDblPipeline.rootSig == nullptr || mTransparentDblPipeline.pipeLineState == nullptr) return false;
-
-	mainDesc.Type = PipelineType::MASKED_DBL;
-	mMaskedDblPipeline = mPipelineManager.CreatePSO(mainDesc);
-	if (mMaskedDblPipeline.rootSig == nullptr || mMaskedDblPipeline.pipeLineState == nullptr) return false;
-
-	// CREATE DRAW ARGUMENTS--------------------------------------------------------------------------------------------------------------
-
-	D3D12_INDIRECT_ARGUMENT_DESC indirectDescs[2] {};
-	indirectDescs[0].Type = D3D12_INDIRECT_ARGUMENT_TYPE_CONSTANT;
-	indirectDescs[0].Constant.RootParameterIndex = RootParameter::DrawConstants;
-	indirectDescs[0].Constant.DestOffsetIn32BitValues = 0;
-	indirectDescs[0].Constant.Num32BitValuesToSet = 1;
-
-	indirectDescs[1].Type = D3D12_INDIRECT_ARGUMENT_TYPE_DRAW_INDEXED;
-
-	D3D12_COMMAND_SIGNATURE_DESC signatureDesc{};
-	signatureDesc.NumArgumentDescs = 2;
-	signatureDesc.pArgumentDescs = indirectDescs;
-	signatureDesc.ByteStride = sizeof(IndirectCommand);
-
-	HRESULT hResult = mDeviceManager->GetDevice()->CreateCommandSignature(&signatureDesc, mOpaquePipeline.rootSig.Get(), IID_PPV_ARGS(&mDrawCommandSignature));
-	if (FAILED(hResult)) return false;
 
 	// DEBUG DRAW PSO START----------------------------------------------------------------------------------------------------------------
 
@@ -183,8 +151,9 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 	debugDesc.NumSamplers = 0;
 	debugDesc.Type = PipelineType::DEBUG;
 
-	mDebugPipeline = mPipelineManager.CreatePSO(debugDesc);
-	if (mDebugPipeline.rootSig == nullptr || mDebugPipeline.pipeLineState == nullptr) return false;
+	descs[6] = debugDesc;
+
+	if(!mRenderer.Init(&mLogFile, mDeviceManager.get(), descs, 7)) return false;
 
 	// DEBUG DRAW PSO END-------------------------------------------------------------------------------------------------------------------
 
@@ -599,7 +568,8 @@ void SimplestApp::AppMainLoop()
 
 		ImGui::End();
 
-		if (!mDuckyContext->BeginFrame(currentFrame, mFence.Get(), mOpaquePipeline.pipeLineState.Get(), mFenceEvent, &mLogFile)) break;
+		ID3D12PipelineState* opaqueState = mRenderer.GetPipelineSig(PipelineType::OPAQUE).pipeLineState.Get();
+		if (!mDuckyContext->BeginFrame(currentFrame, mFence.Get(), opaqueState, mFenceEvent, &mLogFile)) break;
 		ConstantBufferAllocator* cbvAllocator = mDuckyContext->GetBufferAllocator(currentFrame);
 
 		IndirectCommand* indirectDst = mDuckyContext->GetIndirectCommandPtr(currentFrame);
@@ -630,7 +600,7 @@ void SimplestApp::AppMainLoop()
 
 		D3D12_RESOURCE_BARRIER barrier = mDeviceManager->GetBarrier();
 		list->ResourceBarrier(1, &barrier);
-		list->SetPipelineState(mOpaquePipeline.pipeLineState.Get());
+		list->SetPipelineState(opaqueState);
 
 		D3D12_CPU_DESCRIPTOR_HANDLE rtvHeap = mDeviceManager->IncrementAndReturnRTVHeaps();
 		D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = mDeviceManager->GetDepthStencilBufferHeap()->GetCPUDescriptorHandleForHeapStart();
@@ -642,8 +612,8 @@ void SimplestApp::AppMainLoop()
 		list->RSSetViewports(1, &mWholeScreenViewPortScissor.viewport);
 		list->RSSetScissorRects(1, &mWholeScreenViewPortScissor.scissor);
 
-		list->SetGraphicsRootSignature(mOpaquePipeline.rootSig.Get());
 		list->SetDescriptorHeaps(1, &heapPtr);
+		list->SetGraphicsRootSignature(mRenderer.GetPipelineSig(PipelineType::OPAQUE).rootSig.Get());
 
 		size_t numMeshes = mScene.GetMeshes().size();
 		static int currentInstance = 0;
@@ -673,9 +643,11 @@ void SimplestApp::AppMainLoop()
 
 		ComPtr<ID3D12Resource> indirectBuffer = mDuckyContext->GetIndirectBuffer(currentFrame);
 
-		list->SetPipelineState(mOpaqueDblPipeline.pipeLineState.Get());
+		ID3D12PipelineState* opaque = mRenderer.GetPipelineSig(PipelineType::OPAQUE).pipeLineState.Get();
+		list->SetPipelineState(opaque);
+		ID3D12CommandSignature* sig = mRenderer.GetCommandSig();
 		list->ExecuteIndirect(
-			mDrawCommandSignature.Get(),
+			sig,
 			static_cast<UINT>(sortedRecordsOpaqueDbl.size()),
 			indirectBuffer.Get(),
 			static_cast<UINT64>(opaqueDblOffset) *
@@ -683,7 +655,7 @@ void SimplestApp::AppMainLoop()
 			nullptr,
 			0);
 
-		list->SetPipelineState(mOpaquePipeline.pipeLineState.Get());
+		/*list->SetPipelineState(mOpaquePipeline.pipeLineState.Get());
 		list->ExecuteIndirect(
 			mDrawCommandSignature.Get(),
 			static_cast<UINT>(sortedRecordsOpaque.size()),
@@ -711,7 +683,7 @@ void SimplestApp::AppMainLoop()
 			static_cast<UINT64>(blendedDblOffset) *
 			sizeof(IndirectCommand),
 			nullptr,
-			0);
+			0);*/
 
 
 		if (bDrawDebug)
@@ -720,8 +692,8 @@ void SimplestApp::AppMainLoop()
 			XMStoreFloat4x4(&debugProjection, XMMatrixTranspose(vp));
 			memcpy(mMappedTransform[currentFrame], &debugProjection, sizeof(debugProjection));
 
-			list->SetGraphicsRootSignature(mDebugPipeline.rootSig.Get());
-			list->SetPipelineState(mDebugPipeline.pipeLineState.Get());
+			list->SetGraphicsRootSignature(mRenderer.GetPipelineSig(PipelineType::DEBUG).rootSig.Get());
+			list->SetPipelineState(mRenderer.GetPipelineSig(PipelineType::DEBUG).pipeLineState.Get());
 			list->SetGraphicsRootConstantBufferView(0,mMatrixBuffer[currentFrame].buffer->GetGPUVirtualAddress());
 			list->SetGraphicsRootShaderResourceView(1,mStructuredBufferOBBs[currentFrame].buffer->GetGPUVirtualAddress());
 			list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_LINELIST);

@@ -3,6 +3,7 @@
 #include "DuckyMesh.h"
 #include "DuckyPipelineManager.h"
 #include "DuckyScene.h"
+#include "DuckyRenderer.h"
 
 using namespace DirectX;
 
@@ -71,8 +72,6 @@ protected:
 	UINT64 mTimeStampFrequency = 0;
 
 	MappedDescriptorHeapResource mDrawsBuffer;
-	
-	ComPtr<ID3D12CommandSignature> mDrawCommandSignature;
 
 	Microsoft::WRL::ComPtr<ID3D12Resource> mDebugVertices;
 	Microsoft::WRL::ComPtr<ID3D12Resource> mDebugIndices;
@@ -80,6 +79,6 @@ protected:
 	D3D12_VERTEX_BUFFER_VIEW mVbDebugView;
 	D3D12_INDEX_BUFFER_VIEW mIbDebugView;
 
-	DuckyPipelineManager mPipelineManager;
 	DuckyScene mScene;
+	DuckyRenderer mRenderer;
 };

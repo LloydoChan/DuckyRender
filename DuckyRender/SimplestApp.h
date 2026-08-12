@@ -109,31 +109,16 @@ class SimplestApp : public DuckyApp
 
 		ComPtr<ID3D12Fence> mFence;
 
-		DescriptorHeapResource mTextureBuffer;
-
 		DescriptorHeapResource mMatrixBuffer[2];
 		XMFLOAT4X4* mMappedTransform[2] = {};
 		MappedDescriptorHeapResource mStructuredBufferOBBs[2];
 
-		PipelineAndRootSig mOpaquePipeline;
 		std::vector<DrawRecord> mOpaqueDraws;
-
-		PipelineAndRootSig mTransparentPipeline;
 		std::vector<DrawRecord> mBlendedDraws;
-
-		PipelineAndRootSig mMaskedPipeline;
 		std::vector<DrawRecord> mMaskedDraws;
-
-		PipelineAndRootSig mOpaqueDblPipeline;
 		std::vector<DrawRecord> mOpaqueDblDraws;
-
-		PipelineAndRootSig mTransparentDblPipeline;
 		std::vector<DrawRecord> mBlendedDblDraws;
-
-		PipelineAndRootSig mMaskedDblPipeline;
 		std::vector<DrawRecord> mMaskedDblDraws;
-
-		PipelineAndRootSig mDebugPipeline;
 
 		DuckyGraphicsContext* mDuckyContext;
 

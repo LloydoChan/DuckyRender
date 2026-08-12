@@ -95,7 +95,7 @@ bool DuckyApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* WindowNa
 	mDeviceManager = std::make_unique<D3DDeviceManager>();
 	if (!mDeviceManager->Init(mWindowHandle, WindowWidth, WindowHeight, &mLogFile)) return false;
 
-	if (!mPipelineManager.Init(&mLogFile, mDeviceManager->GetDevice())) return false;
+	
 
 	SetWindowLongPtr(
 		mWindowHandle,

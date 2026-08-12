@@ -6,11 +6,15 @@
 class DuckyRenderer
 {
 	public:
-		bool Init();
+		bool Init(std::wofstream* LogFile, D3DDeviceManager* Manager, GraphicsPipelineDesc* Pipelines, UINT NumPipelines);
 		void Render();
+
+		const PipelineAndRootSig& GetPipelineSig(PipelineType Type) { return mPipelines[(int)Type]; }
+		ID3D12CommandSignature* GetCommandSig() { return mDrawCommandSignature.Get(); }
 	private:
 		std::array<PipelineAndRootSig, static_cast<size_t>(PipelineType::COUNT)> mPipelines;
 
 		ComPtr<ID3D12CommandSignature> mDrawCommandSignature;
 		DuckyGraphicsContext mGraphicsContext;
+		DuckyPipelineManager mPipelineManager;
 };
