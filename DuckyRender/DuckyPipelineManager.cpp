@@ -1,6 +1,8 @@
 #include "pch.h"
 #include "DuckyPipelineManager.h"
 #include "DuckyTools.h"
+#include "DuckyRenderTypes.h"
+#include "DuckyPipelineStates.h"
 
 bool DuckyPipelineManager::Init(std::wofstream* FilePtr, ID3D12Device* DevicePtr)
 {
@@ -9,6 +11,14 @@ bool DuckyPipelineManager::Init(std::wofstream* FilePtr, ID3D12Device* DevicePtr
 	if (!mCompiler->Init(FilePtr)) return false;
 
 	mDevicePtr = DevicePtr;
+
+	mPipelineStateFactory[PipelineType::OPAQUE]		= MakeOpaquePipelineState;
+	mPipelineStateFactory[PipelineType::ALPHA]		= MakeTransparentPipelineState;
+	mPipelineStateFactory[PipelineType::MASKED]		= MakeMaskedPipelineState;
+	mPipelineStateFactory[PipelineType::OPAQUE_DBL] = MakeDoubleSidedOpaquePipelineState;
+	mPipelineStateFactory[PipelineType::ALPHA_DBL]  = MakeDoubleSidedTransparentPipelineState;
+	mPipelineStateFactory[PipelineType::MASKED_DBL] = MakeDoubleSidedMaskedPipelineState;
+	mPipelineStateFactory[PipelineType::DEBUG]      = MakeDebugDrawPipelineState;
 
 	return true;
 }
@@ -76,29 +86,26 @@ std::vector<D3D12_INPUT_ELEMENT_DESC> DuckyPipelineManager::CreateInputLayout(Sh
 	return Elems;
 }
 
-PipelineAndRootSig DuckyPipelineManager::CreatePSO(const ShaderDesc& VSShader, const ShaderDesc& PSShader, 
-													D3D12_ROOT_PARAMETER* Params, UINT NumParams, 
-													D3D12_STATIC_SAMPLER_DESC* Samplers, UINT NumSamplers, 
-													D3D12_GRAPHICS_PIPELINE_STATE_DESC& desc)
+PipelineAndRootSig DuckyPipelineManager::CreatePSO(GraphicsPipelineDesc& mainDesc)
 {
 	RootSignatureDesc drawSig = {};
 
-	for (int i = 0; i < NumParams; i++)
+	for (int i = 0; i < mainDesc.NumParams; i++)
 	{
-		drawSig.parameters.emplace_back(Params[i]);
+		drawSig.parameters.emplace_back(mainDesc.Params[i]);
 	}
 
-	for (int i = 0; i < NumSamplers; i++)
+	for (int i = 0; i < mainDesc.NumSamplers; i++)
 	{
-		drawSig.staticSamplers.emplace_back(Samplers[i]);
+		drawSig.staticSamplers.emplace_back(mainDesc.Samplers[i]);
 	}
 
 	PipelineAndRootSig newPipeline;
 
 	ShaderCompilationOutput vertexShaderOutput;
-	if (!mCompiler->CompileShaderDXC(VSShader.File.c_str(), VSShader.Entry.c_str(), L"vs_6_6", vertexShaderOutput)) return newPipeline;
+	if (!mCompiler->CompileShaderDXC(mainDesc.VSShader.File.c_str(), mainDesc.VSShader.Entry.c_str(), L"vs_6_6", vertexShaderOutput)) return newPipeline;
 	ShaderCompilationOutput pixelShaderOutput;
-	if (!mCompiler->CompileShaderDXC(PSShader.File.c_str(), PSShader.Entry.c_str(), L"ps_6_6", pixelShaderOutput)) return newPipeline;
+	if (!mCompiler->CompileShaderDXC(mainDesc.PSShader.File.c_str(), mainDesc.PSShader.Entry.c_str(), L"ps_6_6", pixelShaderOutput)) return newPipeline;
 
 	D3D12_ROOT_SIGNATURE_DESC rootSigDesc = {};
 	rootSigDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
@@ -123,6 +130,8 @@ PipelineAndRootSig DuckyPipelineManager::CreatePSO(const ShaderDesc& VSShader, c
 	rootSigBlob->Release();
 	if (FAILED(hResult) && !OutputErrorFromHResult(hResult, "couldn't create root sig ", *mFilePtr)) return newPipeline;
 
+	D3D12_GRAPHICS_PIPELINE_STATE_DESC desc = mPipelineStateFactory[mainDesc.Type]();
+
 	desc.pRootSignature = newPipeline.rootSig.Get();
 
 	desc.VS.pShaderBytecode = vertexShaderOutput.shaderBlob.Get()->GetBufferPointer();
@@ -135,7 +144,6 @@ PipelineAndRootSig DuckyPipelineManager::CreatePSO(const ShaderDesc& VSShader, c
 	desc.InputLayout.pInputElementDescs = elems.data();
 	desc.InputLayout.NumElements = elems.size();
 	desc.IBStripCutValue = D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED;
-
 	desc.NumRenderTargets = 1;
 	desc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
 	desc.SampleDesc.Count = 1;

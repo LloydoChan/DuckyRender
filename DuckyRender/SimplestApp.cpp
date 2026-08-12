@@ -99,34 +99,40 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 	samplerDesc.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 	samplerDesc.ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
 
-	auto opaqueState = MakeOpaquePipelineState();
-	auto transparantState = MakeTransparentPipelineState();
-	auto maskedState = MakeMaskedPipelineState();
-	auto dblOpaqueState = MakeDoubleSidedOpaquePipelineState();
-	auto dblBlendState = MakeDoubleSidedTransparentPipelineState();
-	auto dblMaskedState = MakeDoubleSidedMaskedPipelineState();
-	auto debugState = MakeDebugDrawPipelineState();
-
 	ShaderDesc pbrShaderVS, pbrShaderPS;
 	pbrShaderVS.File = L"BasicVertTransformation.hlsl";
 	pbrShaderPS.File = L"BasicColorPixelShader.hlsl";
 
-	mOpaquePipeline = mPipelineManager.CreatePSO(pbrShaderVS, pbrShaderPS, rootParams, RootParameter::Count, &samplerDesc, 1, opaqueState);
+	GraphicsPipelineDesc mainDesc;
+	mainDesc.VSShader = pbrShaderVS;
+	mainDesc.PSShader = pbrShaderPS;
+	mainDesc.Params = rootParams;
+	mainDesc.NumParams = RootParameter::Count;
+	mainDesc.Samplers = &samplerDesc;
+	mainDesc.NumSamplers = 1;
+
+	mainDesc.Type = PipelineType::OPAQUE;
+	mOpaquePipeline = mPipelineManager.CreatePSO(mainDesc);
 	if (mOpaquePipeline.rootSig == nullptr || mOpaquePipeline.pipeLineState == nullptr) return false;
 
-	mTransparentPipeline = mPipelineManager.CreatePSO(pbrShaderVS, pbrShaderPS, rootParams, RootParameter::Count, &samplerDesc, 1, transparantState);
+	mainDesc.Type = PipelineType::ALPHA;
+	mTransparentPipeline = mPipelineManager.CreatePSO(mainDesc);
 	if (mTransparentPipeline.rootSig == nullptr || mTransparentPipeline.pipeLineState == nullptr) return false;
 
-	mMaskedPipeline = mPipelineManager.CreatePSO(pbrShaderVS, pbrShaderPS, rootParams, RootParameter::Count, &samplerDesc, 1, maskedState);
+	mainDesc.Type = PipelineType::MASKED;
+	mMaskedPipeline = mPipelineManager.CreatePSO(mainDesc);
 	if (mMaskedPipeline.rootSig == nullptr || mMaskedPipeline.pipeLineState == nullptr) return false;
 
-	mOpaqueDblPipeline = mPipelineManager.CreatePSO(pbrShaderVS, pbrShaderPS, rootParams, RootParameter::Count, &samplerDesc, 1, dblOpaqueState);
+	mainDesc.Type = PipelineType::OPAQUE_DBL;
+	mOpaqueDblPipeline = mPipelineManager.CreatePSO(mainDesc);
 	if (mOpaqueDblPipeline.rootSig == nullptr || mOpaqueDblPipeline.pipeLineState == nullptr) return false;
 
-	mTransparentDblPipeline = mPipelineManager.CreatePSO(pbrShaderVS, pbrShaderPS, rootParams, RootParameter::Count, &samplerDesc, 1, dblBlendState);
+	mainDesc.Type = PipelineType::ALPHA_DBL;
+	mTransparentDblPipeline = mPipelineManager.CreatePSO(mainDesc);
 	if (mTransparentDblPipeline.rootSig == nullptr || mTransparentDblPipeline.pipeLineState == nullptr) return false;
 
-	mMaskedDblPipeline = mPipelineManager.CreatePSO(pbrShaderVS, pbrShaderPS, rootParams, RootParameter::Count, &samplerDesc, 1, dblMaskedState);
+	mainDesc.Type = PipelineType::MASKED_DBL;
+	mMaskedDblPipeline = mPipelineManager.CreatePSO(mainDesc);
 	if (mMaskedDblPipeline.rootSig == nullptr || mMaskedDblPipeline.pipeLineState == nullptr) return false;
 
 	// CREATE DRAW ARGUMENTS--------------------------------------------------------------------------------------------------------------
@@ -167,7 +173,17 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 	ShaderDesc debugShaderVS, debugShaderPS;
 	debugShaderVS.File = L"AABBVertexShader.hlsl";
 	debugShaderPS.File = L"AABBPixelShader.hlsl";
-	mDebugPipeline = mPipelineManager.CreatePSO(debugShaderVS, debugShaderPS, debugParams, 2, nullptr, 0, debugState);
+
+	GraphicsPipelineDesc debugDesc;
+	debugDesc.VSShader = debugShaderVS;
+	debugDesc.PSShader = debugShaderPS;
+	debugDesc.Params = debugParams;
+	debugDesc.NumParams = 2;
+	debugDesc.Samplers = nullptr;
+	debugDesc.NumSamplers = 0;
+	debugDesc.Type = PipelineType::DEBUG;
+
+	mDebugPipeline = mPipelineManager.CreatePSO(debugDesc);
 	if (mDebugPipeline.rootSig == nullptr || mDebugPipeline.pipeLineState == nullptr) return false;
 
 	// DEBUG DRAW PSO END-------------------------------------------------------------------------------------------------------------------

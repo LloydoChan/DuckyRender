@@ -1,6 +1,8 @@
 #pragma once
 // precompiled header!
 #include <vector>
+#include <unordered_map>
+#include <functional>
 #include <array>
 #include <errno.h>
 #include <algorithm>

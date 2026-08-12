@@ -1,9 +1,9 @@
 #pragma once
 #include "DuckyCompiler.h"
+#include "DuckyRenderTypes.h"
 
 using namespace DirectX;
 using Microsoft::WRL::ComPtr;
-
 
 struct ShaderDesc
 {
@@ -13,17 +13,13 @@ struct ShaderDesc
 
 struct GraphicsPipelineDesc
 {
-	ShaderDesc VS;
-	ShaderDesc PS;
-
-	D3D12_BLEND_DESC BlendState;
-	D3D12_RASTERIZER_DESC RasterizerState;
-	D3D12_DEPTH_STENCIL_DESC DepthStencilState;
-
-	D3D12_PRIMITIVE_TOPOLOGY_TYPE TopologyType;
-
-	DXGI_FORMAT RTVFormat;
-	DXGI_FORMAT DSVFormat;
+	ShaderDesc VSShader;
+	ShaderDesc PSShader;
+	D3D12_ROOT_PARAMETER* Params;
+	UINT NumParams;
+	D3D12_STATIC_SAMPLER_DESC* Samplers;
+	UINT NumSamplers;
+	PipelineType Type;
 };
 
 struct PipelineAndRootSig
@@ -43,12 +39,11 @@ class DuckyPipelineManager
 	public:
 		bool Init(std::wofstream* FilePtr, ID3D12Device* DevicePtr);
 		std::vector<D3D12_INPUT_ELEMENT_DESC> CreateInputLayout(ShaderCompilationOutput& shaderCompData);
-		PipelineAndRootSig CreatePSO(const ShaderDesc& VSShader, const ShaderDesc& PSShader,
-									 D3D12_ROOT_PARAMETER* Params, UINT NumParams, 
-									 D3D12_STATIC_SAMPLER_DESC* Samplers, UINT NumSamplers,
-									 D3D12_GRAPHICS_PIPELINE_STATE_DESC& desc);
+		PipelineAndRootSig CreatePSO(GraphicsPipelineDesc& MainDesc);
 	private:
 		std::unique_ptr<DuckyCompiler> mCompiler;
 		ID3D12Device* mDevicePtr;
 		std::wofstream* mFilePtr;
+
+		std::map<PipelineType, std::function<D3D12_GRAPHICS_PIPELINE_STATE_DESC()>> mPipelineStateFactory;
 };

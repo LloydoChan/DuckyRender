@@ -17,3 +17,19 @@ struct IndirectCommand
     uint32_t mDrawIndex;
     D3D12_DRAW_INDEXED_ARGUMENTS mDraw;
 };
+
+#ifdef OPAQUE
+#undef OPAQUE
+#endif
+
+enum class PipelineType : uint32_t
+{
+	OPAQUE,
+	ALPHA,
+	MASKED,
+	OPAQUE_DBL,
+	ALPHA_DBL,
+	MASKED_DBL,
+	DEBUG,
+	COUNT
+};

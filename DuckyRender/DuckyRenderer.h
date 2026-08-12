@@ -1,21 +1,7 @@
 #pragma once
 #include "DuckyPipelineManager.h"
 #include "DuckyGraphicsContext.h"
-
-#ifdef OPAQUE
-#undef OPAQUE
-#endif
-
-enum class PipelineType : uint32_t
-{
-	OPAQUE,
-	ALPHA,
-	MASKED,
-	OPAQUE_DBL,
-	ALPHA_DBL,
-	MASKED_DBL,
-	COUNT
-};
+#include "DuckyRenderTypes.h"
 
 class DuckyRenderer
 {
