@@ -162,8 +162,6 @@ bool DuckyScene::InitTextures(std::ifstream& InFile, D3DDeviceManager* DeviceMan
 		mTextures.emplace_back(newResource);
 	}
 
-	return true;
-
 	// init fallback textures
 	DescriptorHeapResource newResource = DeviceManager->CreateFallbackTexture(L"BaseColorFallbackTexture", BaseColorFallback, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB);
 	if (newResource.buffer == nullptr) return false;
