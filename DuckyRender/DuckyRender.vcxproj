@@ -159,6 +159,7 @@
     <ClCompile Include="DuckyGraphicsContext.cpp" />
     <ClCompile Include="DuckyImGui.cpp" />
     <ClCompile Include="DuckyMesh.cpp" />
+    <ClCompile Include="DuckyPipelineManager.cpp" />
     <ClCompile Include="DuckyPipelineStates.cpp" />
     <ClCompile Include="DuckySwapChain.cpp" />
     <ClCompile Include="DuckyTools.cpp" />
@@ -238,6 +239,7 @@
     <ClInclude Include="DuckyImGui.h" />
     <ClInclude Include="DuckyMaterial.h" />
     <ClInclude Include="DuckyMesh.h" />
+    <ClInclude Include="DuckyPipelineManager.h" />
     <ClInclude Include="DuckyPipelineStates.h" />
     <ClInclude Include="DuckyRenderTypes.h" />
     <ClInclude Include="DuckySwapChain.h" />

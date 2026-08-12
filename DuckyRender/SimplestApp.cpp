@@ -1,4 +1,5 @@
 #include "pch.h"
+#include "DuckyPipelineManager.h"
 #include "SimplestApp.h"
 #include "DuckyGraphicsContext.h"
 #include "D3DDeviceManager.h"
@@ -145,22 +146,22 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 	auto dblMaskedState = MakeDoubleSidedMaskedPipelineState();
 	auto debugState = MakeDebugDrawPipelineState();
 
-	mOpaquePipeline = mDeviceManager->CreatePSO(L"BasicVertTransformation.hlsl", L"main", L"BasicColorPixelShader.hlsl", L"main", drawSig, opaqueState);
+	mOpaquePipeline = mPipelineManager.CreatePSO(L"BasicVertTransformation.hlsl", L"main", L"BasicColorPixelShader.hlsl", L"main", drawSig, opaqueState);
 	if (mOpaquePipeline.rootSig == nullptr || mOpaquePipeline.pipeLineState == nullptr) return false;
 
-	mTransparentPipeline = mDeviceManager->CreatePSO(L"BasicVertTransformation.hlsl", L"main", L"BasicColorPixelShader.hlsl", L"main", drawSig, transparantState);
+	mTransparentPipeline = mPipelineManager.CreatePSO(L"BasicVertTransformation.hlsl", L"main", L"BasicColorPixelShader.hlsl", L"main", drawSig, transparantState);
 	if (mTransparentPipeline.rootSig == nullptr || mTransparentPipeline.pipeLineState == nullptr) return false;
 
-	mMaskedPipeline = mDeviceManager->CreatePSO(L"BasicVertTransformation.hlsl", L"main", L"BasicColorPixelShader.hlsl", L"main", drawSig, maskedState);
+	mMaskedPipeline = mPipelineManager.CreatePSO(L"BasicVertTransformation.hlsl", L"main", L"BasicColorPixelShader.hlsl", L"main", drawSig, maskedState);
 	if (mMaskedPipeline.rootSig == nullptr || mMaskedPipeline.pipeLineState == nullptr) return false;
 
-	mOpaqueDblPipeline = mDeviceManager->CreatePSO(L"BasicVertTransformation.hlsl", L"main", L"BasicColorPixelShader.hlsl", L"main", drawSig, dblOpaqueState);
+	mOpaqueDblPipeline = mPipelineManager.CreatePSO(L"BasicVertTransformation.hlsl", L"main", L"BasicColorPixelShader.hlsl", L"main", drawSig, dblOpaqueState);
 	if (mOpaqueDblPipeline.rootSig == nullptr || mOpaqueDblPipeline.pipeLineState == nullptr) return false;
 
-	mTransparentDblPipeline = mDeviceManager->CreatePSO(L"BasicVertTransformation.hlsl", L"main", L"BasicColorPixelShader.hlsl", L"main", drawSig, dblBlendState);
+	mTransparentDblPipeline = mPipelineManager.CreatePSO(L"BasicVertTransformation.hlsl", L"main", L"BasicColorPixelShader.hlsl", L"main", drawSig, dblBlendState);
 	if (mTransparentDblPipeline.rootSig == nullptr || mTransparentDblPipeline.pipeLineState == nullptr) return false;
 
-	mMaskedDblPipeline = mDeviceManager->CreatePSO(L"BasicVertTransformation.hlsl", L"main", L"BasicColorPixelShader.hlsl", L"main", drawSig, dblMaskedState);
+	mMaskedDblPipeline = mPipelineManager.CreatePSO(L"BasicVertTransformation.hlsl", L"main", L"BasicColorPixelShader.hlsl", L"main", drawSig, dblMaskedState);
 	if (mMaskedDblPipeline.rootSig == nullptr || mMaskedDblPipeline.pipeLineState == nullptr) return false;
 
 	// CREATE DRAW ARGUMENTS--------------------------------------------------------------------------------------------------------------
@@ -203,7 +204,7 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 		debugSig.parameters.emplace_back(debugParam);
 	}
 
-	mDebugPipeline = mDeviceManager->CreatePSO(L"AABBVertexShader.hlsl", L"main", L"AABBPixelShader.hlsl", L"main", debugSig, debugState);
+	mDebugPipeline = mPipelineManager.CreatePSO(L"AABBVertexShader.hlsl", L"main", L"AABBPixelShader.hlsl", L"main", debugSig, debugState);
 	if (mDebugPipeline.rootSig == nullptr || mDebugPipeline.pipeLineState == nullptr) return false;
 
 	// DEBUG DRAW PSO END-------------------------------------------------------------------------------------------------------------------

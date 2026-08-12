@@ -73,75 +73,9 @@ bool D3DDeviceManager::Init(HWND hWnd, UINT WindowWidth, UINT WindowHeight, std:
 	hResult = CoInitializeEx(0, COINITBASE_MULTITHREADED);
 	if (FAILED(hResult) && !OutputErrorFromHResult(hResult, "problem initializing com: ", *mLogFilePtr)) return false;
 
-	mCompiler = std::make_unique<DuckyCompiler>();
-	if(!mCompiler->Init(mLogFilePtr)) return false;
-
 	mCbvUavSrvDescriptorHandle = CreateDescriptorHeap(D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 1024);
 
 	return true;
-}
-
-std::vector<D3D12_INPUT_ELEMENT_DESC> D3DDeviceManager::CreateInputLayout(ShaderCompilationOutput& shaderCompData)
-{
-	std::vector<D3D12_INPUT_ELEMENT_DESC> Elems;
-
-	ComPtr<ID3D12ShaderReflection> vertReflectionData;
-
-	DxcBuffer reflectionData = { shaderCompData.reflectionBlob->GetBufferPointer(),
-								 shaderCompData.reflectionBlob->GetBufferSize(),
-								 0U};
-
-	if (!mCompiler->CreateReflectionData(&reflectionData, vertReflectionData.ReleaseAndGetAddressOf())) return Elems;
-
-	D3D12_SHADER_DESC shaderDesc;
-	vertReflectionData->GetDesc(&shaderDesc);
-
-	for (UINT i = 0; i < shaderDesc.InputParameters; i++)
-	{
-		D3D12_SIGNATURE_PARAMETER_DESC paramDesc;
-		vertReflectionData->GetInputParameterDesc(i, &paramDesc);
-		
-		if (paramDesc.SystemValueType != D3D_NAME_UNDEFINED)
-		{
-			continue;
-		}
-
-		// assume is a position and just change where needed
-		D3D12_INPUT_ELEMENT_DESC currentDesc = {
-				"POSITION",
-				 0,
-				 DXGI_FORMAT_R32G32B32_FLOAT,
-				 0,
-				 D3D12_APPEND_ALIGNED_ELEMENT,
-				 D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
-				 0
-		};
-		
-		if (std::strcmp(paramDesc.SemanticName, "TEXCOORD") == 0)
-		{
-			currentDesc.SemanticName = "TEXCOORD";
-			currentDesc.Format = DXGI_FORMAT_R32G32_FLOAT;
-		}
-		else if (std::strcmp(paramDesc.SemanticName, "NORMAL") == 0)
-		{
-			currentDesc.SemanticName = "NORMAL";
-			currentDesc.Format = DXGI_FORMAT_R32G32B32_FLOAT;
-		}
-		else if (std::strcmp(paramDesc.SemanticName, "TANGENT") == 0)
-		{
-			currentDesc.SemanticName = "TANGENT";
-			currentDesc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
-		}
-		else if (std::strcmp(paramDesc.SemanticName, "COLOR") == 0)
-		{
-			currentDesc.SemanticName = "COLOR";
-			currentDesc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
-		}
-
-		Elems.push_back(currentDesc);
-	}
-
-	return Elems;
 }
 
 
@@ -275,69 +209,6 @@ MappedDescriptorHeapResource D3DDeviceManager::CreateStructuredBuffer(size_t Buf
 	newBuff.descHandle = allocation.gpu;
 
 	return newBuff;
-}
-
-PipelineAndRootSig D3DDeviceManager::CreatePSO(LPCWSTR vertexShader, 
-												LPCWSTR vertexEntry, 
-												LPCWSTR pixelShader, 
-												LPCWSTR pixelEntry, 
-												RootSignatureDesc& NewRootSigDesc, 
-												D3D12_GRAPHICS_PIPELINE_STATE_DESC& PipelineDesc)
-{
-	PipelineAndRootSig newPipeline;
-	
-	ShaderCompilationOutput vertexShaderOutput;
-	if(!mCompiler->CompileShaderDXC(vertexShader, vertexEntry, L"vs_6_6", vertexShaderOutput)) return newPipeline;
-	ShaderCompilationOutput pixelShaderOutput;
-	if (!mCompiler->CompileShaderDXC(pixelShader, pixelEntry, L"ps_6_6", pixelShaderOutput)) return newPipeline;
-	
-	D3D12_ROOT_SIGNATURE_DESC rootSigDesc = {};
-	rootSigDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
-						D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED;
-	rootSigDesc.NumParameters = static_cast<UINT>(NewRootSigDesc.parameters.size());
-	rootSigDesc.pParameters = NewRootSigDesc.parameters.empty() ? nullptr : NewRootSigDesc.parameters.data();
-	rootSigDesc.NumStaticSamplers = static_cast<UINT>(NewRootSigDesc.staticSamplers.size());
-	rootSigDesc.pStaticSamplers = NewRootSigDesc.staticSamplers.empty() ? nullptr : NewRootSigDesc.staticSamplers.data();
-
-	ID3DBlob* rootSigBlob = nullptr;
-
-	HRESULT hResult = D3D12SerializeRootSignature(
-		&rootSigDesc,
-		D3D_ROOT_SIGNATURE_VERSION_1_0,
-		&rootSigBlob,
-		nullptr
-	);
-
-	if (FAILED(hResult) && !OutputErrorFromHResult(hResult, "couldn't serialize root sig ", *mLogFilePtr)) return newPipeline;
-
-	hResult = mDevice->CreateRootSignature(0, rootSigBlob->GetBufferPointer(), rootSigBlob->GetBufferSize(), IID_PPV_ARGS(&newPipeline.rootSig));
-	rootSigBlob->Release();
-	if (FAILED(hResult) && !OutputErrorFromHResult(hResult, "couldn't create root sig ", *mLogFilePtr)) return newPipeline;
-
-	PipelineDesc.pRootSignature = newPipeline.rootSig.Get();
-
-	PipelineDesc.VS.pShaderBytecode = vertexShaderOutput.shaderBlob.Get()->GetBufferPointer();
-	PipelineDesc.VS.BytecodeLength = vertexShaderOutput.shaderBlob.Get()->GetBufferSize();
-	PipelineDesc.PS.pShaderBytecode = pixelShaderOutput.shaderBlob.Get()->GetBufferPointer();
-	PipelineDesc.PS.BytecodeLength = pixelShaderOutput.shaderBlob.Get()->GetBufferSize();
-
-	std::vector<D3D12_INPUT_ELEMENT_DESC> elems = CreateInputLayout(vertexShaderOutput);
-	
-	PipelineDesc.InputLayout.pInputElementDescs = elems.data();
-	PipelineDesc.InputLayout.NumElements = elems.size();
-	PipelineDesc.IBStripCutValue = D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED;
-
-	PipelineDesc.NumRenderTargets = 1;
-	PipelineDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
-	PipelineDesc.SampleDesc.Count = 1;
-	PipelineDesc.SampleDesc.Quality = 0;
-
-	hResult = mDevice->CreateGraphicsPipelineState(&PipelineDesc, IID_PPV_ARGS(&newPipeline.pipeLineState));
-
-	if (FAILED(hResult)) 
-		OutputErrorFromHResult(hResult, "couldn't create graphics pipeline ", *mLogFilePtr);
-
-	return newPipeline;
 }
 
 ComPtr<ID3D12CommandAllocator> D3DDeviceManager::CreateCommandAllocator()

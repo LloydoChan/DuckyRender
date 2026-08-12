@@ -8,18 +8,6 @@ using namespace DirectX;
 using Microsoft::WRL::ComPtr;
 const size_t NO_TEXTURE     = 6666;
 
-struct RootSignatureDesc
-{
-	std::vector<D3D12_ROOT_PARAMETER> parameters;
-	std::vector<D3D12_STATIC_SAMPLER_DESC> staticSamplers;
-};
-
-struct PipelineAndRootSig
-{
-	ComPtr<ID3D12RootSignature> rootSig;
-	ComPtr<ID3D12PipelineState> pipeLineState;
-};
-
 
 struct DescriptorHeapResource
 {
@@ -93,9 +81,6 @@ class D3DDeviceManager
 		DescriptorHeapResource CreateConstantBuffer(size_t bufferSize);
 		MappedDescriptorHeapResource CreateStructuredBuffer(size_t BufferSize, size_t ElementSize);
 
-		PipelineAndRootSig CreatePSO(LPCWSTR vertexShader, LPCWSTR vertexEntry, LPCWSTR pixelShader, LPCWSTR pixelEntry, RootSignatureDesc& NewRootSigDesc, D3D12_GRAPHICS_PIPELINE_STATE_DESC& desc);
-		std::vector<D3D12_INPUT_ELEMENT_DESC> CreateInputLayout(ShaderCompilationOutput& shaderCompData);
-
 		size_t InitTexture(const wchar_t* Filepath);
 		size_t InitFallbackTexture(const wchar_t* Name, const XMFLOAT4& InputColor);
 
@@ -153,6 +138,5 @@ class D3DDeviceManager
 		UINT mCbvUavSrvDescriptorHandle = 0;
 
 		std::wofstream* mLogFilePtr = nullptr;
-		std::unique_ptr<DuckyCompiler> mCompiler;
 		std::unique_ptr<DuckySwapChain> mSwapChain;
 };

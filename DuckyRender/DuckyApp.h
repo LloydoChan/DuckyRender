@@ -1,6 +1,7 @@
 #pragma once
 #include "DuckyMaterial.h"
 #include "DuckyMesh.h"
+#include "DuckyPipelineManager.h"
 
 using namespace DirectX;
 
@@ -106,4 +107,6 @@ protected:
 
 	D3D12_VERTEX_BUFFER_VIEW mVbDebugView;
 	D3D12_INDEX_BUFFER_VIEW mIbDebugView;
+
+	DuckyPipelineManager mPipelineManager;
 };
