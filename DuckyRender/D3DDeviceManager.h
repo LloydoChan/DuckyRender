@@ -81,13 +81,8 @@ class D3DDeviceManager
 		DescriptorHeapResource CreateConstantBuffer(size_t bufferSize);
 		MappedDescriptorHeapResource CreateStructuredBuffer(size_t BufferSize, size_t ElementSize);
 
-		size_t InitTexture(const wchar_t* Filepath);
-		size_t InitFallbackTexture(const wchar_t* Name, const XMFLOAT4& InputColor);
-
 		ID3D12CommandQueue* GetCommandQueue() { return mCommandQueue.Get(); }
-		DescriptorHeapResource* GetTexture(size_t HashedInput);
 		ID3D12DescriptorHeap* GetDepthStencilBufferHeap() { return mDsvHeaps.Get(); }
-		UINT GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE type) { return mDevice->GetDescriptorHandleIncrementSize(type); }
 		ID3D12DescriptorHeap* GetDescriptorHeapHandle() { return mDescriptorHeaps[mCbvUavSrvDescriptorHandle].Get(); };
 		UINT GetDescriptorHeapHandleInt() { return mCbvUavSrvDescriptorHandle; };
 		ID3D12Device* GetDevice() { return mDevice.Get(); }
@@ -111,11 +106,8 @@ class D3DDeviceManager
 			return BarrierDesc;
 		}
 
-
-
 		void Present() { mSwapChain->Present(); }
 		D3D12_CPU_DESCRIPTOR_HANDLE IncrementAndReturnRTVHeaps() { return mSwapChain->GetCurrentRtv(this); };
-
 
 		bool Resize(UINT WindowWidth, UINT WindowHeight);
 
