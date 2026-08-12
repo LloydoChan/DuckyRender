@@ -1,6 +1,7 @@
 #pragma once
 // precompiled header!
 #include <vector>
+#include <array>
 #include <errno.h>
 #include <algorithm>
 #include <chrono>

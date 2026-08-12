@@ -49,50 +49,19 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 		return false;
 	}
 
-	InitInstanceData(DuckyFile);
-	InitTextures(DuckyFile);
-
-	// init fallback textures
-	DescriptorHeapResource newResource = mDeviceManager->CreateFallbackTexture(L"BaseColorFallbackTexture", BaseColorFallback, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB);
-	if (newResource.buffer == nullptr) return false;
-	mTextures.emplace_back(newResource);
-	mBaseColorFallbackHandle = mTextures.size() - 1;
-
-	newResource = mDeviceManager->CreateFallbackTexture(L"NormalFallbackTexture", NormalFallback, DXGI_FORMAT_R8G8B8A8_UNORM);
-	if (newResource.buffer == nullptr) return false;
-	mTextures.emplace_back(newResource);
-	mNormalColorFallbackHandle = mTextures.size() - 1;
-
-	newResource = mDeviceManager->CreateFallbackTexture(L"EmissiveFallbackTexture", EmissiveFallback, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB);
-	if (newResource.buffer == nullptr) return false;
-	mTextures.emplace_back(newResource);
-	mEmissiveColorFallbackHandle = mTextures.size() - 1;
-
-	newResource = mDeviceManager->CreateFallbackTexture(L"MetallicRoughnessFallbackTexture", BaseColorFallback, DXGI_FORMAT_R8G8B8A8_UNORM);
-	if (newResource.buffer == nullptr) return false;
-	mTextures.emplace_back(newResource);
-	mMetallicRougnessFallbackHandle = mTextures.size() - 1;
-
-
-	InitMaterials(DuckyFile);
-	InitMeshes(DuckyFile);
-	InitVertexAndIndexMegaBuffer(DuckyFile);
+	mScene.Init(DuckyFile, mDeviceManager.get());
 	InitDebugDrawsVBAndIB();
 	CreateDrawRecords();
-
-	mNumMeshes = mMeshes.size();
-
-	if (mMeshes.empty()) return false;
 
 	WorkOutGlobalBoundingBoxCenter();
 
 	size_t totalPrimitiveDraws = 0;
 
-	for (const DuckyMeshInstance& instance :mInstances)
+	for (const DuckyMeshInstance& instance : mScene.GetInstances())
 	{
-		if (instance.mMeshDataIndex < 0 || instance.mMeshDataIndex >= static_cast<int>(mMeshes.size())) continue;
+		if (instance.mMeshDataIndex < 0 || instance.mMeshDataIndex >= static_cast<int>(mScene.GetMeshes().size())) continue;
 
-		totalPrimitiveDraws += mMeshes[instance.mMeshDataIndex].GetPrimitiveCount();
+		totalPrimitiveDraws += mScene.GetMeshes()[instance.mMeshDataIndex].GetPrimitiveCount();
 	}
 
 	UINT64 neededCapacity = AlignConstantBufferSize(sizeof(PerFrameConstants));
@@ -666,7 +635,7 @@ void SimplestApp::AppMainLoop()
 		list->SetGraphicsRootSignature(mOpaquePipeline.rootSig.Get());
 		list->SetDescriptorHeaps(1, &heapPtr);
 
-		size_t numMeshes = mMeshes.size();
+		size_t numMeshes = mScene.GetMeshes().size();
 		static int currentInstance = 0;
 		static int frameCnt = 0;
 		
@@ -678,14 +647,14 @@ void SimplestApp::AppMainLoop()
 		asFrameConstants->mLightColor = XMFLOAT4(1.f, 1.f, 1.f, 1.f);
 		asFrameConstants->mLightDirection = XMFLOAT4(-0.4f, -1.0f, 0.2f, 0.f);
 		asFrameConstants->mVisualisationMode = mVisualizationMode;
-		asFrameConstants->mMaterialBufferIndex = mMaterialBuffer.heapOffset;
-		asFrameConstants->mInstanceBufferIndex = mInstanceBuffer.heapOffset;
+		asFrameConstants->mMaterialBufferIndex = mScene.GetMaterialsHeapBuffer().heapOffset;
+		asFrameConstants->mInstanceBufferIndex = mScene.GetInstancesHeapBuffer().heapOffset;
 		asFrameConstants->mDrawBufferIndex = mDrawsBuffer.heapOffset;
 		list->SetGraphicsRootConstantBufferView(0, constantAllocation.mGpuAddress);
 
 		list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-		list->IASetVertexBuffers(0, 1, &mVbView);
-		list->IASetIndexBuffer(&mIbView);
+		list->IASetVertexBuffers(0, 1, &mScene.GetVertexBufferView());
+		list->IASetIndexBuffer(&mScene.GetIndexBufferView());
 
 		PIXBeginEvent(list, PIX_COLOR(0, 255, 0), "DRAW");
 		PIXScopedEvent(PIX_COLOR(0, 255, 255), "DRAW");
@@ -734,20 +703,6 @@ void SimplestApp::AppMainLoop()
 			nullptr,
 			0);
 
-		/*list->SetPipelineState(mMaskedDblPipeline.pipeLineState.Get());
-		DrawRecords(sortedRecordsMaskedDbl, cbvAllocator, list);
-
-		list->SetPipelineState(mTransparentDblPipeline.pipeLineState.Get());
-		DrawRecords(sortedRecordsBlendedDbl, cbvAllocator, list);
-
-		list->SetPipelineState(mOpaquePipeline.pipeLineState.Get());
-		DrawRecords(sortedRecordsOpaque, cbvAllocator, list);
-
-		list->SetPipelineState(mMaskedPipeline.pipeLineState.Get());
-		DrawRecords(sortedRecordsMasked, cbvAllocator, list);
-
-		list->SetPipelineState(mTransparentPipeline.pipeLineState.Get());
-		DrawRecords(sortedRecordsBlended, cbvAllocator, list);*/
 
 		if (bDrawDebug)
 		{
@@ -817,9 +772,9 @@ void SimplestApp::AppMainLoop()
 
 void SimplestApp::WorkOutGlobalBoundingBoxCenter()
 {
-	for (const auto& instance : mInstances)
+	for (const auto& instance : mScene.GetInstances())
 	{
-		const DuckyMeshData& data = mMeshes[instance.mMeshDataIndex];
+		const DuckyMeshData& data = mScene.GetMeshes()[instance.mMeshDataIndex];
 		for (const auto& primitive : data.GetPrimitives())
 		{
 			const AABB& box = primitive.GetBoundingBox();
@@ -864,17 +819,17 @@ void SimplestApp::CreateDrawRecords()
 {
 	size_t numDraws = 0;
 	std::vector<DrawRecord> tempRecords;
-	for (int instance = 0; instance < mInstances.size(); instance++)
+	for (int instance = 0; instance < mScene.GetInstances().size(); instance++)
 	{
-		const DuckyMeshInstance* instancePtr = &mInstances[instance];
-		const DuckyMeshData& meshData = mMeshes[instancePtr->mMeshDataIndex];
+		const DuckyMeshInstance* instancePtr = &mScene.GetInstances()[instance];
+		const DuckyMeshData& meshData = mScene.GetMeshes()[instancePtr->mMeshDataIndex];
 
 		const std::vector<DuckyPrimitive>& primitives = meshData.GetPrimitives();
 
 		for (int primitive = 0; primitive < primitives.size(); primitive++)
 		{
 			const DuckyPrimitive* primPtr = &primitives[primitive];
-			const DuckyMaterial* matPtr = &mMaterialsCPU[primPtr->GetMaterialIndex()];
+			const DuckyMaterial* matPtr = &mScene.GetMaterials()[primPtr->GetMaterialIndex()];
 
 			DrawRecord newRecord{ instance, instancePtr->mMeshDataIndex, primitive, primPtr->GetMaterialIndex(), numDraws };
 			numDraws++;
@@ -932,7 +887,7 @@ void SimplestApp::DrawRecords(const std::vector<SortRecord>& Draws, ConstantBuff
 	for (const SortRecord& draw : Draws)
 	{
 		List->SetGraphicsRoot32BitConstant( RootParameter::DrawConstants, draw.record.mGPUDrawIndex, 0);
-		const DuckyPrimitive& prim = mMeshes[draw.record.mMeshIndex].GetPrimitive(draw.record.mPrimitiveIndex);
+		const DuckyPrimitive& prim = mScene.GetMeshes()[draw.record.mMeshIndex].GetPrimitive(draw.record.mPrimitiveIndex);
 
 		prim.Draw(List);
 	}
@@ -974,10 +929,10 @@ std::vector<TransformedDrawRecord> SimplestApp::TransformAABBsToOBBs(const std::
 
 	for (const DrawRecord& record : recordsToSort)
 	{
-		DuckyMeshInstance& inst = mInstances[record.mInstanceIndex];
+		const DuckyMeshInstance& inst = mScene.GetInstances()[record.mInstanceIndex];
 		XMMATRIX transform = inst.mTransform;
 
-		DuckyMeshData& meshData = mMeshes[record.mMeshIndex];
+		const DuckyMeshData& meshData = mScene.GetMeshes()[record.mMeshIndex];
 		const AABB& boundingBox = meshData.GetPrimitives()[record.mPrimitiveIndex].GetBoundingBox();
 
 		const XMFLOAT4& min = boundingBox.GetMin();
@@ -1086,7 +1041,7 @@ uint32_t SimplestApp::BuildIndirectCommands(const std::vector<SortRecord>& draws
 	{
 		const SortRecord& record = draws[i];
 
-		const DuckyPrimitive& primitive = mMeshes[record.record.mMeshIndex].GetPrimitive(record.record.mPrimitiveIndex);
+		const DuckyPrimitive& primitive = mScene.GetMeshes()[record.record.mMeshIndex].GetPrimitive(record.record.mPrimitiveIndex);
 
 		IndirectCommand& cmd = destination[i];
 

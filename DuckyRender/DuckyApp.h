@@ -2,12 +2,9 @@
 #include "DuckyMaterial.h"
 #include "DuckyMesh.h"
 #include "DuckyPipelineManager.h"
+#include "DuckyScene.h"
 
 using namespace DirectX;
-
-const XMFLOAT4 BaseColorFallback{ 1.f, 1.f, 1.f, 1.f };
-const XMFLOAT4 NormalFallback{ 0.5f, 0.5f, 1.f, 1.f };
-const XMFLOAT4 EmissiveFallback{ 0.f,0.f,0.f, 0.f };
 
 class DuckyApp
 {
@@ -35,13 +32,6 @@ public:
 	void EndGPUStats(ID3D12GraphicsCommandList* commandList, UINT frameIndex);
 	D3D12_QUERY_DATA_PIPELINE_STATISTICS WriteOutGPUStats(UINT FrameIndex);
 
-	// materials and mesh data
-	bool InitInstanceData(std::ifstream& ModelFile);
-	bool InitMaterials(std::ifstream& ModelFile);
-	bool InitTextures(std::ifstream& ModelFile);
-	bool InitMeshes(std::ifstream& ModelFile);
-	bool InitVertexAndIndexMegaBuffer(std::ifstream& ModelFile);
-
 	bool InitDebugDrawsVBAndIB();
 
 protected:
@@ -60,11 +50,6 @@ protected:
 	UINT mClientHeight = 0;
 
 	bool mMinimized = false;
-
-	int mBaseColorFallbackHandle = 0;
-	int mNormalColorFallbackHandle = 0;
-	int mEmissiveColorFallbackHandle = 0;
-	int mMetallicRougnessFallbackHandle = 0;
 
 	std::wstring mInputFilePath;
 
@@ -85,22 +70,9 @@ protected:
 	UINT64 mFrameCount = 0;
 	UINT64 mTimeStampFrequency = 0;
 
-	std::vector<DuckyMaterial> mMaterialsCPU;
-	MappedDescriptorHeapResource mMaterialBuffer;
-	MappedDescriptorHeapResource mInstanceBuffer;
 	MappedDescriptorHeapResource mDrawsBuffer;
-	std::vector<DescriptorHeapResource> mTextures;
-
+	
 	ComPtr<ID3D12CommandSignature> mDrawCommandSignature;
-
-	std::vector<DuckyMeshData> mMeshes;
-	std::vector<DuckyMeshInstance> mInstances;
-
-	Microsoft::WRL::ComPtr<ID3D12Resource> mVertices;
-	Microsoft::WRL::ComPtr<ID3D12Resource> mIndices;
-
-	D3D12_VERTEX_BUFFER_VIEW mVbView;
-	D3D12_INDEX_BUFFER_VIEW  mIbView;
 
 	Microsoft::WRL::ComPtr<ID3D12Resource> mDebugVertices;
 	Microsoft::WRL::ComPtr<ID3D12Resource> mDebugIndices;
@@ -109,4 +81,5 @@ protected:
 	D3D12_INDEX_BUFFER_VIEW mIbDebugView;
 
 	DuckyPipelineManager mPipelineManager;
+	DuckyScene mScene;
 };
