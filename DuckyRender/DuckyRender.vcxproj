@@ -154,6 +154,7 @@
   <ItemGroup>
     <ClCompile Include="D3DDeviceManager.cpp" />
     <ClCompile Include="DuckyApp.cpp" />
+    <ClCompile Include="DuckyCamera.cpp" />
     <ClCompile Include="DuckyCompiler.cpp" />
     <ClCompile Include="DuckyDescriptor.cpp" />
     <ClCompile Include="DuckyGraphicsContext.cpp" />
@@ -235,6 +236,7 @@
   <ItemGroup>
     <ClInclude Include="D3DDeviceManager.h" />
     <ClInclude Include="DuckyApp.h" />
+    <ClInclude Include="DuckyCamera.h" />
     <ClInclude Include="DuckyCompiler.h" />
     <ClInclude Include="DuckyDescriptor.h" />
     <ClInclude Include="DuckyGraphicsContext.h" />

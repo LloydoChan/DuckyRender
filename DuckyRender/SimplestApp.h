@@ -4,6 +4,7 @@
 #include "DuckyMesh.h"
 #include "DuckyImGui.h"
 #include "DuckyRenderTypes.h"
+#include "DuckyCamera.h"
 
 class DuckyGraphicsContext;
 struct ConstantBufferAllocator;
@@ -32,13 +33,6 @@ struct TransformedDrawRecord
 {
 	DrawRecord mDrawRecord;
 	GPUOBB mOBB;
-};
-
-struct MovementStruct
-{
-	float xMovement = 0.f;
-	float yMovement = 0.f;
-	float zMovement = 0.f;
 };
 
 struct PerFrameConstants
@@ -77,7 +71,7 @@ class SimplestApp : public DuckyApp
 		virtual bool Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* WindowName) override;
 		virtual LRESULT WindowProcedure(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam);
 		virtual void HandleInput(UINT msg, WPARAM wParam, LPARAM lParam);
-		void UpdateMovementAndRotation(XMVECTOR& ViewVector, MovementStruct& movement, float DeltaTime);
+		void UpdateMovement(MovementStruct& movement, float DeltaTime);
 		virtual void AppMainLoop();
 
 		void WorkOutGlobalBoundingBoxCenter();

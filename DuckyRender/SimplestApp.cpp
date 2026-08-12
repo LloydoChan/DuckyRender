@@ -6,6 +6,7 @@
 #include "DuckyPipelineStates.h"
 #include "DuckyTools.h"
 
+
 #include "imgui/imgui.h"
 #include "imgui/imgui_impl_win32.h"
 
@@ -20,8 +21,6 @@ using Clock = std::chrono::steady_clock;
 
 // this isn't const because it needs to change based on scale
 float MOVEMENT_SPEED = 20.f;
-const float ROTATIONAL_SPEED_YAW = 2.f * 3.141f;
-const float ROTATIONAL_SPEED_PITCH = 2.f * 3.141f;
 
 namespace RootParameter
 {
@@ -328,43 +327,11 @@ void SimplestApp::HandleInput(UINT msg, WPARAM wParam, LPARAM lParam)
 	}
 }
 
-void SimplestApp::UpdateMovementAndRotation(XMVECTOR& ViewVector, MovementStruct& movement, float DeltaTime)
+void SimplestApp::UpdateMovement(MovementStruct& movement, float DeltaTime)
 {
 	LONG localMouseDeltaXCopy = mMouseDeltaX;
 	LONG localMouseDeltaYCopy = mMouseDeltaY;
 
-	static const XMVECTOR up = XMVectorSet(0.f, 1.f, 0.f, 0.f);
-
-	ViewVector = XMVector3Normalize(ViewVector);
-	
-	if (mLeftButtonDown && localMouseDeltaXCopy != 0)
-	{
-		float yaw = XMConvertToRadians(static_cast<float>(mMouseDeltaX) * ROTATIONAL_SPEED_YAW * DeltaTime);
-		XMVECTOR quat = XMQuaternionRotationAxis(up, yaw);
-		ViewVector = XMVector3Rotate(ViewVector, quat);
-		ViewVector = XMVector3Normalize(ViewVector);
-	}
-
-	XMVECTOR localDeltaYCopy = XMVector3Normalize(XMVector3Cross(up, ViewVector));
-	XMVECTOR rightVector = XMVector3Cross(ViewVector, up);
-	rightVector = XMVector3Normalize(rightVector);
-
-	if (mLeftButtonDown && localMouseDeltaYCopy != 0)
-	{
-		float pitch = XMConvertToRadians(static_cast<float>(mMouseDeltaY) * ROTATIONAL_SPEED_PITCH * DeltaTime);
-		XMVECTOR quat = XMQuaternionRotationAxis(rightVector, -pitch);
-		XMVECTOR possibleViewVector = XMVector3Rotate(ViewVector, quat);
-		possibleViewVector = XMVector3Normalize(possibleViewVector);
-
-		const float verticalAlignment = XMVectorGetX(XMVector3Dot(possibleViewVector, up));
-
-		constexpr float pitchLimit = 0.99f;
-
-		if (std::abs(verticalAlignment) < pitchLimit)
-		{
-			ViewVector = possibleViewVector;
-		}
-	}
 
 	if (mKeys['W'] || mScrollAmount > 0)
 	{
@@ -409,16 +376,6 @@ void SimplestApp::UpdateMovementAndRotation(XMVECTOR& ViewVector, MovementStruct
 
 void SimplestApp::AppMainLoop()
 {
-	float fov = XMConvertToRadians(60.0f);
-	float aspect = static_cast<float>(mWholeScreenViewPortScissor.scissor.right) / static_cast<float>(mWholeScreenViewPortScissor.scissor.bottom);
-
-	XMMATRIX projection =
-		XMMatrixPerspectiveFovLH(
-			fov,
-			aspect,
-			0.1f,
-			1000.0f);
-
 	float angle = 0.f;
 
 	XMFLOAT4 min = mGlobalAABB.GetMin();
@@ -443,10 +400,13 @@ void SimplestApp::AppMainLoop()
 
 	XMVECTOR at = XMVectorSet(sceneMidPoint[0], sceneMidPoint[1], sceneMidPoint[2], 1.f);
 	XMVECTOR eye = XMVectorSet(5.f, viewLength, 5.f, 1.f);
-	const XMVECTOR up = XMVectorSet(0.f, 1.f, 0.f, 0.f);
+
+	float fov = XMConvertToRadians(60.0f);
+	float aspect = static_cast<float>(mWholeScreenViewPortScissor.scissor.right) / static_cast<float>(mWholeScreenViewPortScissor.scissor.bottom);
+
+	std::unique_ptr<DuckyCamera> sceneCamera = std::make_unique<DuckyCamera>(at, eye, fov, aspect, 0.1f, 1000.0f);
 
 	auto previousTime = Clock::now();
-
 	MSG msg = {};
 	UINT64 fenceVal = 0;
 
@@ -493,35 +453,17 @@ void SimplestApp::AppMainLoop()
 
 		previousTime = currentTime;
 
-		XMVECTOR viewVector = XMVector4Normalize(XMVectorSubtract(eye, at));
-
 		MovementStruct movement{};
 
-		UpdateMovementAndRotation(viewVector, movement, deltaTime);
+		UpdateMovement(movement, deltaTime);
 
-		XMVECTOR right = XMVector3Cross(viewVector, up);
-		XMVECTOR relativeUp = XMVector3Cross(viewVector, right);
-		XMVECTOR delta{ movement.xMovement, movement.yMovement, 0.f };
-
-		XMVECTOR forward = XMVectorScale(viewVector, movement.zMovement);
-		right = XMVectorScale(right, movement.xMovement);
-		relativeUp = XMVectorScale(relativeUp, movement.yMovement);
-
-		at = XMVectorAdd(at, forward);
-		at = XMVectorAdd(at, right);
-		at = XMVectorAdd(at, relativeUp);
-
-		eye = XMVectorAdd(at, XMVectorScale(viewVector, viewLength));
-
-		XMMATRIX view = XMMatrixLookAtLH(eye, at, up);
-		// per frame matrix buffer setting
-		XMMATRIX vp = view * projection;
+		sceneCamera->Update(deltaTime, movement, viewLength, mMouseDeltaX, mMouseDeltaY, mLeftButtonDown);
 
 		mMouseDeltaX = mMouseDeltaY = 0;
 		mScrollAmount = 0;
 
 		XMFLOAT4X4 viewProj;
-		XMStoreFloat4x4(&viewProj, vp);
+		XMStoreFloat4x4(&viewProj, sceneCamera->GetViewProjection());
 		DuckyFrustum frameFrustum = ExtractFrustumFromViewProjection(viewProj);
 
 		unsigned int numDrawableMeshes = 0;
@@ -530,7 +472,7 @@ void SimplestApp::AppMainLoop()
 	
 		for (int type = static_cast<int>(PipelineType::OPAQUE); type < static_cast<int>(PipelineType::DEBUG); type++)
 		{
-			sortedRecords[type] = SortAndCull(mDrawTypes[type], frameFrustum, vp, currentFrame);
+			sortedRecords[type] = SortAndCull(mDrawTypes[type], frameFrustum, sceneCamera->GetViewProjection(), currentFrame);
 			numDrawableMeshes += sortedRecords[type].size();
 		}
 
@@ -600,8 +542,8 @@ void SimplestApp::AppMainLoop()
 		
 		ConstantBufferAllocation constantAllocation = cbvAllocator->AllocateConstantBuffer(sizeof(PerFrameConstants));
 		PerFrameConstants* asFrameConstants = reinterpret_cast<PerFrameConstants*>(constantAllocation.mCpuAddress);
-		XMStoreFloat4x4(static_cast<XMFLOAT4X4*>(&asFrameConstants->mViewProjection), XMMatrixTranspose(vp));
-		XMStoreFloat4(static_cast<XMFLOAT4*>(&asFrameConstants->mCameraPosition), eye);
+		XMStoreFloat4x4(static_cast<XMFLOAT4X4*>(&asFrameConstants->mViewProjection), XMMatrixTranspose(sceneCamera->GetViewProjection()));
+		XMStoreFloat4(static_cast<XMFLOAT4*>(&asFrameConstants->mCameraPosition), sceneCamera->GetEye());
 		asFrameConstants->mLightColor = XMFLOAT4(1.f, 1.f, 1.f, 1.f);
 		asFrameConstants->mLightDirection = XMFLOAT4(-0.4f, -1.0f, 0.2f, 0.f);
 		asFrameConstants->mVisualisationMode = mVisualizationMode;
@@ -634,7 +576,7 @@ void SimplestApp::AppMainLoop()
 		if (bDrawDebug)
 		{
 			XMFLOAT4X4 debugProjection;
-			XMStoreFloat4x4(&debugProjection, XMMatrixTranspose(vp));
+			XMStoreFloat4x4(&debugProjection, XMMatrixTranspose(sceneCamera->GetViewProjection()));
 			memcpy(mMappedTransform[currentFrame], &debugProjection, sizeof(debugProjection));
 
 			list->SetGraphicsRootSignature(mRenderer.GetPipelineSig(PipelineType::DEBUG).rootSig.Get());
