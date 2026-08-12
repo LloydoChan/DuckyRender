@@ -113,12 +113,7 @@ class SimplestApp : public DuckyApp
 		XMFLOAT4X4* mMappedTransform[2] = {};
 		MappedDescriptorHeapResource mStructuredBufferOBBs[2];
 
-		std::vector<DrawRecord> mOpaqueDraws;
-		std::vector<DrawRecord> mBlendedDraws;
-		std::vector<DrawRecord> mMaskedDraws;
-		std::vector<DrawRecord> mOpaqueDblDraws;
-		std::vector<DrawRecord> mBlendedDblDraws;
-		std::vector<DrawRecord> mMaskedDblDraws;
+		std::vector<DrawRecord> mDrawTypes[static_cast<int>(PipelineType::DEBUG)];
 
 		DuckyGraphicsContext* mDuckyContext;
 

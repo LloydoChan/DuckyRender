@@ -525,25 +525,14 @@ void SimplestApp::AppMainLoop()
 		DuckyFrustum frameFrustum = ExtractFrustumFromViewProjection(viewProj);
 
 		unsigned int numDrawableMeshes = 0;
+
+		std::vector<SortRecord> sortedRecords[static_cast<int>(PipelineType::DEBUG)];
 	
-		std::vector<SortRecord> sortedRecordsOpaqueDbl = SortAndCull(mOpaqueDblDraws, frameFrustum, vp, currentFrame);
-		numDrawableMeshes += sortedRecordsOpaqueDbl.size();
-
-		std::vector<SortRecord> sortedRecordsOpaque = SortAndCull(mOpaqueDraws, frameFrustum, vp, currentFrame);
-		numDrawableMeshes += sortedRecordsOpaque.size();
-
-		std::vector<SortRecord> sortedRecordsMaskedDbl = SortAndCull(mMaskedDblDraws, frameFrustum, vp, currentFrame);
-		numDrawableMeshes += sortedRecordsMaskedDbl.size();
-
-		std::vector<SortRecord> sortedRecordsMasked = SortAndCull(mMaskedDraws, frameFrustum, vp, currentFrame);
-		numDrawableMeshes += sortedRecordsMasked.size();
-
-		std::vector<SortRecord> sortedRecordsBlendedDbl = SortAndCull(mBlendedDblDraws, frameFrustum, vp, currentFrame);
-		numDrawableMeshes += sortedRecordsBlendedDbl.size();
-
-		std::vector<SortRecord> sortedRecordsBlended = SortAndCull(mBlendedDraws, frameFrustum, vp, currentFrame);
-		numDrawableMeshes += sortedRecordsBlended.size();
-
+		for (int type = static_cast<int>(PipelineType::OPAQUE); type < static_cast<int>(PipelineType::DEBUG); type++)
+		{
+			sortedRecords[type] = SortAndCull(mDrawTypes[type], frameFrustum, vp, currentFrame);
+			numDrawableMeshes += sortedRecords[type].size();
+		}
 
 		float clearColor[] = { 0.5f, 0.8f, 0.9f, 1.f };
 
@@ -575,26 +564,15 @@ void SimplestApp::AppMainLoop()
 		IndirectCommand* indirectDst = mDuckyContext->GetIndirectCommandPtr(currentFrame);
 		uint32_t commandOffset = 0;
 
-		const uint32_t opaqueDblOffset = commandOffset;
-		commandOffset += BuildIndirectCommands(sortedRecordsOpaqueDbl, indirectDst + commandOffset);
+		uint32_t Offsets[static_cast<int>(PipelineType::COUNT)];
 
-		const uint32_t maskedDblOffset = commandOffset;
-		commandOffset += BuildIndirectCommands(sortedRecordsMaskedDbl, indirectDst + commandOffset);
-
-		const uint32_t blendedDblOffset = commandOffset;
-		commandOffset += BuildIndirectCommands(sortedRecordsBlendedDbl, indirectDst + commandOffset);
-
-		const uint32_t opaqueOffset = commandOffset;
-		commandOffset += BuildIndirectCommands(sortedRecordsOpaque, indirectDst + commandOffset);
-
-		const uint32_t maskedOffset = commandOffset;
-		commandOffset += BuildIndirectCommands(sortedRecordsMasked, indirectDst + commandOffset);
-
-		const uint32_t blendedOffset = commandOffset;
-		commandOffset += BuildIndirectCommands(sortedRecordsBlended, indirectDst + commandOffset);
+		for (int type = static_cast<int>(PipelineType::OPAQUE); type < static_cast<int>(PipelineType::DEBUG); type++)
+		{
+			Offsets[type] = commandOffset;
+			commandOffset += BuildIndirectCommands(sortedRecords[type], indirectDst + commandOffset);
+		}
 
 		gpuTime = GetGPUFrameMilliSeconds(currentFrame);
-
 
 		StartGPUTimeStamp(list, currentFrame);
 
@@ -642,48 +620,15 @@ void SimplestApp::AppMainLoop()
 		StartGpuStats(list, currentFrame);
 
 		ComPtr<ID3D12Resource> indirectBuffer = mDuckyContext->GetIndirectBuffer(currentFrame);
-
-		ID3D12PipelineState* opaque = mRenderer.GetPipelineSig(PipelineType::OPAQUE).pipeLineState.Get();
-		list->SetPipelineState(opaque);
-		ID3D12CommandSignature* sig = mRenderer.GetCommandSig();
-		list->ExecuteIndirect(
-			sig,
-			static_cast<UINT>(sortedRecordsOpaqueDbl.size()),
-			indirectBuffer.Get(),
-			static_cast<UINT64>(opaqueDblOffset) *
-			sizeof(IndirectCommand),
-			nullptr,
-			0);
-
-		/*list->SetPipelineState(mOpaquePipeline.pipeLineState.Get());
-		list->ExecuteIndirect(
-			mDrawCommandSignature.Get(),
-			static_cast<UINT>(sortedRecordsOpaque.size()),
-			indirectBuffer.Get(),
-			static_cast<UINT64>(opaqueOffset) *
-			sizeof(IndirectCommand),
-			nullptr,
-			0);
-
-		list->SetPipelineState(mTransparentPipeline.pipeLineState.Get());
-		list->ExecuteIndirect(
-			mDrawCommandSignature.Get(),
-			static_cast<UINT>(sortedRecordsBlended.size()),
-			indirectBuffer.Get(),
-			static_cast<UINT64>(blendedOffset) *
-			sizeof(IndirectCommand),
-			nullptr,
-			0);
-
-		list->SetPipelineState(mTransparentDblPipeline.pipeLineState.Get());
-		list->ExecuteIndirect(
-			mDrawCommandSignature.Get(),
-			static_cast<UINT>(sortedRecordsBlendedDbl.size()),
-			indirectBuffer.Get(),
-			static_cast<UINT64>(blendedDblOffset) *
-			sizeof(IndirectCommand),
-			nullptr,
-			0);*/
+		
+		for (int type = static_cast<int>(PipelineType::OPAQUE); type < static_cast<int>(PipelineType::DEBUG); type++)
+		{
+			mRenderer.ExecuteDraws(list,
+				static_cast<PipelineType>(type),
+				indirectBuffer.Get(),
+				static_cast<UINT>(sortedRecords[type].size()),
+				static_cast<UINT64>(Offsets[type]) * sizeof(IndirectCommand));
+		}
 
 
 		if (bDrawDebug)
@@ -699,7 +644,7 @@ void SimplestApp::AppMainLoop()
 			list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_LINELIST);
 			list->IASetVertexBuffers(0,1,&mVbDebugView);
 			list->IASetIndexBuffer(&mIbDebugView);
-			list->DrawIndexedInstanced(24, sortedRecordsOpaqueDbl.size(), 0, 0, 0);
+			list->DrawIndexedInstanced(24, sortedRecords[static_cast<int>(PipelineType::OPAQUE_DBL)].size(), 0, 0, 0);
 		}
 
 
@@ -712,9 +657,6 @@ void SimplestApp::AppMainLoop()
 
 		// don't want imGUI stats to contribute
 		mImGui.Render(list);
-
-		// now, add debug Draws, using the sorted AABB data from this frame
-
 
 		barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
 		barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
@@ -823,28 +765,28 @@ void SimplestApp::CreateDrawRecords()
 			{
 				switch (mode)
 				{
-				case AlphaMode::Blend:
-					mBlendedDblDraws.push_back(newRecord);
-					break;
-				case AlphaMode::Mask:
-					mMaskedDblDraws.push_back(newRecord);
-					break;
-				default:
-					mOpaqueDblDraws.push_back(newRecord);
+					case AlphaMode::Blend:
+						mDrawTypes[static_cast<int>(PipelineType::ALPHA_DBL)].push_back(newRecord);
+						break;
+					case AlphaMode::Mask:
+						mDrawTypes[static_cast<int>(PipelineType::MASKED_DBL)].push_back(newRecord);
+						break;
+					default:
+						mDrawTypes[static_cast<int>(PipelineType::OPAQUE_DBL)].push_back(newRecord);
 				}
 			}
 			else
 			{
 				switch (mode)
 				{
-				case AlphaMode::Blend:
-					mBlendedDraws.push_back(newRecord);
-					break;
-				case AlphaMode::Mask:
-					mMaskedDraws.push_back(newRecord);
-					break;
-				default:
-					mOpaqueDraws.push_back(newRecord);
+					case AlphaMode::Blend:
+						mDrawTypes[static_cast<int>(PipelineType::ALPHA)].push_back(newRecord);
+						break;
+					case AlphaMode::Mask:
+						mDrawTypes[static_cast<int>(PipelineType::MASKED)].push_back(newRecord);
+						break;
+					default:
+						mDrawTypes[static_cast<int>(PipelineType::OPAQUE)].push_back(newRecord);
 				}
 			}
 		}

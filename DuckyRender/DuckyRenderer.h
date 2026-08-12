@@ -9,6 +9,12 @@ class DuckyRenderer
 		bool Init(std::wofstream* LogFile, D3DDeviceManager* Manager, GraphicsPipelineDesc* Pipelines, UINT NumPipelines);
 		void Render();
 
+		void ExecuteDraws(ID3D12GraphicsCommandList* list,
+				PipelineType type,
+				ID3D12Resource* indirectBuffer,
+				UINT drawCount,
+				UINT64 offset);
+
 		const PipelineAndRootSig& GetPipelineSig(PipelineType Type) { return mPipelines[(int)Type]; }
 		ID3D12CommandSignature* GetCommandSig() { return mDrawCommandSignature.Get(); }
 	private:

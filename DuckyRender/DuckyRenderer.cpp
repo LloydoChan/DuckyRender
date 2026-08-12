@@ -38,3 +38,17 @@ bool DuckyRenderer::Init(std::wofstream* LogFile, D3DDeviceManager* Manager, Gra
 
     return true;
 }
+
+void DuckyRenderer::ExecuteDraws(ID3D12GraphicsCommandList* list, PipelineType type, ID3D12Resource* indirectBuffer, UINT drawCount, UINT64 offset)
+{
+	const auto& pipeline = mPipelines[static_cast<size_t>(type)];
+
+	list->SetPipelineState(pipeline.pipeLineState.Get());
+
+	list->ExecuteIndirect(mDrawCommandSignature.Get(),
+						  drawCount,
+						  indirectBuffer,
+						  offset,
+						  nullptr,
+						  0);
+}
