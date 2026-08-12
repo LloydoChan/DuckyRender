@@ -86,12 +86,6 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 	rootParams[RootParameter::DrawConstants].Constants.Num32BitValues = 1;
 	rootParams[RootParameter::DrawConstants].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
 
-
-	for (const auto& param : rootParams)
-	{
-		drawSig.parameters.emplace_back(param);
-	}
-
 	D3D12_STATIC_SAMPLER_DESC samplerDesc = {};
 
 	samplerDesc.AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
@@ -105,8 +99,6 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 	samplerDesc.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 	samplerDesc.ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
 
-	drawSig.staticSamplers.emplace_back(samplerDesc);
-
 	auto opaqueState = MakeOpaquePipelineState();
 	auto transparantState = MakeTransparentPipelineState();
 	auto maskedState = MakeMaskedPipelineState();
@@ -115,22 +107,26 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 	auto dblMaskedState = MakeDoubleSidedMaskedPipelineState();
 	auto debugState = MakeDebugDrawPipelineState();
 
-	mOpaquePipeline = mPipelineManager.CreatePSO(L"BasicVertTransformation.hlsl", L"main", L"BasicColorPixelShader.hlsl", L"main", drawSig, opaqueState);
+	ShaderDesc pbrShaderVS, pbrShaderPS;
+	pbrShaderVS.File = L"BasicVertTransformation.hlsl";
+	pbrShaderPS.File = L"BasicColorPixelShader.hlsl";
+
+	mOpaquePipeline = mPipelineManager.CreatePSO(pbrShaderVS, pbrShaderPS, rootParams, RootParameter::Count, &samplerDesc, 1, opaqueState);
 	if (mOpaquePipeline.rootSig == nullptr || mOpaquePipeline.pipeLineState == nullptr) return false;
 
-	mTransparentPipeline = mPipelineManager.CreatePSO(L"BasicVertTransformation.hlsl", L"main", L"BasicColorPixelShader.hlsl", L"main", drawSig, transparantState);
+	mTransparentPipeline = mPipelineManager.CreatePSO(pbrShaderVS, pbrShaderPS, rootParams, RootParameter::Count, &samplerDesc, 1, transparantState);
 	if (mTransparentPipeline.rootSig == nullptr || mTransparentPipeline.pipeLineState == nullptr) return false;
 
-	mMaskedPipeline = mPipelineManager.CreatePSO(L"BasicVertTransformation.hlsl", L"main", L"BasicColorPixelShader.hlsl", L"main", drawSig, maskedState);
+	mMaskedPipeline = mPipelineManager.CreatePSO(pbrShaderVS, pbrShaderPS, rootParams, RootParameter::Count, &samplerDesc, 1, maskedState);
 	if (mMaskedPipeline.rootSig == nullptr || mMaskedPipeline.pipeLineState == nullptr) return false;
 
-	mOpaqueDblPipeline = mPipelineManager.CreatePSO(L"BasicVertTransformation.hlsl", L"main", L"BasicColorPixelShader.hlsl", L"main", drawSig, dblOpaqueState);
+	mOpaqueDblPipeline = mPipelineManager.CreatePSO(pbrShaderVS, pbrShaderPS, rootParams, RootParameter::Count, &samplerDesc, 1, dblOpaqueState);
 	if (mOpaqueDblPipeline.rootSig == nullptr || mOpaqueDblPipeline.pipeLineState == nullptr) return false;
 
-	mTransparentDblPipeline = mPipelineManager.CreatePSO(L"BasicVertTransformation.hlsl", L"main", L"BasicColorPixelShader.hlsl", L"main", drawSig, dblBlendState);
+	mTransparentDblPipeline = mPipelineManager.CreatePSO(pbrShaderVS, pbrShaderPS, rootParams, RootParameter::Count, &samplerDesc, 1, dblBlendState);
 	if (mTransparentDblPipeline.rootSig == nullptr || mTransparentDblPipeline.pipeLineState == nullptr) return false;
 
-	mMaskedDblPipeline = mPipelineManager.CreatePSO(L"BasicVertTransformation.hlsl", L"main", L"BasicColorPixelShader.hlsl", L"main", drawSig, dblMaskedState);
+	mMaskedDblPipeline = mPipelineManager.CreatePSO(pbrShaderVS, pbrShaderPS, rootParams, RootParameter::Count, &samplerDesc, 1, dblMaskedState);
 	if (mMaskedDblPipeline.rootSig == nullptr || mMaskedDblPipeline.pipeLineState == nullptr) return false;
 
 	// CREATE DRAW ARGUMENTS--------------------------------------------------------------------------------------------------------------
@@ -152,7 +148,6 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 	if (FAILED(hResult)) return false;
 
 	// DEBUG DRAW PSO START----------------------------------------------------------------------------------------------------------------
-	RootSignatureDesc debugSig = {};
 
 	D3D12_ROOT_PARAMETER debugParams[2]{};
 
@@ -168,12 +163,11 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 	debugParams[1].Descriptor.RegisterSpace = 0;
 	debugParams[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
 
-	for (const auto& debugParam : debugParams)
-	{
-		debugSig.parameters.emplace_back(debugParam);
-	}
 
-	mDebugPipeline = mPipelineManager.CreatePSO(L"AABBVertexShader.hlsl", L"main", L"AABBPixelShader.hlsl", L"main", debugSig, debugState);
+	ShaderDesc debugShaderVS, debugShaderPS;
+	debugShaderVS.File = L"AABBVertexShader.hlsl";
+	debugShaderPS.File = L"AABBPixelShader.hlsl";
+	mDebugPipeline = mPipelineManager.CreatePSO(debugShaderVS, debugShaderPS, debugParams, 2, nullptr, 0, debugState);
 	if (mDebugPipeline.rootSig == nullptr || mDebugPipeline.pipeLineState == nullptr) return false;
 
 	// DEBUG DRAW PSO END-------------------------------------------------------------------------------------------------------------------
