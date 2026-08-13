@@ -370,7 +370,7 @@ void ProcessTextures(const tinygltf::Model& Model,
 {
 	for (const tinygltf::Material& material : Model.materials)
 	{
-		unsigned int textureIndex = material.pbrMetallicRoughness.baseColorTexture.index;
+		int textureIndex = material.pbrMetallicRoughness.baseColorTexture.index;
 		if (textureIndex != -1)
 		{
 			WriteOutTextureData(textureIndex, Model, orderedNames, TextureType::BASE_COLOR, TextureInputAssetPath, TextureOutputAssetPath);

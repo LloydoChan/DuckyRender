@@ -409,7 +409,8 @@ void SimplestApp::AppMainLoop()
 
 
 	XMVECTOR at = XMVectorSet(sceneMidPoint[0], sceneMidPoint[1], sceneMidPoint[2], 1.f);
-	XMVECTOR eye = XMVectorSet(5.f, viewLength, 5.f, 1.f);
+	XMVECTOR initialDirection = XMVector3Normalize(XMVectorSet(1.0f, 0.6f, 1.0f, 0.0f));
+	XMVECTOR eye =XMVectorAdd(at,XMVectorScale(initialDirection,viewLength));
 
 	float fov = XMConvertToRadians(60.0f);
 	float aspect = static_cast<float>(mWholeScreenViewPortScissor.scissor.right) / static_cast<float>(mWholeScreenViewPortScissor.scissor.bottom);

@@ -1,8 +1,8 @@
 #include "pch.h"
 #include "DuckyCamera.h"
 
-const float ROTATIONAL_SPEED_YAW = 2.f * 3.141f;
-const float ROTATIONAL_SPEED_PITCH = 2.f * 3.141f;
+constexpr float MOUSE_YAW_SENSITIVITY = 0.003f;
+constexpr float MOUSE_PITCH_SENSITIVITY = 0.003f;
 
 DuckyCamera::DuckyCamera(const XMVECTOR& At, const XMVECTOR& Eye, float FOV, float AspectRatio, float NearZ, float FarZ) : 
 	mAt(At), mEye(Eye), mFOV(FOV), mAspectRatio(AspectRatio), mNearZ(NearZ), mFarZ(FarZ)
@@ -20,27 +20,26 @@ void DuckyCamera::Update(float DeltaTime, const MovementStruct& Movement, float 
 
     if (Rotate && MouseDeltaX != 0.0f)
     {
-        const float yaw = XMConvertToRadians(MouseDeltaX * ROTATIONAL_SPEED_YAW * DeltaTime);
+        const float yaw = MouseDeltaX * MOUSE_YAW_SENSITIVITY;
 
         XMVECTOR quat = XMQuaternionRotationAxis(up, yaw);
-        viewVector = XMVector3Rotate(viewVector, quat);
-        viewVector = XMVector3Normalize(viewVector);
+
+        viewVector = XMVector3Normalize(XMVector3Rotate(viewVector, quat));
     }
 
-    XMVECTOR rightVector = XMVector3Normalize(XMVector3Cross(viewVector, up));
+    XMVECTOR rightVector =XMVector3Normalize(XMVector3Cross(viewVector, up));
 
     if (Rotate && MouseDeltaY != 0.0f)
     {
-        const float pitch = XMConvertToRadians( MouseDeltaY * ROTATIONAL_SPEED_PITCH * DeltaTime);
+        const float pitch = MouseDeltaY * MOUSE_PITCH_SENSITIVITY;
 
-        XMVECTOR quat = XMQuaternionRotationAxis(rightVector,-pitch);
+        XMVECTOR quat = XMQuaternionRotationAxis(rightVector, -pitch);
+
         XMVECTOR possibleViewVector = XMVector3Normalize(XMVector3Rotate(viewVector, quat));
-
-        const float verticalAlignment = XMVectorGetX(XMVector3Dot(possibleViewVector, up));
 
         constexpr float pitchLimit = 0.99f;
 
-        if (std::abs(verticalAlignment) < pitchLimit) viewVector = possibleViewVector;
+        if (std::abs( XMVectorGetX(XMVector3Dot(possibleViewVector,up))) < pitchLimit) viewVector = possibleViewVector;
     }
 
     XMVECTOR right = XMVector3Cross(viewVector, up);
