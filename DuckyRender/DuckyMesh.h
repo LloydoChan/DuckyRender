@@ -1,5 +1,5 @@
 #pragma once
-
+#include "pch.h"
 #include "DuckyMaterial.h"
 
 using Microsoft::WRL::ComPtr;
@@ -12,101 +12,116 @@ struct ID3D12Resource;
 const unsigned int AABB_MIN = 0;
 const unsigned int AABB_MAX = 1;
 
-struct GpuBuffer
+struct CookedVertex
 {
-	ComPtr<ID3D12Resource> resource;
-
-	uint64_t size = 0;
-	uint32_t stride = 0;
-
-	D3D12_RESOURCE_STATES state =
-		D3D12_RESOURCE_STATE_COMMON;
+	XMFLOAT3 position{ 0.f,0.f,0.f };
+	XMFLOAT3 normal{ 0.f, 1.f, 0.f };
+	XMFLOAT4 tangent{ 1.f, 0.f, 0.f, 1.f };
+	XMFLOAT2 texcoord0{ 0.f, 0.f };
+	XMFLOAT4 color0{ 1.f,1.f,1.f,1.f };
 };
 
-struct BufferInfo
+struct DebugVertex
 {
-	size_t BufferSize = 0;
-	unsigned int Stride = 0;
-	std::vector<std::byte> Data;
+	XMFLOAT3 position;
 };
+
+const float stdMax = (std::numeric_limits<float>::max)();
+const float stdMin = std::numeric_limits<float>::lowest();
+
 
 class AABB
 {
 	public:
 		AABB();
-		AABB(const XMVECTOR& Min, const XMVECTOR& Max);
-
-		const XMVECTOR& GetMin() const { return mVertices[AABB_MIN]; }
-		const XMVECTOR& GetMax() const { return mVertices[AABB_MAX]; }
-
-		void SetNewMinMax(const XMVECTOR& newMin, const XMVECTOR& newMax) {
-			mVertices[AABB_MIN] = newMin;
-			mVertices[AABB_MAX] = newMax;
-			RegenerateBox(newMin, newMax);
+		AABB(const XMFLOAT4& Min, const XMFLOAT4& Max) : mVertices { Min, Max } { RegenerateBox(); }
+		AABB(const XMFLOAT4* Points)
+		{
+			for (int i = 0; i < 8; i++)
+			{
+				mVertices[i] = Points[i];
+			}
 		}
 
-		XMVECTOR const * GetPointsAddress() const { return &mVertices[0]; }
+		const XMFLOAT4& GetMin() const { return mVertices[AABB_MIN]; }
+		const XMFLOAT4& GetMax() const { return mVertices[AABB_MAX]; }
+
+		void SetNewMinMax(const XMFLOAT4& newMin, const XMFLOAT4& newMax) {
+			mVertices[AABB_MIN] = newMin;
+			mVertices[AABB_MAX] = newMax;
+			RegenerateBox();
+		}
+
+		XMFLOAT4 const * GetPointsAddress() const { return &mVertices[0]; }
 
 	private:
-		void RegenerateBox(const XMVECTOR& newMin, const XMVECTOR& newMax);
-		XMVECTOR mVertices[8] {};
+		void RegenerateBox();
+		XMFLOAT4 mVertices[8];
 };
 
-struct PrimitiveLoadData
+struct GPUOBB
 {
-	BufferInfo vertexBuffer;
-	BufferInfo indexBuffer;
-	DuckyMaterial material;
-	AABB boundingBox{};
+	XMFLOAT3 Center;
+	XMFLOAT3 Extents;
+
+	XMFLOAT4 Orientation; // quaternion
 };
 
+struct DuckyFrustum
+{
+	XMFLOAT4 mPlanes[6];
+};
 
 class DuckyPrimitive
 {
-public:
-	DuckyPrimitive()  { };
-	bool InitPrimitive(D3DDeviceManager* DeviceManager,
-		PrimitiveLoadData& LoadData,
-		UINT MaterialIndex);
+	public:
+		DuckyPrimitive(size_t NumIndices, 
+			size_t NumVertices, 
+			size_t IndexOffset, 
+			size_t VertexOffset, 
+			unsigned int MaterialIndex, 
+			AABB& BoundingBox) : mNumIndices(NumIndices),
+								 mNumVertices(NumVertices),
+								 mVertexOffset(VertexOffset),
+								 mIndexOffset(IndexOffset),
+								 mMaterialIndex(MaterialIndex),
+								 mPrimitiveAABB(BoundingBox) {};
+	
+		void Draw(ID3D12GraphicsCommandList* commandList) const;
 
-	void BindGeometry(ID3D12GraphicsCommandList* commandList) const;
-	void Draw(ID3D12GraphicsCommandList* commandList) const;
+		uint32_t GetMaterialIndex() const { return mMaterialIndex; }
+		const AABB& GetBoundingBox() const { return mPrimitiveAABB; }
+		void SetBoundingBox(const AABB& NewBB) { mPrimitiveAABB = NewBB; }
 
-	uint32_t GetMaterialIndex() const { return mMaterialIndex; }
-	const AABB& GetBoundingBox() const { return mPrimitiveAABB; }
-private:
-	GpuBuffer mVertices;
-	GpuBuffer mIndices;
+		size_t GetNumVertices() const { return mNumVertices; }
+		size_t GetNumIndices() const { return mNumIndices; }
+		AlphaMode GetAlphaMode() const { return mode; }
 
-	D3D12_VERTEX_BUFFER_VIEW mVertexView{};
-	D3D12_INDEX_BUFFER_VIEW mIndexView{};
-	UINT mNumVertices = 0;
-	UINT mNumIndices = 0;
+		size_t GetVertexOffset() const { return mVertexOffset; }
+		size_t GetIndexOffset() const { return mIndexOffset; }
+	private:
+		size_t mNumIndices = 0;
+		size_t mNumVertices = 0;
+		size_t mVertexOffset = 0;
+		size_t mIndexOffset = 0;
 
-	UINT mMaterialIndex = 0;
+		UINT mMaterialIndex = 0;
 
-	AABB mPrimitiveAABB;
+		AABB mPrimitiveAABB;
 
-	bool InitBuffer(D3DDeviceManager* DeviceManager, BufferInfo& BufferInfo, ComPtr<ID3D12Resource>& Data);
+		AlphaMode mode = AlphaMode::Opaque;
 };
 
 class DuckyMeshData
 {
-public:
-	const std::vector<DuckyPrimitive>& GetPrimitives() const { return mPrimitives; }
-	const DuckyMaterial& GetMaterial(uint32_t index) const { return mMaterials[index]; }
-	bool Init(D3DDeviceManager* deviceManager, std::ifstream& inputFile);
-	size_t GetPrimitiveCount() { return mPrimitives.size(); }
+	public:
+		const std::vector<DuckyPrimitive>& GetPrimitives() const { return mPrimitives; }
+		const DuckyPrimitive& GetPrimitive(unsigned int Index) const { return mPrimitives[Index]; }
+		void AddPrimitive(const DuckyPrimitive& Primitive) { mPrimitives.emplace_back(Primitive); }
+		size_t GetPrimitiveCount() const { return mPrimitives.size(); }
 
-private:
-	bool ReadPrimitive( D3DDeviceManager* deviceManager, std::ifstream& inputFile, PrimitiveLoadData& output);
-	size_t ReadTexture( D3DDeviceManager* deviceManager, std::ifstream& inputFile);
-
-	static bool ReadBufferInfo( std::ifstream& inputFile,BufferInfo& output);
-
-
-	std::vector<DuckyPrimitive> mPrimitives;
-	std::vector<DuckyMaterial> mMaterials;
+	private:
+		std::vector<DuckyPrimitive> mPrimitives;
 };
 
 struct DuckyMeshInstance

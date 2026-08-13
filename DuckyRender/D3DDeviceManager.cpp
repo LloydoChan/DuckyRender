@@ -73,111 +73,138 @@ bool D3DDeviceManager::Init(HWND hWnd, UINT WindowWidth, UINT WindowHeight, std:
 	hResult = CoInitializeEx(0, COINITBASE_MULTITHREADED);
 	if (FAILED(hResult) && !OutputErrorFromHResult(hResult, "problem initializing com: ", *mLogFilePtr)) return false;
 
-	mCompiler = std::make_unique<DuckyCompiler>();
-	if(!mCompiler->Init(mLogFilePtr)) return false;
-
 	mCbvUavSrvDescriptorHandle = CreateDescriptorHeap(D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 1024);
 
 	return true;
 }
 
-std::vector<D3D12_INPUT_ELEMENT_DESC> D3DDeviceManager::CreateInputLayout(ShaderCompilationOutput& shaderCompData)
+DescriptorHeapResource D3DDeviceManager::CreateDefaultStructuredBuffer(size_t bufferSize, size_t elementSize)
 {
-	std::vector<D3D12_INPUT_ELEMENT_DESC> Elems;
+	DescriptorHeapResource result;
 
-	ComPtr<ID3D12ShaderReflection> vertReflectionData;
+	result.buffer = CreateDefaultBuffer(bufferSize, D3D12_RESOURCE_STATE_COPY_DEST);
 
-	DxcBuffer reflectionData = { shaderCompData.reflectionBlob->GetBufferPointer(),
-								 shaderCompData.reflectionBlob->GetBufferSize(),
-								 0U};
+	if (!result.buffer) return {};
 
-	if (!mCompiler->CreateReflectionData(&reflectionData, vertReflectionData.ReleaseAndGetAddressOf())) return Elems;
+	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc{};
+	srvDesc.Format = DXGI_FORMAT_UNKNOWN;
+	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+	srvDesc.Buffer.FirstElement = 0;
+	srvDesc.Buffer.NumElements = static_cast<UINT>(bufferSize / elementSize);
+	srvDesc.Buffer.StructureByteStride = static_cast<UINT>(elementSize);
+	srvDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
 
-	D3D12_SHADER_DESC shaderDesc;
-	vertReflectionData->GetDesc(&shaderDesc);
+	DescriptorAllocation allocation = AllocateCbvSrvUavDescriptor(mCbvUavSrvDescriptorHandle);
 
-	for (UINT i = 0; i < shaderDesc.InputParameters; i++)
+	if (!allocation.IsValid()) return {};
+
+	mDevice->CreateShaderResourceView(result.buffer.Get(),&srvDesc, allocation.cpu);
+
+	result.heapOffset = allocation.descriptorIndex;
+	result.descHandle = allocation.gpu;
+
+	return result;
+}
+
+MappedDescriptorHeapResource D3DDeviceManager::CreateStructuredBuffer(size_t BufferSize,size_t ElementSize)
+{
+	D3D12_HEAP_PROPERTIES heapprop = {};
+
+	heapprop.Type = D3D12_HEAP_TYPE_UPLOAD;
+	heapprop.CPUPageProperty =
+		D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
+	heapprop.MemoryPoolPreference =
+		D3D12_MEMORY_POOL_UNKNOWN;
+
+	D3D12_RESOURCE_DESC resdesc = {};
+
+	resdesc.Dimension =
+		D3D12_RESOURCE_DIMENSION_BUFFER;
+	resdesc.Width = BufferSize;
+	resdesc.Height = 1;
+	resdesc.DepthOrArraySize = 1;
+	resdesc.MipLevels = 1;
+	resdesc.Format = DXGI_FORMAT_UNKNOWN;
+	resdesc.SampleDesc.Count = 1;
+	resdesc.Flags = D3D12_RESOURCE_FLAG_NONE;
+	resdesc.Layout =
+		D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+
+	MappedDescriptorHeapResource newBuff;
+
+	HRESULT hResult =
+		mDevice->CreateCommittedResource(
+			&heapprop,
+			D3D12_HEAP_FLAG_NONE,
+			&resdesc,
+			D3D12_RESOURCE_STATE_GENERIC_READ,
+			nullptr,
+			IID_PPV_ARGS(&newBuff.buffer));
+
+	if (FAILED(hResult))
 	{
-		D3D12_SIGNATURE_PARAMETER_DESC paramDesc;
-		vertReflectionData->GetInputParameterDesc(i, &paramDesc);
-		
-		// assume is a position and just change where needed
-		D3D12_INPUT_ELEMENT_DESC currentDesc = {
-				"POSITION",
-				 0,
-				 DXGI_FORMAT_R32G32B32_FLOAT,
-				 0,
-				 D3D12_APPEND_ALIGNED_ELEMENT,
-				 D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
-				 0
-		};
-		
-		if (std::strcmp(paramDesc.SemanticName, "TEXCOORD") == 0)
-		{
-			currentDesc.SemanticName = "TEXCOORD";
-			currentDesc.Format = DXGI_FORMAT_R32G32_FLOAT;
-		}
-		else if (std::strcmp(paramDesc.SemanticName, "NORMAL") == 0)
-		{
-			currentDesc.SemanticName = "NORMAL";
-			currentDesc.Format = DXGI_FORMAT_R32G32B32_FLOAT;
-		}
-		else if (std::strcmp(paramDesc.SemanticName, "TANGENT") == 0)
-		{
-			currentDesc.SemanticName = "TANGENT";
-			currentDesc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
-		}
-		else if (std::strcmp(paramDesc.SemanticName, "COLOR") == 0)
-		{
-			currentDesc.SemanticName = "COLOR";
-			currentDesc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
-		}
+		OutputErrorFromHResult(
+			hResult,
+			"problem creating committed resource : ",
+			*mLogFilePtr);
 
-		Elems.push_back(currentDesc);
+		return {};
 	}
 
-	return Elems;
+	D3D12_RANGE readRange = { 0, 0 };
+
+	HRESULT hr =
+		newBuff.buffer->Map(
+			0,
+			&readRange,
+			&newBuff.mapped);
+
+	if (FAILED(hr))
+		return {};
+
+	// Create SRV
+	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+
+	srvDesc.Format =
+		DXGI_FORMAT_UNKNOWN;
+
+	srvDesc.Shader4ComponentMapping =
+		D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+
+	srvDesc.ViewDimension =
+		D3D12_SRV_DIMENSION_BUFFER;
+
+	srvDesc.Buffer.FirstElement = 0;
+
+	srvDesc.Buffer.NumElements =
+		static_cast<UINT>(
+			BufferSize / ElementSize);
+
+	srvDesc.Buffer.StructureByteStride =
+		static_cast<UINT>(ElementSize);
+
+	srvDesc.Buffer.Flags =
+		D3D12_BUFFER_SRV_FLAG_NONE;
+
+	DescriptorAllocation allocation =
+		AllocateCbvSrvUavDescriptor(
+			mCbvUavSrvDescriptorHandle);
+
+	mDevice->CreateShaderResourceView(
+		newBuff.buffer.Get(),
+		&srvDesc,
+		allocation.cpu);
+
+	newBuff.heapOffset =
+		allocation.descriptorIndex;
+
+	newBuff.descHandle =
+		allocation.gpu;
+
+	return newBuff;
 }
 
-size_t D3DDeviceManager::InitTexture(const wchar_t* Filepath)
-{
-	// Alternative: Inline instantiation and call
-	std::size_t quickHash = std::hash<std::wstring>{}(Filepath);
-
-	if(!mTextures.contains(quickHash))
-	{ 
-		DescriptorHeapResource newResource = CreateTexture(Filepath);
-		if (newResource.buffer == nullptr) return INVALID_HANDLE;
-		mTextures[quickHash] = newResource;
-		return quickHash;
-	}
-	
-	return quickHash;
-}
-
-size_t D3DDeviceManager::InitFallbackTexture(const wchar_t* Name, const XMFLOAT4& InputColor)
-{
-	std::size_t quickHash = std::hash<std::wstring>{}(Name);
-
-	if (!mTextures.contains(quickHash))
-	{
-		DescriptorHeapResource newResource = CreateFallbackTexture(Name, InputColor);
-		if (newResource.buffer == nullptr) return INVALID_HANDLE;
-		mTextures[quickHash] = newResource;
-		return quickHash;
-	}
-
-	return quickHash;
-}
-
-DescriptorHeapResource* D3DDeviceManager::GetTexture(size_t HashedInput)
-{
-	auto it = mTextures.find(HashedInput);
-
-	if (it == mTextures.end()) return nullptr;
-
-	return &it->second;
-}
 
 ComPtr<ID3D12Resource> D3DDeviceManager::CreateBuffer(size_t bufferSize)
 {
@@ -249,67 +276,73 @@ DescriptorHeapResource D3DDeviceManager::CreateConstantBuffer(size_t bufferSize)
 	return constantBuffer;
 }
 
-PipelineAndRootSig D3DDeviceManager::CreatePSO(LPCWSTR vertexShader, 
-												LPCWSTR vertexEntry, 
-												LPCWSTR pixelShader, 
-												LPCWSTR pixelEntry, 
-												RootSignatureDesc& NewRootSigDesc, 
-												D3D12_GRAPHICS_PIPELINE_STATE_DESC& PipelineDesc)
+ComPtr<ID3D12Resource> D3DDeviceManager::CreateUploadBuffer(size_t BufferSize)
 {
-	PipelineAndRootSig newPipeline;
-	
-	ShaderCompilationOutput vertexShaderOutput;
-	if(!mCompiler->CompileShaderDXC(vertexShader, vertexEntry, L"vs_6_0", vertexShaderOutput)) return newPipeline;
-	ShaderCompilationOutput pixelShaderOutput;
-	if (!mCompiler->CompileShaderDXC(pixelShader, pixelEntry, L"ps_6_0", pixelShaderOutput)) return newPipeline;
-	
-	D3D12_ROOT_SIGNATURE_DESC rootSigDesc = {};
-	rootSigDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
-	rootSigDesc.NumParameters = static_cast<UINT>(NewRootSigDesc.parameters.size());
-	rootSigDesc.pParameters = NewRootSigDesc.parameters.empty() ? nullptr : NewRootSigDesc.parameters.data();
-	rootSigDesc.NumStaticSamplers = static_cast<UINT>(NewRootSigDesc.staticSamplers.size());
-	rootSigDesc.pStaticSamplers = NewRootSigDesc.staticSamplers.empty() ? nullptr : NewRootSigDesc.staticSamplers.data();
+	// new for creating triangle data
+	D3D12_HEAP_PROPERTIES heapprop = {};
 
-	ID3DBlob* rootSigBlob = nullptr;
+	heapprop.Type = D3D12_HEAP_TYPE_UPLOAD;
+	heapprop.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
+	heapprop.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
 
-	HRESULT hResult = D3D12SerializeRootSignature(
-		&rootSigDesc,
-		D3D_ROOT_SIGNATURE_VERSION_1_0,
-		&rootSigBlob,
-		nullptr
+	D3D12_RESOURCE_DESC resdesc = {};
+
+	resdesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+	resdesc.Width = BufferSize;
+	resdesc.Height = 1;
+	resdesc.DepthOrArraySize = 1;
+	resdesc.MipLevels = 1;
+	resdesc.Format = DXGI_FORMAT_UNKNOWN;
+	resdesc.SampleDesc.Count = 1;
+	resdesc.Flags = D3D12_RESOURCE_FLAG_NONE;
+	resdesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+
+	ComPtr<ID3D12Resource> resource;
+
+	HRESULT hResult;
+
+	hResult = mDevice->CreateCommittedResource(
+		&heapprop,
+		D3D12_HEAP_FLAG_NONE,
+		&resdesc,
+		D3D12_RESOURCE_STATE_GENERIC_READ,
+		nullptr,
+		IID_PPV_ARGS(&resource)
 	);
 
-	if (FAILED(hResult) && !OutputErrorFromHResult(hResult, "couldn't serialize root sig ", *mLogFilePtr)) return newPipeline;
+	if (FAILED(hResult) && !OutputErrorFromHResult(hResult, "problem creating committed resource : ", *mLogFilePtr)) return {};
 
-	hResult = mDevice->CreateRootSignature(0, rootSigBlob->GetBufferPointer(), rootSigBlob->GetBufferSize(), IID_PPV_ARGS(&newPipeline.rootSig));
-	rootSigBlob->Release();
-	if (FAILED(hResult) && !OutputErrorFromHResult(hResult, "couldn't create root sig ", *mLogFilePtr)) return newPipeline;
+	return resource;
+}
 
-	PipelineDesc.pRootSignature = newPipeline.rootSig.Get();
+ComPtr<ID3D12Resource> D3DDeviceManager::CreateDefaultBuffer(size_t BufferSize, D3D12_RESOURCE_STATES initialState)
+{
+	D3D12_HEAP_PROPERTIES heap{};
+	heap.Type = D3D12_HEAP_TYPE_DEFAULT;
 
-	PipelineDesc.VS.pShaderBytecode = vertexShaderOutput.shaderBlob.Get()->GetBufferPointer();
-	PipelineDesc.VS.BytecodeLength = vertexShaderOutput.shaderBlob.Get()->GetBufferSize();
-	PipelineDesc.PS.pShaderBytecode = pixelShaderOutput.shaderBlob.Get()->GetBufferPointer();
-	PipelineDesc.PS.BytecodeLength = pixelShaderOutput.shaderBlob.Get()->GetBufferSize();
+	D3D12_RESOURCE_DESC desc{};
+	desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+	desc.Width = BufferSize;
+	desc.Height = 1;
+	desc.DepthOrArraySize = 1;
+	desc.MipLevels = 1;
+	desc.SampleDesc.Count = 1;
+	desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
 
-	std::vector<D3D12_INPUT_ELEMENT_DESC> elems = CreateInputLayout(vertexShaderOutput);
-	
-	PipelineDesc.InputLayout.pInputElementDescs = elems.data();
-	PipelineDesc.InputLayout.NumElements = elems.size();
-	PipelineDesc.IBStripCutValue = D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED;
+	ComPtr<ID3D12Resource> resource;
 
-	PipelineDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-	PipelineDesc.NumRenderTargets = 1;
-	PipelineDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
-	PipelineDesc.SampleDesc.Count = 1;
-	PipelineDesc.SampleDesc.Quality = 0;
+	HRESULT hr = mDevice->CreateCommittedResource(
+		&heap,
+		D3D12_HEAP_FLAG_NONE,
+		&desc,
+		initialState,
+		nullptr,
+		IID_PPV_ARGS(&resource));
 
-	hResult = mDevice->CreateGraphicsPipelineState(&PipelineDesc, IID_PPV_ARGS(&newPipeline.pipeLineState));
+	if (FAILED(hr))
+		return {};
 
-	if (FAILED(hResult)) 
-		OutputErrorFromHResult(hResult, "couldn't create graphics pipeline ", *mLogFilePtr);
-
-	return newPipeline;
+	return resource;
 }
 
 ComPtr<ID3D12CommandAllocator> D3DDeviceManager::CreateCommandAllocator()
@@ -517,7 +550,7 @@ DescriptorHeapResource D3DDeviceManager::CreateTexture(const wchar_t* Filepath)
 	return newTexture;
 }
 
-DescriptorHeapResource D3DDeviceManager::CreateFallbackTexture(const wchar_t* Name, const XMFLOAT4& Color)
+DescriptorHeapResource D3DDeviceManager::CreateFallbackTexture(const wchar_t* Name, const XMFLOAT4& Color, DXGI_FORMAT Format)
 {
 	DescriptorHeapResource newTexture;
 
@@ -530,8 +563,8 @@ DescriptorHeapResource D3DDeviceManager::CreateFallbackTexture(const wchar_t* Na
 
 	D3D12_RESOURCE_DESC resDesc = {};
 
-	resDesc.Format = DXGI_FORMAT_BC7_UNORM_SRGB;
-	resDesc.Width = 4;
+	resDesc.Format = Format;
+	resDesc.Width = 1;
 	resDesc.Height =1;
 	resDesc.DepthOrArraySize = 1;
 	resDesc.SampleDesc.Count = 1;
@@ -551,14 +584,22 @@ DescriptorHeapResource D3DDeviceManager::CreateFallbackTexture(const wchar_t* Na
 
 	if (FAILED(hResult) && !OutputErrorFromHResult(hResult, "couldn't create texture ", *mLogFilePtr)) return newTexture;
 
-	hResult = newTexture.buffer->WriteToSubresource(0, nullptr, &Color, 1, 1);
+	uint8_t pixel[4] =
+	{
+		static_cast<uint8_t>(Color.x * 255.0f),
+		static_cast<uint8_t>(Color.y * 255.0f),
+		static_cast<uint8_t>(Color.z * 255.0f),
+		static_cast<uint8_t>(Color.w * 255.0f)
+	};
+
+	hResult = newTexture.buffer->WriteToSubresource(0, nullptr, pixel, 4, 4);
 	newTexture.buffer->SetName(Name);
 
 	if (FAILED(hResult) && !OutputErrorFromHResult(hResult, "couldn't write to subresource ", *mLogFilePtr)) return newTexture;
 
 	// create the resource view
 	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-	srvDesc.Format = DXGI_FORMAT_BC7_UNORM_SRGB;
+	srvDesc.Format = Format;
 	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
 	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
 	srvDesc.Texture2D.MipLevels = 1;

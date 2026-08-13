@@ -2,7 +2,7 @@
 
 using namespace DirectX;
 
-const size_t INVALID_HANDLE = (std::numeric_limits<size_t>::max)();
+const int INVALID_HANDLE = -1;
 
 enum class AlphaMode : uint32_t
 {
@@ -15,17 +15,17 @@ struct MaterialConstants
 {
     XMFLOAT4 mBaseColorFactor =
     {
-        1.0f, 1.0f, 1.0f, 1.0f
+        1.f, 1.f, 1.f, 1.f
     };
 
+    XMFLOAT3 mEmissiveColorFactor =
+    {
+        0.f, 0.f, 0.f
+    };
+
+    float mNormalScale = 1.0f;
     float mRoughnessFactor = 1.0f;
     float mMetallicFactor = 1.0f;
-    float mNormalScale = 1.0f;
-
-    unsigned int mHasBaseColorTexture = 0;
-    unsigned int mHasNormalTexture = 0;
-    unsigned int mHasMetallicRoughnessTexture = 0;
-    unsigned int mHasEmissiveTexture = 0;
 
     AlphaMode alphaMode = AlphaMode::Opaque;
     float alphaCutoff = 0.5f;
@@ -39,8 +39,27 @@ struct DuckyMaterial
 {
     MaterialConstants constants{};
 
-    size_t mBaseColorTexture         = INVALID_HANDLE;
-    size_t mNormalTexture            = INVALID_HANDLE;
-    size_t mMetallicRoughnessTexture = INVALID_HANDLE;
-    size_t mEmissive                 = INVALID_HANDLE;
+   int mBaseColorTexture         = INVALID_HANDLE;
+   int mNormalTexture            = INVALID_HANDLE;
+   int mMetallicRoughnessTexture = INVALID_HANDLE;
+   int mEmissive                 = INVALID_HANDLE;
+};
+
+struct GPUMaterial
+{
+    XMFLOAT4 BaseColorFactor;
+    XMFLOAT3 EmissiveFactor;
+
+    float NormalScale;
+    float RoughnessFactor;
+    float MetallicFactor;
+
+    uint32_t alphaMode;
+    float alphaCutoff;
+    uint32_t doubleSided;
+
+    uint32_t BaseColorTexture;
+    uint32_t NormalTexture;
+    uint32_t MetallicRoughnessTexture;
+    uint32_t EmissiveTexture;
 };

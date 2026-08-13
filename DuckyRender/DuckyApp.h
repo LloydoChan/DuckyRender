@@ -1,13 +1,11 @@
 #pragma once
+#include "DuckyMaterial.h"
+#include "DuckyMesh.h"
+#include "DuckyPipelineManager.h"
+#include "DuckyScene.h"
+#include "DuckyRenderer.h"
 
 using namespace DirectX;
-#include "DuckyImGui.h"
-
-class D3DDeviceManager;
-
-const XMFLOAT4 BaseColorFallback{ 1.f, 1.f, 1.f, 1.f };
-const XMFLOAT4 NormalFallback{ 0.5f, 0.5f, 1.f, 1.f };
-const XMFLOAT4 EmissiveFallback{ 1.f, 1.f, 1.f, 1.f };
 
 class DuckyApp
 {
@@ -35,7 +33,7 @@ public:
 	void EndGPUStats(ID3D12GraphicsCommandList* commandList, UINT frameIndex);
 	D3D12_QUERY_DATA_PIPELINE_STATISTICS WriteOutGPUStats(UINT FrameIndex);
 
-	void ImGUIDraw(double GpuTime, double CpuTime, const D3D12_QUERY_DATA_PIPELINE_STATISTICS& Stats);
+	bool InitDebugDrawsVBAndIB();
 
 protected:
 	
@@ -53,9 +51,6 @@ protected:
 	UINT mClientHeight = 0;
 
 	bool mMinimized = false;
-
-	size_t mBaseColorFallbackHandle = 0;
-	size_t mNormalColorFallbackHandle = 0;
 
 	std::wstring mInputFilePath;
 
@@ -76,5 +71,14 @@ protected:
 	UINT64 mFrameCount = 0;
 	UINT64 mTimeStampFrequency = 0;
 
-	DuckyImGui mImGui;
+	MappedDescriptorHeapResource mDrawsBuffer;
+
+	Microsoft::WRL::ComPtr<ID3D12Resource> mDebugVertices;
+	Microsoft::WRL::ComPtr<ID3D12Resource> mDebugIndices;
+
+	D3D12_VERTEX_BUFFER_VIEW mVbDebugView;
+	D3D12_INDEX_BUFFER_VIEW mIbDebugView;
+
+	DuckyScene mScene;
+	DuckyRenderer mRenderer;
 };

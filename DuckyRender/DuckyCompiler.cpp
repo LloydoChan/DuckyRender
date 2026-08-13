@@ -61,7 +61,7 @@ bool DuckyCompiler::CompileShaderDXC(LPCWSTR ShaderFilePath, LPCWSTR entryPoint,
 
 		if (errors && errors->GetStringLength() > 0)
 		{
-			std::cerr << errors->GetStringPointer();
+			*mLogFilePtr << errors->GetStringPointer();
 		}
 
 		return false;

@@ -5,76 +5,68 @@ struct Input
     float3 normal   : NORMAL_WS;
     float4 tangent  : TANGENT_WS;
     float2 uv       : TEXCOORD;
-    float4 col : COLOR;
+    float4 col      : COLOR;
 };
 
 static const uint DEPTH = 1;
 static const uint ROUGHNESS = 2;
 static const uint METAL = 3;
 static const uint NORMAL = 4;
+static const uint UV = 5;
+static const uint DIFFUSE = 6;
 
 static const uint ALPHA_OPAQUE = 0;
 static const uint ALPHA_MASK = 1;
 static const uint ALPHA_BLEND = 2;
 
+struct GPUDrawData
+{
+    uint InstanceIndex;
+    uint MaterialIndex;
+};
+
 cbuffer PerFrameConstants : register(b0)
 {
     matrix viewProj;
-    
+
     float4 cameraPosition;
     float4 lightDirection;
     float4 lightColor;
-    
+
     uint visualisationMode;
+
+    uint InstanceBufferIndex;
+    uint MaterialBufferIndex;
+    uint DrawBufferIndex;
 };
 
-cbuffer InstanceMaterial : register(b2)
+cbuffer DrawConstants : register(b2)
+{
+    uint DrawIndex;
+};
+
+struct InstanceMaterial
 {
     float4 BaseColorFactor;
+    float3 EmissiveColorFactor;
 
+    float NormalScale;
     float RoughnessFactor;
     float MetallicFactor;
-    float NormalScale;
-    
-    uint  HasBaseColorTexture;
-    uint  HasNormalTexture;
-    uint  HasMetallicRoughnessTexture;
-    uint  HasEmissiveTexture;
-    
-    uint  alphaMode;
-    float alphaCutoff;
-    uint  doubleSided;
-    
-    uint padding1;
-    uint padding2;
-};
 
-Texture2D<float4> tex : register(t0);
-Texture2D<float4> NormalMapTexture : register(t1);
-Texture2D<float4> MetallicRoughnessTexture : register(t2);
-Texture2D<float4> EmissiveTexture : register(t3);
+    uint alphaMode;
+    float alphaCutoff;
+    uint doubleSided;
+
+    uint BaseColorTexture;
+    uint NormalTexture;
+    uint MetallicRoughnessTexture;
+    uint EmissiveTexture;
+};
 
 SamplerState smp : register(s0);
 
 static const float PI = 3.14159265359f;
-
-float3 SRGBToLinear(float3 c)
-{
-    float3 low = c / 12.92f;
-    float3 high = pow((c + 0.055f) / 1.055f, 2.4f);
-
-    return select(high, low, c <= 0.04045f);
-}
-
-float3 LinearToSRGB(float3 c)
-{
-    c = saturate(c);
-
-    float3 low = c * 12.92f;
-    float3 high = 1.055f * pow(c, 1.0f / 2.4f) - 0.055f;
-
-    return select(high, low, c <= 0.0031308f);
-}
 
 float3 PrimitiveIDToColour(uint primitiveID)
 {
@@ -133,53 +125,63 @@ float4 main(Input input,
             uint primitiveID : SV_PrimitiveID,
             bool isFrontFace : SV_IsFrontFace) : SV_TARGET
 {
-    //float4 baseColorSample = BaseColorFactor * float4(input.col.rgb, 1.f);
     
-    //if (HasBaseColorTexture == 1)
-    //{
-       float4 baseColorSample = tex.Sample(smp, input.uv);
-    //}
+    StructuredBuffer<GPUDrawData> draws = ResourceDescriptorHeap[DrawBufferIndex];
+
+    GPUDrawData draw = draws[DrawIndex];
     
-    if (alphaMode == ALPHA_MASK) clip(baseColorSample.a - alphaCutoff);
+    StructuredBuffer<InstanceMaterial> materials = ResourceDescriptorHeap[MaterialBufferIndex];
+
+    InstanceMaterial mat = materials[draw.MaterialIndex];
+    
+    float4 baseColor = mat.BaseColorFactor * float4(input.col.rgb, 1.f);
+    
+    Texture2D<float4> base = ResourceDescriptorHeap[mat.BaseColorTexture];
+    float4 baseColorSample = base.Sample(smp, input.uv);
+    
+    baseColor *= baseColorSample;
+    
+    if (mat.alphaMode == ALPHA_MASK) clip(baseColor.a - mat.alphaCutoff);
    
-    float3 baseColor = baseColorSample.rgb;
     float3 V = normalize(cameraPosition.xyz - input.worldPos);
     // create tangent space
     
-    float faceSign = doubleSided != 0 && !isFrontFace ? -1.0f : 1.0f;
 
-    float3 N = normalize(input.normal) * faceSign;
-    float3 T = normalize(input.tangent.xyz) * faceSign;
+    float3 N = normalize(input.normal);
+    float3 T = normalize(input.tangent.xyz);
+    
+    // make tangent orthogonal to N
+    T = normalize(T - N * dot(N, T));
+    
     float3 B = cross(N, T) * input.tangent.w;
     
-     float3 L = normalize(-lightDirection.xyz);
+    float faceSign = mat.doubleSided != 0 && !isFrontFace ? -1.0f : 1.0f;
     
-     if (HasNormalTexture == 1)
-     {
-         float3 NormalMapSample = NormalMapTexture.Sample(smp, input.uv).rgb * 2.f - 1.f;
-         NormalMapSample.xy *= NormalScale;
-         NormalMapSample = normalize(NormalMapSample);
-         float3x3 TangentToWorld = float3x3(T, B, N);
-         N = normalize(mul(NormalMapSample, TangentToWorld)).rgb;
-     }
+    T *= faceSign;
+    N *= faceSign;
+    B *= faceSign;
     
-     float roughness = RoughnessFactor;
-     float metallic = MetallicFactor;
+    float3 L = normalize(-lightDirection.xyz);
     
-     if (HasMetallicRoughnessTexture == 1)
-     {
-      // roughness
-         float4 metallicRoughnessSample = MetallicRoughnessTexture.Sample(smp, input.uv);
-         roughness = saturate(RoughnessFactor * metallicRoughnessSample.g);
-         metallic = saturate(MetallicFactor * metallicRoughnessSample.b);
-     }
+    Texture2D<float3> normalMap = ResourceDescriptorHeap[mat.NormalTexture];
+    
+    float3 NormalMapSample = normalMap.Sample(smp, input.uv).rgb  * 2.f - 1.f;
+    NormalMapSample.xy *= mat.NormalScale;
+    NormalMapSample = normalize(NormalMapSample);
+    float3x3 TangentToWorld = float3x3(T, B, N);
+    N = normalize(mul(NormalMapSample, TangentToWorld)).rgb;
+    N = normalize(N);
+   
+     // roughness
+    Texture2D<float4> metallicTex = ResourceDescriptorHeap[mat.MetallicRoughnessTexture];
+    float4 metallicRoughnessSample = metallicTex.Sample(smp, input.uv);
+    float roughness = saturate(mat.RoughnessFactor * metallicRoughnessSample.g);
+    float metallic = saturate(mat.MetallicFactor * metallicRoughnessSample.b);
     
      float3 emissive = float3(0.f, 0.f, 0.f);
 
-     if (HasEmissiveTexture == 1)
-     {
-         emissive = EmissiveTexture.Sample(smp, input.uv).rgb;
-     }
+     Texture2D<float3> emissiveTex = ResourceDescriptorHeap[mat.EmissiveTexture];
+     emissive += emissiveTex.Sample(smp, input.uv).rgb * mat.EmissiveColorFactor;
     
      roughness = max(roughness, 0.045f);
     
@@ -188,23 +190,23 @@ float4 main(Input input,
      float NdotV = saturate(dot(N, V));
      float VdotH = saturate(dot(V, H));
 
-     float3 F0 = lerp(0.04f, baseColor, metallic);
-     float3 F = FresnelSchlick(VdotH, F0);
-     float D = DistributionGGX(N, H, roughness);
-     float G = GeometrySmith(N, V, L, roughness);
+     float3 F0 = lerp(0.04f, baseColor.rgb, metallic);
+     float3 F  = FresnelSchlick(VdotH, F0);
+     float D   = DistributionGGX(N, H, roughness);
+     float G   = GeometrySmith(N, V, L, roughness);
 
      float3 specular = D * G * F / max(4.0f * NdotV * NDotL, 0.0001f);
      float3 kS = F;
      float3 kD = (1.0f - kS) * (1.0f - metallic);
 
-     float3 diffuse = kD * baseColor / PI;
+    float3 diffuse = kD * baseColor.rgb / PI * NDotL;
 
      float3 radiance = lightColor;
 
-     float3 color = (diffuse + specular) * NDotL * radiance + emissive;
+    float3 color = (diffuse + specular) * radiance + emissive * 0.1f;
     
     // hack ambient term
-    float3 ambient = baseColor * 0.03f * (1.0f - metallic);
+    float3 ambient = baseColor.rgb * 0.03f * (1.0f - metallic);
     color += ambient;
   
     if (visualisationMode == DEPTH)
@@ -219,5 +221,11 @@ float4 main(Input input,
     if (visualisationMode == METAL)
         return float4(metallic.xxx, 1.f);
     
-    return float4(color, baseColorSample.a);
+    if (visualisationMode == UV)
+        return float4(input.uv.xy, 0.f, 1.f);
+    
+    if (visualisationMode == DIFFUSE)
+        return float4(baseColor.rgb, 1.f);
+    
+    return float4(color, baseColor.a);
 }

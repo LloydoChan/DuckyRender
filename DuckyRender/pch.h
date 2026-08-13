@@ -1,6 +1,9 @@
 #pragma once
 // precompiled header!
 #include <vector>
+#include <unordered_map>
+#include <functional>
+#include <array>
 #include <errno.h>
 #include <algorithm>
 #include <chrono>
@@ -24,6 +27,8 @@
 
 #include <pix3.h>
 #include <shlobj.h>
+
+#include "D3DDeviceManager.h"
 
 #pragma comment(lib, "WindowsApp.lib")
 #pragma comment(lib, "d3d12.lib")

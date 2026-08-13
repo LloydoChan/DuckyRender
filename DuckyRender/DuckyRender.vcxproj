@@ -154,14 +154,19 @@
   <ItemGroup>
     <ClCompile Include="D3DDeviceManager.cpp" />
     <ClCompile Include="DuckyApp.cpp" />
+    <ClCompile Include="DuckyCamera.cpp" />
     <ClCompile Include="DuckyCompiler.cpp" />
     <ClCompile Include="DuckyDescriptor.cpp" />
     <ClCompile Include="DuckyGraphicsContext.cpp" />
     <ClCompile Include="DuckyImGui.cpp" />
     <ClCompile Include="DuckyMesh.cpp" />
+    <ClCompile Include="DuckyPipelineManager.cpp" />
     <ClCompile Include="DuckyPipelineStates.cpp" />
+    <ClCompile Include="DuckyRenderer.cpp" />
+    <ClCompile Include="DuckyScene.cpp" />
     <ClCompile Include="DuckySwapChain.cpp" />
     <ClCompile Include="DuckyTools.cpp" />
+    <ClCompile Include="DuckyUploadContext.cpp" />
     <ClCompile Include="Imgui\imgui.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
@@ -190,6 +195,24 @@
     <ClCompile Include="SimplestApp.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <FxCompile Include="AABBPixelShader.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Pixel</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Pixel</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">6.8</ShaderModel>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">6.8</ShaderModel>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</ExcludedFromBuild>
+    </FxCompile>
+    <FxCompile Include="AABBVertexShader.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Vertex</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Vertex</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">6.8</ShaderModel>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">6.8</ShaderModel>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</ExcludedFromBuild>
+    </FxCompile>
     <FxCompile Include="BasicColorPixelShader.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Pixel</ShaderType>
@@ -198,6 +221,7 @@
       <EntryPointName Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">main</EntryPointName>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">6.8</ShaderModel>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">6.7</ShaderModel>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
     </FxCompile>
     <FxCompile Include="BasicVertTransformation.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
@@ -207,20 +231,27 @@
       <EntryPointName Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">main</EntryPointName>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">6.8</ShaderModel>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">6.8</ShaderModel>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</ExcludedFromBuild>
     </FxCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="D3DDeviceManager.h" />
     <ClInclude Include="DuckyApp.h" />
+    <ClInclude Include="DuckyCamera.h" />
     <ClInclude Include="DuckyCompiler.h" />
     <ClInclude Include="DuckyDescriptor.h" />
     <ClInclude Include="DuckyGraphicsContext.h" />
     <ClInclude Include="DuckyImGui.h" />
     <ClInclude Include="DuckyMaterial.h" />
     <ClInclude Include="DuckyMesh.h" />
+    <ClInclude Include="DuckyPipelineManager.h" />
     <ClInclude Include="DuckyPipelineStates.h" />
+    <ClInclude Include="DuckyRenderer.h" />
+    <ClInclude Include="DuckyRenderTypes.h" />
+    <ClInclude Include="DuckyScene.h" />
     <ClInclude Include="DuckySwapChain.h" />
     <ClInclude Include="DuckyTools.h" />
+    <ClInclude Include="DuckyUploadContext.h" />
     <ClInclude Include="Imgui\imconfig.h" />
     <ClInclude Include="Imgui\imgui.h" />
     <ClInclude Include="Imgui\imgui_impl_dx12.h" />

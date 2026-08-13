@@ -8,24 +8,20 @@ using namespace DirectX;
 using Microsoft::WRL::ComPtr;
 const size_t NO_TEXTURE     = 6666;
 
-struct RootSignatureDesc
-{
-	std::vector<D3D12_ROOT_PARAMETER> parameters;
-	std::vector<D3D12_STATIC_SAMPLER_DESC> staticSamplers;
-};
-
-struct PipelineAndRootSig
-{
-	ComPtr<ID3D12RootSignature> rootSig;
-	ComPtr<ID3D12PipelineState> pipeLineState;
-};
-
 
 struct DescriptorHeapResource
 {
 	ComPtr<ID3D12Resource> buffer;
 	UINT heapOffset = 0;
 	D3D12_GPU_DESCRIPTOR_HANDLE descHandle;
+};
+
+struct MappedDescriptorHeapResource
+{
+	ComPtr<ID3D12Resource> buffer;
+	UINT heapOffset = 0;
+	D3D12_GPU_DESCRIPTOR_HANDLE descHandle;
+	void* mapped = nullptr;
 };
 
 struct ViewportScissor
@@ -81,18 +77,15 @@ class D3DDeviceManager
 
 		int CreateDescriptorHeap(D3D12_DESCRIPTOR_HEAP_FLAGS flags, D3D12_DESCRIPTOR_HEAP_TYPE type, UINT numDescriptors = MAX_NUM_DESCRIPTORS_PER_HEAP);
 
+		DescriptorHeapResource CreateDefaultStructuredBuffer(size_t bufferSize, size_t elementSize);
+		MappedDescriptorHeapResource CreateStructuredBuffer(size_t BufferSize, size_t ElementSize);
 		ComPtr<ID3D12Resource> CreateBuffer(size_t bufferSize);
 		DescriptorHeapResource CreateConstantBuffer(size_t bufferSize);
-		PipelineAndRootSig CreatePSO(LPCWSTR vertexShader, LPCWSTR vertexEntry, LPCWSTR pixelShader, LPCWSTR pixelEntry, RootSignatureDesc& NewRootSigDesc, D3D12_GRAPHICS_PIPELINE_STATE_DESC& desc);
-		std::vector<D3D12_INPUT_ELEMENT_DESC> CreateInputLayout(ShaderCompilationOutput& shaderCompData);
-
-		size_t InitTexture(const wchar_t* Filepath);
-		size_t InitFallbackTexture(const wchar_t* Name, const XMFLOAT4& InputColor);
+		ComPtr<ID3D12Resource> CreateUploadBuffer(size_t BufferSize);
+		ComPtr<ID3D12Resource> CreateDefaultBuffer(size_t BufferSize, D3D12_RESOURCE_STATES initialState);
 
 		ID3D12CommandQueue* GetCommandQueue() { return mCommandQueue.Get(); }
-		DescriptorHeapResource* GetTexture(size_t HashedInput);
 		ID3D12DescriptorHeap* GetDepthStencilBufferHeap() { return mDsvHeaps.Get(); }
-		UINT GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE type) { return mDevice->GetDescriptorHandleIncrementSize(type); }
 		ID3D12DescriptorHeap* GetDescriptorHeapHandle() { return mDescriptorHeaps[mCbvUavSrvDescriptorHandle].Get(); };
 		UINT GetDescriptorHeapHandleInt() { return mCbvUavSrvDescriptorHandle; };
 		ID3D12Device* GetDevice() { return mDevice.Get(); }
@@ -116,20 +109,15 @@ class D3DDeviceManager
 			return BarrierDesc;
 		}
 
-
-
 		void Present() { mSwapChain->Present(); }
 		D3D12_CPU_DESCRIPTOR_HANDLE IncrementAndReturnRTVHeaps() { return mSwapChain->GetCurrentRtv(this); };
 
-
 		bool Resize(UINT WindowWidth, UINT WindowHeight);
 
+		DescriptorHeapResource CreateTexture(const wchar_t* Filepath);
+		DescriptorHeapResource CreateFallbackTexture(const wchar_t* Name, const XMFLOAT4& Color, DXGI_FORMAT Format);
 
 	private:
-		// only want to call this from the DeviceManager itself
-		DescriptorHeapResource CreateTexture(const wchar_t* Filepath);
-		DescriptorHeapResource CreateFallbackTexture(const wchar_t* Name, const XMFLOAT4& Color);
-		std::unordered_map<size_t,DescriptorHeapResource> mTextures;
 
 		ComPtr<ID3D12Device> mDevice;
 		ComPtr<ID3D12CommandQueue> mCommandQueue;
@@ -145,6 +133,5 @@ class D3DDeviceManager
 		UINT mCbvUavSrvDescriptorHandle = 0;
 
 		std::wofstream* mLogFilePtr = nullptr;
-		std::unique_ptr<DuckyCompiler> mCompiler;
 		std::unique_ptr<DuckySwapChain> mSwapChain;
 };

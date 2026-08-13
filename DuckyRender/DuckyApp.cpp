@@ -1,6 +1,29 @@
 #include "pch.h"
 #include "DuckyApp.h"
 #include "D3DDeviceManager.h"
+#include "DuckyRenderTypes.h"
+
+DebugVertex boxVertices[8] =
+{
+	{{-1,-1,-1}},
+	{{ 1,-1,-1}},
+	{{ 1, 1,-1}},
+	{{-1, 1,-1}},
+
+	{{-1,-1, 1}},
+	{{ 1,-1, 1}},
+	{{ 1, 1, 1}},
+	{{-1, 1, 1}},
+};
+
+
+uint16_t boxIndices[24] =
+{
+	0,1, 1,2, 2,3, 3,0,
+	4,5, 5,6, 6,7, 7,4,
+	0,4, 1,5, 2,6, 3,7
+};
+
 
 DuckyApp::~DuckyApp() = default;
 
@@ -72,6 +95,8 @@ bool DuckyApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* WindowNa
 	mDeviceManager = std::make_unique<D3DDeviceManager>();
 	if (!mDeviceManager->Init(mWindowHandle, WindowWidth, WindowHeight, &mLogFile)) return false;
 
+	
+
 	SetWindowLongPtr(
 		mWindowHandle,
 		GWL_STYLE,
@@ -98,7 +123,7 @@ bool DuckyApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* WindowNa
 
 bool DuckyApp::InitGPUTimeStamps()
 {
-	mFrameCount = 2;
+	mFrameCount = FrameCount;
 
 	HRESULT result = mCommandQueue->GetTimestampFrequency(&mTimeStampFrequency);
 
@@ -231,7 +256,7 @@ bool DuckyApp::InitGPUStats()
 {
 	D3D12_QUERY_HEAP_DESC queryHeapDesc{};
 	queryHeapDesc.Type = D3D12_QUERY_HEAP_TYPE_PIPELINE_STATISTICS;
-	queryHeapDesc.Count = 2;
+	queryHeapDesc.Count = FrameCount;
 	queryHeapDesc.NodeMask = 0;
 
 	ID3D12Device* device = mDeviceManager->GetDevice();
@@ -243,7 +268,7 @@ bool DuckyApp::InitGPUStats()
 
 	if (FAILED(result)) return false;
 
-	const UINT64 bufferSize = sizeof(D3D12_QUERY_DATA_PIPELINE_STATISTICS) * 2;
+	const UINT64 bufferSize = sizeof(D3D12_QUERY_DATA_PIPELINE_STATISTICS) * FrameCount;
 
 	D3D12_HEAP_PROPERTIES heapProperties{};
 	heapProperties.Type = D3D12_HEAP_TYPE_READBACK;
@@ -323,25 +348,45 @@ D3D12_QUERY_DATA_PIPELINE_STATISTICS DuckyApp::WriteOutGPUStats(UINT FrameIndex)
 	return stats;
 }
 
-void DuckyApp::ImGUIDraw(double GpuTime, double CpuTime, const D3D12_QUERY_DATA_PIPELINE_STATISTICS& Stats)
+bool DuckyApp::InitDebugDrawsVBAndIB()
 {
-	ImGui::SetNextWindowSize(
-		ImVec2(320.f, 420.f),
-		ImGuiCond_FirstUseEver);
+	
+	size_t vertexBufferSize = 8 * sizeof(DebugVertex);
+	size_t indexBufferSize = 24 * sizeof(uint16_t);
 
-	mImGui.BeginFrame();
+	//now create vertex and index buffers
+	mDebugVertices = mDeviceManager->CreateBuffer(vertexBufferSize);
+	mDebugIndices = mDeviceManager->CreateBuffer(indexBufferSize);
 
-	ImGui::Begin("DuckyRender");
+	void* mappedVertices = nullptr;
+	HRESULT result = mDebugVertices->Map(0, nullptr, &mappedVertices);
 
-	ImGui::Text("GPU Frame: %.3f ms", GpuTime);
-	ImGui::Text("CPU Frame: %.3f ms", CpuTime);
+	if (FAILED(result)) return false;
 
-	ImGui::Text("PS Invocations: %d ", Stats.PSInvocations);
-	ImGui::Text("VS Invocations: %d ", Stats.VSInvocations);
-	ImGui::Text("IA Vertices: %d", Stats.IAVertices);
-	ImGui::Text("IA Primitives: %d", Stats.IAPrimitives);
+	memcpy(mappedVertices, &boxVertices[0], sizeof(DebugVertex) * 8);
 
-	ImGui::End();
+	mDebugVertices->Unmap(0, nullptr);
+
+
+	void* mappedIndices = nullptr;
+
+	result = mDebugIndices->Map(0, nullptr, &mappedIndices);
+
+	if (FAILED(result)) return false;
+	memcpy(mappedIndices, &boxIndices[0], sizeof(uint16_t) * 24);
+
+	mDebugIndices->Unmap(0, nullptr);
+
+
+	mVbDebugView.BufferLocation = mDebugVertices->GetGPUVirtualAddress();
+	mVbDebugView.SizeInBytes = vertexBufferSize;
+	mVbDebugView.StrideInBytes = sizeof(DebugVertex);
+
+	mIbDebugView.BufferLocation = mDebugIndices->GetGPUVirtualAddress();
+	mIbDebugView.SizeInBytes = indexBufferSize;
+	mIbDebugView.Format = DXGI_FORMAT_R16_UINT;
+
+	return true;
 }
 
 LRESULT DuckyApp::StaticWindowProcedure(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)

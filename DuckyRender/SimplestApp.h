@@ -2,6 +2,10 @@
 #include "DuckyApp.h"
 #include "D3DDeviceManager.h"
 #include "DuckyMesh.h"
+#include "DuckyImGui.h"
+#include "DuckyRenderTypes.h"
+#include "DuckyCamera.h"
+#include "DuckyUploadContext.h"
 
 class DuckyGraphicsContext;
 struct ConstantBufferAllocator;
@@ -12,21 +16,24 @@ namespace MaterialVisualization
 	static const unsigned int ROUGHNESS = 2;
 	static const unsigned int METAL = 3;
 	static const unsigned int NORMAL = 4;
-	static const unsigned int VIS_MAX = 5;
+	static const unsigned int UV = 5;
+	static const unsigned int BASE = 6;
+	static const unsigned int VIS_MAX = 7;
 };
 
 struct DrawRecord
 {
-	const DuckyMeshInstance* mInstanceIndex;
-	const DuckyPrimitive*    mPrimitiveIndex;
-	const DuckyMaterial*     mMaterialIndex;
+	unsigned int mInstanceIndex;
+	unsigned int mMeshIndex;
+	unsigned int mPrimitiveIndex;
+	unsigned int mMaterialIndex;
+	unsigned int mGPUDrawIndex;
 };
 
-struct MovementStruct
+struct TransformedDrawRecord
 {
-	float xMovement = 0.f;
-	float yMovement = 0.f;
-	float zMovement = 0.f;
+	DrawRecord mDrawRecord;
+	GPUOBB mOBB;
 };
 
 struct PerFrameConstants
@@ -39,9 +46,9 @@ struct PerFrameConstants
 
 	unsigned int mVisualisationMode = 0;
 
-// put this in here to pad out entire struct to 128 bytes
-private:
-	XMFLOAT3 mDummyPadding;
+	uint32_t mInstanceBufferIndex;
+	uint32_t mMaterialBufferIndex;
+	uint32_t mDrawBufferIndex;
 };
 
 struct PerInstanceConstants
@@ -49,6 +56,13 @@ struct PerInstanceConstants
 	XMFLOAT4X4 world;
 	XMFLOAT4X4 normal;
 };
+
+struct SortRecord
+{
+	DrawRecord record;
+	float minZ = (std::numeric_limits<float>::max)();
+};
+
 
 class SimplestApp : public DuckyApp
 {
@@ -58,19 +72,24 @@ class SimplestApp : public DuckyApp
 		virtual bool Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* WindowName) override;
 		virtual LRESULT WindowProcedure(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam);
 		virtual void HandleInput(UINT msg, WPARAM wParam, LPARAM lParam);
-		void UpdateMovementAndRotation(XMVECTOR& ViewVector, MovementStruct& movement, float DeltaTime);
-		bool BindMaterial(ID3D12GraphicsCommandList* commandList, ConstantBufferAllocator* allocator, const DuckyMaterial& material);
-		void BindTexture(ID3D12GraphicsCommandList* commandList, UINT rootParameter, size_t textureHandle, size_t fallBackHandle);
-		bool BindInstanceConstants(ID3D12GraphicsCommandList* commandList, ConstantBufferAllocator* allocator, const DuckyMeshInstance& instance);
+		void UpdateMovement(MovementStruct& movement, float DeltaTime);
 		virtual void AppMainLoop();
 
 		void WorkOutGlobalBoundingBoxCenter();
 		void CreateDrawRecords();
-		void DrawRecords(const std::vector<DrawRecord>& Draws, ConstantBufferAllocator* Allocator, ID3D12GraphicsCommandList* List);
+		void DrawRecords(const std::vector<SortRecord>& Draws, ConstantBufferAllocator* Allocator, ID3D12GraphicsCommandList* List);
 
 		bool Resize(UINT WindowWidth, UINT WindowHeight);
 
-		void SortDrawRecords(const XMMATRIX& WorldView, std::vector<DrawRecord>& recordsToSort, bool bAlphaPass = false);
+		std::vector<TransformedDrawRecord> TransformAABBsToOBBs(const std::vector<DrawRecord>& recordsToSort);
+		std::vector<SortRecord> SortDrawRecords(const XMMATRIX& View, const std::vector<TransformedDrawRecord>& RecordsToSort, bool bAlphaPass = false);
+		void CopyOBBsToGPU(const std::vector<TransformedDrawRecord>& TransformedOBBs, size_t Offset);
+		std::vector<SortRecord> SortAndCull(const std::vector<TransformedDrawRecord>& records, const DuckyFrustum& frustum, const XMMATRIX& view, bool alphaPass = false);
+
+		uint32_t BuildIndirectCommands(const std::vector<SortRecord>& draws, IndirectCommand* destination);
+
+		std::vector<TransformedDrawRecord> FrustumCullUsingOBBs(const std::vector<TransformedDrawRecord>& TransformedOBBs, const DuckyFrustum& Frustum);
+		DuckyFrustum ExtractFrustumFromViewProjection(const XMFLOAT4X4& ViewProjection);
 
 	private:
 		bool mKeys[256] = {};
@@ -79,40 +98,29 @@ class SimplestApp : public DuckyApp
 		bool mRightButtonDown = false;
 		bool mLeftButtonDown = false;
 		int  mScrollAmount = 0;
+		bool bDrawDebug = false;
 
 		ViewportScissor mWholeScreenViewPortScissor;
 
 		ComPtr<ID3D12Fence> mFence;
 
-		DescriptorHeapResource mTextureBuffer;
+		DescriptorHeapResource mMatrixBuffer[FrameCount];
+		XMFLOAT4X4* mMappedTransform[FrameCount] = {};
+		MappedDescriptorHeapResource mStructuredBufferOBBs;
 
-		DescriptorHeapResource mMatrixBuffer[2];
-		XMFLOAT4X4* mMappedTransform[2] = {};
-
-		std::vector<DuckyMeshData> mMeshes;
-		std::vector<DuckyMeshInstance> mInstances;
-
-		PipelineAndRootSig mOpaquePipeline;
-		std::vector<DrawRecord> mOpaqueDraws;
-
-		PipelineAndRootSig mTransparentPipeline;
-		std::vector<DrawRecord> mBlendedDraws;
-
-		PipelineAndRootSig mMaskedPipeline;
-		std::vector<DrawRecord> mMaskedDraws;
-
-		PipelineAndRootSig mOpaqueDblPipeline;
-		std::vector<DrawRecord> mOpaqueDblDraws;
-
-		PipelineAndRootSig mTransparentDblPipeline;
-		std::vector<DrawRecord> mBlendedDblDraws;
-
-		PipelineAndRootSig mMaskedDblPipeline;
-		std::vector<DrawRecord> mMaskedDblDraws;
+		std::vector<DrawRecord> mDrawTypes[static_cast<int>(PipelineType::DEBUG)];
 
 		DuckyGraphicsContext* mDuckyContext;
 
 		unsigned int mVisualizationMode = 0;
 
 		AABB mGlobalAABB;
+
+		DuckyImGui mImGui;
+
+		DuckyUploadContext mUploadContext;
+
+		unsigned int mNumMeshes = 0;
+
+		std::vector<TransformedDrawRecord> mTransformedDrawTypes[static_cast<int>(PipelineType::DEBUG)];
 };

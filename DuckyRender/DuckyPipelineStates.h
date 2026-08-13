@@ -7,3 +7,5 @@ D3D12_GRAPHICS_PIPELINE_STATE_DESC MakeTransparentPipelineState();
 D3D12_GRAPHICS_PIPELINE_STATE_DESC MakeDoubleSidedOpaquePipelineState();
 D3D12_GRAPHICS_PIPELINE_STATE_DESC MakeDoubleSidedMaskedPipelineState();
 D3D12_GRAPHICS_PIPELINE_STATE_DESC MakeDoubleSidedTransparentPipelineState();
+
+D3D12_GRAPHICS_PIPELINE_STATE_DESC MakeDebugDrawPipelineState();
