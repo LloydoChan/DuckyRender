@@ -98,7 +98,7 @@ bool ConvertToDds(TextureType Type, const std::string& texconvPath, const std::s
 	
 	std::string conversionFormat = CompressionTypes[Type];
 	// Example command: texconv.exe -f BC1_UNORM -y input.jpg -o C:/output
-	std::string cmd = texconvPath + " -px " + prefix + " -f " + conversionFormat + "  -y \"" + inputJpg + "\" -o \"" + outputDir + "\"";
+	std::string cmd = texconvPath +  " -gpu 1" + " -px " + prefix + " -f " + conversionFormat + "  -y \"" + inputJpg + "\" -o \"" + outputDir + "\"";
 
 	int result = std::system(cmd.c_str());
 
@@ -359,6 +359,38 @@ void ProcessMaterials(const tinygltf::Model& Model,
 		newMaterial.alphaCutoff = static_cast<float>(material.alphaCutoff);
 		newMaterial.doubleSided = material.doubleSided;
 
+		auto extensionIt = material.extensions.find("KHR_materials_pbrSpecularGlossiness");
+
+		if (extensionIt != material.extensions.end())
+		{
+			const tinygltf::Value& ext = extensionIt->second;
+
+			if (ext.Has("diffuseTexture"))
+			{
+				const tinygltf::Value& diffuseTexture = ext.Get("diffuseTexture");
+
+				if (diffuseTexture.Has("index"))
+				{
+					// For DuckyRender, interpret this as base colour
+					newMaterial.primTextureIndex = diffuseTexture.Get("index").Get<int>();
+				}
+
+				const tinygltf::Value& diffuseFactor = ext.Get("diffuseFactor");
+				if (diffuseFactor.IsArray())
+				{
+					const auto& values = diffuseFactor.Get<tinygltf::Value::Array>();
+
+					if (values.size() >= 4)
+					{
+						newMaterial.baseColor = XMFLOAT4(static_cast<float>(values[0].Get<double>()),
+														 static_cast<float>(values[1].Get<double>()),
+														 static_cast<float>(values[2].Get<double>()),
+														 static_cast<float>(values[3].Get<double>()));
+					}
+				}
+			}
+		}
+
 		MaterialDataStream.write((const char*)&newMaterial, sizeof(MaterialInfo));
 	}
 }
@@ -392,6 +424,25 @@ void ProcessTextures(const tinygltf::Model& Model,
 		if (textureIndex != -1)
 		{
 			WriteOutTextureData(textureIndex, Model, orderedNames, TextureType::EMISSIVE, TextureInputAssetPath, TextureOutputAssetPath);
+		}
+
+		auto extensionIt = material.extensions.find("KHR_materials_pbrSpecularGlossiness");
+
+		if (extensionIt != material.extensions.end())
+		{
+			const tinygltf::Value& ext = extensionIt->second;
+
+			if (ext.Has("diffuseTexture"))
+			{
+				const tinygltf::Value& diffuseTexture = ext.Get("diffuseTexture");
+
+				if (diffuseTexture.Has("index"))
+				{
+					textureIndex = diffuseTexture.Get("index").Get<int>();
+					// For DuckyRender, interpret this as base colour
+					WriteOutTextureData(textureIndex, Model, orderedNames, TextureType::BASE_COLOR, TextureInputAssetPath, TextureOutputAssetPath);
+				}
+			}
 		}
 	}
 }

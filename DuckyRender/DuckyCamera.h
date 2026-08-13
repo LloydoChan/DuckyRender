@@ -11,7 +11,7 @@ class DuckyCamera
 {
 public:
 	DuckyCamera(const XMVECTOR& At, const XMVECTOR& Eye, float FOV, float AspectRatio, float NearZ, float FarZ);
-	void Update(float DeltaTime, const MovementStruct& Movement, float ViewLength, float MouseDeltaX, float MouseDeltaY, bool Rotate);
+	void Update(float DeltaTime, const MovementStruct& Movement, float MouseDeltaX, float MouseDeltaY, bool Rotate);
 
 	XMVECTOR GetViewVector() { return XMVector4Normalize(XMVectorSubtract(mEye, mAt)); }
 
@@ -30,4 +30,6 @@ private:
 	XMMATRIX mProjection;
 	XMMATRIX mView;
 	XMMATRIX mViewProjection;
+
+	float mViewLength = 5.f;
 };

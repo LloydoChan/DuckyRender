@@ -12,7 +12,7 @@ DuckyCamera::DuckyCamera(const XMVECTOR& At, const XMVECTOR& Eye, float FOV, flo
 	mViewProjection = mView * mProjection;
 }
 
-void DuckyCamera::Update(float DeltaTime, const MovementStruct& Movement, float ViewLength, float MouseDeltaX, float MouseDeltaY, bool Rotate)
+void DuckyCamera::Update(float DeltaTime, const MovementStruct& Movement, float MouseDeltaX, float MouseDeltaY, bool Rotate)
 {
     XMVECTOR viewVector = GetViewVector();
 
@@ -53,11 +53,13 @@ void DuckyCamera::Update(float DeltaTime, const MovementStruct& Movement, float 
 
     relativeUp = XMVectorScale(relativeUp, Movement.yMovement);
 
-    mAt = XMVectorAdd(mAt, forward);
+    mViewLength += Movement.zMovement;
+
     mAt = XMVectorAdd(mAt, right);
     mAt = XMVectorAdd(mAt, relativeUp);
 
-    mEye = XMVectorAdd(mAt,XMVectorScale(viewVector, ViewLength));
+    XMVECTOR ScaledView = XMVectorScale(viewVector, mViewLength);
+    mEye = XMVectorAdd(mAt, ScaledView);
 
     mView = XMMatrixLookAtLH(mEye, mAt, up);
     mViewProjection = mView * mProjection;

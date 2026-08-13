@@ -467,7 +467,7 @@ void SimplestApp::AppMainLoop()
 
 		UpdateMovement(movement, deltaFrameSeconds);
 
-		sceneCamera->Update(deltaFrameSeconds, movement, viewLength, mMouseDeltaX, mMouseDeltaY, mLeftButtonDown);
+		sceneCamera->Update(deltaFrameSeconds, movement, mMouseDeltaX, mMouseDeltaY, mLeftButtonDown);
 
 		mMouseDeltaX = mMouseDeltaY = 0;
 		mScrollAmount = 0;
