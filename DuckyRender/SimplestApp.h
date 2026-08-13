@@ -83,8 +83,8 @@ class SimplestApp : public DuckyApp
 
 		std::vector<TransformedDrawRecord> TransformAABBsToOBBs(const std::vector<DrawRecord>& recordsToSort);
 		std::vector<SortRecord> SortDrawRecords(const XMMATRIX& View, const std::vector<TransformedDrawRecord>& RecordsToSort, bool bAlphaPass = false);
-		void CopyOBBsToGPU(const std::vector<TransformedDrawRecord>& TransformedOBBs, unsigned int CurrentFrame);
-		std::vector<SortRecord> SortAndCull(const std::vector<DrawRecord>& DrawRecords, const DuckyFrustum& Frustum, const XMMATRIX& View, int CurrentFrame);
+		void CopyOBBsToGPU(const std::vector<TransformedDrawRecord>& TransformedOBBs, size_t Offset);
+		std::vector<SortRecord> SortAndCull(const std::vector<TransformedDrawRecord>& records, const DuckyFrustum& frustum, const XMMATRIX& view, bool alphaPass = false);
 
 		uint32_t BuildIndirectCommands(const std::vector<SortRecord>& draws, IndirectCommand* destination);
 
@@ -104,9 +104,9 @@ class SimplestApp : public DuckyApp
 
 		ComPtr<ID3D12Fence> mFence;
 
-		DescriptorHeapResource mMatrixBuffer[2];
-		XMFLOAT4X4* mMappedTransform[2] = {};
-		MappedDescriptorHeapResource mStructuredBufferOBBs[2];
+		DescriptorHeapResource mMatrixBuffer[FrameCount];
+		XMFLOAT4X4* mMappedTransform[FrameCount] = {};
+		MappedDescriptorHeapResource mStructuredBufferOBBs;
 
 		std::vector<DrawRecord> mDrawTypes[static_cast<int>(PipelineType::DEBUG)];
 
@@ -121,4 +121,6 @@ class SimplestApp : public DuckyApp
 		DuckyUploadContext mUploadContext;
 
 		unsigned int mNumMeshes = 0;
+
+		std::vector<TransformedDrawRecord> mTransformedDrawTypes[static_cast<int>(PipelineType::DEBUG)];
 };

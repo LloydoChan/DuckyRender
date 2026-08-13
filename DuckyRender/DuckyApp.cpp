@@ -123,7 +123,7 @@ bool DuckyApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* WindowNa
 
 bool DuckyApp::InitGPUTimeStamps()
 {
-	mFrameCount = 2;
+	mFrameCount = FrameCount;
 
 	HRESULT result = mCommandQueue->GetTimestampFrequency(&mTimeStampFrequency);
 
@@ -256,7 +256,7 @@ bool DuckyApp::InitGPUStats()
 {
 	D3D12_QUERY_HEAP_DESC queryHeapDesc{};
 	queryHeapDesc.Type = D3D12_QUERY_HEAP_TYPE_PIPELINE_STATISTICS;
-	queryHeapDesc.Count = 2;
+	queryHeapDesc.Count = FrameCount;
 	queryHeapDesc.NodeMask = 0;
 
 	ID3D12Device* device = mDeviceManager->GetDevice();
@@ -268,7 +268,7 @@ bool DuckyApp::InitGPUStats()
 
 	if (FAILED(result)) return false;
 
-	const UINT64 bufferSize = sizeof(D3D12_QUERY_DATA_PIPELINE_STATISTICS) * 2;
+	const UINT64 bufferSize = sizeof(D3D12_QUERY_DATA_PIPELINE_STATISTICS) * FrameCount;
 
 	D3D12_HEAP_PROPERTIES heapProperties{};
 	heapProperties.Type = D3D12_HEAP_TYPE_READBACK;

@@ -51,10 +51,10 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 	if (!mUploadContext.Init( mDeviceManager->GetDevice(), mDeviceManager->GetCommandQueue())) return false;
 
 	mScene.Init(DuckyFile, mDeviceManager.get(), mUploadContext);
+	mNumMeshes = mScene.GetInstances().size();
 
 	InitDebugDrawsVBAndIB();
 	CreateDrawRecords();
-
 	WorkOutGlobalBoundingBoxCenter();
 
 	size_t totalPrimitiveDraws = 0;
@@ -64,6 +64,15 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 		if (instance.mMeshDataIndex < 0 || instance.mMeshDataIndex >= static_cast<int>(mScene.GetMeshes().size())) continue;
 
 		totalPrimitiveDraws += mScene.GetMeshes()[instance.mMeshDataIndex].GetPrimitiveCount();
+	}
+
+	mStructuredBufferOBBs = mDeviceManager->CreateStructuredBuffer(totalPrimitiveDraws * sizeof(GPUOBB), sizeof(GPUOBB));
+	size_t obbOffset = 0;
+	for (int type = static_cast<int>(PipelineType::OPAQUE); type < static_cast<int>(PipelineType::DEBUG); type++)
+	{
+		mTransformedDrawTypes[type] = TransformAABBsToOBBs(mDrawTypes[type]);
+		CopyOBBsToGPU(mTransformedDrawTypes[type], obbOffset);
+		obbOffset += mTransformedDrawTypes[type].size();
 	}
 
 	UINT64 neededCapacity = AlignConstantBufferSize(sizeof(PerFrameConstants));
@@ -174,15 +183,13 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 
 	if (mFenceEvent == nullptr) return false;
 
-	for (int i = 0; i < 2; i++)
+	for (int i = 0; i < FrameCount; i++)
 	{
 		mMatrixBuffer[i] = mDeviceManager->CreateConstantBuffer(sizeof(XMMATRIX));
 		if (mMatrixBuffer[i].buffer == nullptr) return false;
 		HRESULT hResult = mMatrixBuffer[i].buffer->Map(0, nullptr, reinterpret_cast<void**>(&mMappedTransform[i]));
 
 		if (FAILED(hResult))return false;
-
-		mStructuredBufferOBBs[i] = mDeviceManager->CreateStructuredBuffer(totalPrimitiveDraws * sizeof(GPUOBB), sizeof(GPUOBB));
 	}
 
 	if (!mImGui.Init(
@@ -421,7 +428,7 @@ void SimplestApp::AppMainLoop()
 
 	bool bRunning = true;
 	double gpuTime = 0.0;
-	float deltaCPU = 0.f;
+	float actualCPU = 0.f;
 
 	D3D12_QUERY_DATA_PIPELINE_STATISTICS gpuStats{};
 
@@ -451,16 +458,15 @@ void SimplestApp::AppMainLoop()
 
 		auto currentTime = Clock::now();
 
-		float deltaTime = std::chrono::duration<float>(
-			currentTime - previousTime).count();
+		float deltaFrameSeconds = std::chrono::duration<float>(currentTime - previousTime).count();
 
 		previousTime = currentTime;
 
 		MovementStruct movement{};
 
-		UpdateMovement(movement, deltaTime);
+		UpdateMovement(movement, deltaFrameSeconds);
 
-		sceneCamera->Update(deltaTime, movement, viewLength, mMouseDeltaX, mMouseDeltaY, mLeftButtonDown);
+		sceneCamera->Update(deltaFrameSeconds, movement, viewLength, mMouseDeltaX, mMouseDeltaY, mLeftButtonDown);
 
 		mMouseDeltaX = mMouseDeltaY = 0;
 		mScrollAmount = 0;
@@ -475,7 +481,15 @@ void SimplestApp::AppMainLoop()
 	
 		for (int type = static_cast<int>(PipelineType::OPAQUE); type < static_cast<int>(PipelineType::DEBUG); type++)
 		{
-			sortedRecords[type] = SortAndCull(mDrawTypes[type], frameFrustum, sceneCamera->GetViewProjection(), currentFrame);
+			char debugString[50];
+			snprintf(debugString, 50, "Sort And Cull %d", type);
+			PIXScopedEvent(PIX_COLOR(0, 255, 255), "Sort And Cull");
+
+			const bool alphaPass =
+				type == static_cast<int>(PipelineType::ALPHA) ||
+				type == static_cast<int>(PipelineType::ALPHA_DBL);
+
+			sortedRecords[type] = SortAndCull(mTransformedDrawTypes[type], frameFrustum, sceneCamera->GetViewProjection(), alphaPass);
 			numDrawableMeshes += sortedRecords[type].size();
 		}
 
@@ -489,9 +503,11 @@ void SimplestApp::AppMainLoop()
 
 		ImGui::Begin("DuckyRender");
 
+		float deltaTime = gpuTime > actualCPU * 1000.f ? gpuTime : actualCPU * 1000.f;
+
 		ImGui::Text("GPU Frame: %.3f ms", gpuTime);
-		ImGui::Text("CPU Frame: %.3f ms", deltaCPU);
-		ImGui::Text("Frame time: %.3f ms", deltaTime * 1000.f);
+		ImGui::Text("CPU Frame: %.3f ms", actualCPU * 1000.f);
+		ImGui::Text("Frame time: %.3f ms", deltaTime);
 
 		ImGui::Text("PS Invocations: %d ", gpuStats.PSInvocations);
 		ImGui::Text("VS Invocations: %d ", gpuStats.VSInvocations);
@@ -502,8 +518,10 @@ void SimplestApp::AppMainLoop()
 
 		ImGui::End();
 
+
 		ID3D12PipelineState* opaqueState = mRenderer.GetPipelineSig(PipelineType::OPAQUE).pipeLineState.Get();
 		if (!mDuckyContext->BeginFrame(currentFrame, mFence.Get(), opaqueState, mFenceEvent, &mLogFile)) break;
+		
 		ConstantBufferAllocator* cbvAllocator = mDuckyContext->GetBufferAllocator(currentFrame);
 
 		IndirectCommand* indirectDst = mDuckyContext->GetIndirectCommandPtr(currentFrame);
@@ -511,8 +529,10 @@ void SimplestApp::AppMainLoop()
 
 		uint32_t Offsets[static_cast<int>(PipelineType::COUNT)];
 
+
 		for (int type = static_cast<int>(PipelineType::OPAQUE); type < static_cast<int>(PipelineType::DEBUG); type++)
 		{
+			PIXScopedEvent(PIX_COLOR(255, 0, 0), "build indirect commands");
 			Offsets[type] = commandOffset;
 			commandOffset += BuildIndirectCommands(sortedRecords[type], indirectDst + commandOffset);
 		}
@@ -554,13 +574,12 @@ void SimplestApp::AppMainLoop()
 		asFrameConstants->mInstanceBufferIndex = mScene.GetInstancesHeapBuffer().heapOffset;
 		asFrameConstants->mDrawBufferIndex = mDrawsBuffer.heapOffset;
 		list->SetGraphicsRootConstantBufferView(0, constantAllocation.mGpuAddress);
+		
 
 		list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 		list->IASetVertexBuffers(0, 1, &mScene.GetVertexBufferView());
 		list->IASetIndexBuffer(&mScene.GetIndexBufferView());
 
-		PIXBeginEvent(list, PIX_COLOR(0, 255, 0), "DRAW");
-		PIXScopedEvent(PIX_COLOR(0, 255, 255), "DRAW");
 
 		StartGpuStats(list, currentFrame);
 
@@ -585,23 +604,24 @@ void SimplestApp::AppMainLoop()
 			list->SetGraphicsRootSignature(mRenderer.GetPipelineSig(PipelineType::DEBUG).rootSig.Get());
 			list->SetPipelineState(mRenderer.GetPipelineSig(PipelineType::DEBUG).pipeLineState.Get());
 			list->SetGraphicsRootConstantBufferView(0,mMatrixBuffer[currentFrame].buffer->GetGPUVirtualAddress());
-			list->SetGraphicsRootShaderResourceView(1,mStructuredBufferOBBs[currentFrame].buffer->GetGPUVirtualAddress());
+			list->SetGraphicsRootShaderResourceView(1,mStructuredBufferOBBs.buffer->GetGPUVirtualAddress());
 			list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_LINELIST);
 			list->IASetVertexBuffers(0,1,&mVbDebugView);
 			list->IASetIndexBuffer(&mIbDebugView);
 			list->DrawIndexedInstanced(24, sortedRecords[static_cast<int>(PipelineType::OPAQUE_DBL)].size(), 0, 0, 0);
 		}
 
+		mImGui.Render(list);
+
 
 		EndGPUStats(list, currentFrame);
 		PIXEndEvent(list);
 
 		gpuStats = WriteOutGPUStats(currentFrame);
+		// don't want imGUI stats to contribute
 
 		EndGPUTimeStamp(list, currentFrame);
 
-		// don't want imGUI stats to contribute
-		mImGui.Render(list);
 
 		barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
 		barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
@@ -614,6 +634,9 @@ void SimplestApp::AppMainLoop()
 		mDeviceManager->Present();
 
 		if (!mDuckyContext->EndFrame(currentFrame, mCommandQueue, mFence.Get())) break;
+
+		auto endTime = Clock::now();
+		actualCPU = std::chrono::duration<float>(endTime - currentTime).count();
 	}
 
 	if (mDuckyContext && mCommandQueue && mFence && mFenceEvent)
@@ -884,10 +907,12 @@ std::vector<SortRecord> SimplestApp::SortDrawRecords(const XMMATRIX& View, const
 	return sortedRecords;
 }
 
-void SimplestApp::CopyOBBsToGPU(const std::vector<TransformedDrawRecord>& TransformedOBBs, unsigned int CurrentFrame)
+void SimplestApp::CopyOBBsToGPU(const std::vector<TransformedDrawRecord>& TransformedOBBs, size_t Offset)
 {
-	mStructuredBufferOBBs[CurrentFrame].buffer->Map(0, nullptr, &mStructuredBufferOBBs[CurrentFrame].mapped);
-	auto* dst = static_cast<GPUOBB*>(mStructuredBufferOBBs[CurrentFrame].mapped);
+	mStructuredBufferOBBs.buffer->Map(0, nullptr, &mStructuredBufferOBBs.mapped);
+	auto* dst = static_cast<GPUOBB*>(mStructuredBufferOBBs.mapped);
+
+	dst += Offset;
 
 	for (size_t i = 0; i < TransformedOBBs.size(); ++i)
 	{
@@ -896,13 +921,10 @@ void SimplestApp::CopyOBBsToGPU(const std::vector<TransformedDrawRecord>& Transf
 	}
 }
 
-std::vector<SortRecord> SimplestApp::SortAndCull(const std::vector<DrawRecord>& DrawRecords, const DuckyFrustum& Frustum, const XMMATRIX& View, int CurrentFrame)
+std::vector<SortRecord> SimplestApp::SortAndCull(const std::vector<TransformedDrawRecord>& records,const DuckyFrustum& frustum,const XMMATRIX& view,bool alphaPass)
 {
-	std::vector<TransformedDrawRecord> transformedRecords = TransformAABBsToOBBs(DrawRecords);
-	CopyOBBsToGPU(transformedRecords, CurrentFrame);
-	std::vector<TransformedDrawRecord> nonCulledRecords = FrustumCullUsingOBBs(transformedRecords, Frustum);
-	std::vector<SortRecord> sortedRecords = SortDrawRecords(View, nonCulledRecords);
-	return sortedRecords;
+	auto visible = FrustumCullUsingOBBs(records, frustum);
+	return SortDrawRecords(view, visible, alphaPass);
 }
 
 uint32_t SimplestApp::BuildIndirectCommands(const std::vector<SortRecord>& draws, IndirectCommand* destination)

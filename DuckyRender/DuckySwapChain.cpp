@@ -2,6 +2,7 @@
 #include "DuckySwapChain.h"
 #include "D3DDeviceManager.h"
 #include "DuckyTools.h"
+#include "DuckyGraphicsContext.h"
 
 bool DuckySwapChain::Init(D3DDeviceManager* DeviceManager, IDXGIFactory6* factory, HWND hWnd, UINT Width, UINT Height, std::wofstream* LogFile)
 {
@@ -15,7 +16,7 @@ bool DuckySwapChain::Init(D3DDeviceManager* DeviceManager, IDXGIFactory6* factor
 	swapChainDesc.SampleDesc.Count = 1;
 	swapChainDesc.SampleDesc.Quality = 0;
 	swapChainDesc.BufferUsage = DXGI_USAGE_BACK_BUFFER;
-	swapChainDesc.BufferCount = 2;
+	swapChainDesc.BufferCount = FrameCount;
 
 	swapChainDesc.Scaling = DXGI_SCALING_STRETCH;
 	swapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
@@ -33,7 +34,7 @@ bool DuckySwapChain::Init(D3DDeviceManager* DeviceManager, IDXGIFactory6* factor
 
 	heapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
 	heapDesc.NodeMask = 0;
-	heapDesc.NumDescriptors = 2;
+	heapDesc.NumDescriptors = FrameCount;
 	heapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
 
 	mRtvHeaps = nullptr;
@@ -75,7 +76,7 @@ bool DuckySwapChain::Resize(D3DDeviceManager* DeviceManager, UINT32 width, UINT3
         return true;
     }
 
-    constexpr UINT bufferCount = 2;
+    constexpr UINT bufferCount = FrameCount;
     constexpr DXGI_FORMAT format = DXGI_FORMAT_R8G8B8A8_UNORM;
     constexpr UINT flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
 
