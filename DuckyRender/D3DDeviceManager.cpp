@@ -78,6 +78,35 @@ bool D3DDeviceManager::Init(HWND hWnd, UINT WindowWidth, UINT WindowHeight, std:
 	return true;
 }
 
+DescriptorHeapResource D3DDeviceManager::CreateDefaultStructuredBuffer(size_t bufferSize, size_t elementSize)
+{
+	DescriptorHeapResource result;
+
+	result.buffer = CreateDefaultBuffer(bufferSize, D3D12_RESOURCE_STATE_COPY_DEST);
+
+	if (!result.buffer) return {};
+
+	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc{};
+	srvDesc.Format = DXGI_FORMAT_UNKNOWN;
+	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+	srvDesc.Buffer.FirstElement = 0;
+	srvDesc.Buffer.NumElements = static_cast<UINT>(bufferSize / elementSize);
+	srvDesc.Buffer.StructureByteStride = static_cast<UINT>(elementSize);
+	srvDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
+
+	DescriptorAllocation allocation = AllocateCbvSrvUavDescriptor(mCbvUavSrvDescriptorHandle);
+
+	if (!allocation.IsValid()) return {};
+
+	mDevice->CreateShaderResourceView(result.buffer.Get(),&srvDesc, allocation.cpu);
+
+	result.heapOffset = allocation.descriptorIndex;
+	result.descHandle = allocation.gpu;
+
+	return result;
+}
+
 MappedDescriptorHeapResource D3DDeviceManager::CreateStructuredBuffer(size_t BufferSize,size_t ElementSize)
 {
 	D3D12_HEAP_PROPERTIES heapprop = {};

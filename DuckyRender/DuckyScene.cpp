@@ -4,15 +4,19 @@
 
 bool DuckyScene::Init(std::ifstream& InFile, D3DDeviceManager* DeviceManager, DuckyUploadContext& UploadContext)
 {
-	InitInstanceData(InFile, DeviceManager);
+	if (!UploadContext.Begin()) return false;
+
+	InitInstanceData(InFile, DeviceManager, UploadContext);
 	InitTextures(InFile, DeviceManager);
 	InitMaterials(InFile, DeviceManager);
 	InitMeshes(InFile, DeviceManager);
 	InitVertexAndIndexMegaBuffer(InFile, DeviceManager, UploadContext);
+
+	if (!UploadContext.SubmitAndWait()) return false;
     return true;
 }
 
-bool DuckyScene::InitInstanceData(std::ifstream& InFile, D3DDeviceManager* DeviceManager)
+bool DuckyScene::InitInstanceData(std::ifstream& InFile, D3DDeviceManager* DeviceManager, DuckyUploadContext& UploadContext)
 {
 	size_t numInstances = 0;
 
@@ -32,24 +36,45 @@ bool DuckyScene::InitInstanceData(std::ifstream& InFile, D3DDeviceManager* Devic
 		mInstances.emplace_back(std::move(instance));
 	}
 
-	const size_t bufferSize = mInstances.size() * sizeof(GPUInstance);
-	mGPUInstances = DeviceManager->CreateStructuredBuffer(bufferSize, sizeof(GPUInstance));
-
-	HRESULT result = mGPUInstances.buffer->Map(0, nullptr, &mGPUInstances.mapped);
-
-	if (FAILED(result)) return false;
-
-	GPUInstance* dst = static_cast<GPUInstance*>(mGPUInstances.mapped);
+	// prep for GPU
+	std::vector<GPUInstance> gpuInstances;
+	gpuInstances.reserve(mInstances.size());
 
 	for (const DuckyMeshInstance& instance : mInstances)
 	{
+		GPUInstance gpu{};
+
 		XMMATRIX normal = XMMatrixInverse(nullptr, instance.mTransform);
 		XMMATRIX world = XMMatrixTranspose(instance.mTransform);
-		XMStoreFloat4x4(&dst->mWorld, world);
-		XMStoreFloat4x4(&dst->mNormal, normal);
-		++dst;
+
+		XMStoreFloat4x4(&gpu.mWorld, world);
+		XMStoreFloat4x4(&gpu.mNormal, normal);
+
+		gpuInstances.emplace_back(gpu);
 	}
 
+	const size_t bufferSize = gpuInstances.size() * sizeof(GPUInstance);
+
+	mGPUInstances = DeviceManager->CreateDefaultStructuredBuffer(bufferSize, sizeof(GPUInstance));
+
+	if (!mGPUInstances.buffer) return false;
+
+	auto upload = DeviceManager->CreateUploadBuffer(bufferSize);
+
+	if (!upload) return false;
+
+	void* mapped = nullptr;
+
+	HRESULT hr = upload->Map(0, nullptr, &mapped);
+
+	if (FAILED(hr)) return false;
+
+	memcpy(mapped, gpuInstances.data(), bufferSize);
+
+	upload->Unmap(0, nullptr);
+
+	if (!UploadContext.UploadBuffer(mGPUInstances.buffer.Get(), upload.Get(), bufferSize, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE)) return false;
+	
 	return true;
 }
 
@@ -260,8 +285,6 @@ bool DuckyScene::InitVertexAndIndexMegaBuffer(std::ifstream& ModelFile, D3DDevic
 
 	if (!ModelFile) return false;
 
-	mVertices = DeviceManager->CreateDefaultBuffer(vertexBufferSize, D3D12_RESOURCE_STATE_COPY_DEST);
-
 	void* mappedIndices = nullptr;
 
 	result = tempIdxBuffer->Map(0, nullptr, &mappedIndices);
@@ -274,26 +297,19 @@ bool DuckyScene::InitVertexAndIndexMegaBuffer(std::ifstream& ModelFile, D3DDevic
 
 	if (!ModelFile) return false;
 
-	mIndices = DeviceManager->CreateDefaultBuffer(indexBufferSize, D3D12_RESOURCE_STATE_COPY_DEST);
+	mVertices = DeviceManager->CreateDefaultBuffer(vertexBufferSize, D3D12_RESOURCE_STATE_COPY_DEST);
+	mIndices  = DeviceManager->CreateDefaultBuffer(indexBufferSize, D3D12_RESOURCE_STATE_COPY_DEST);
 
-	ID3D12GraphicsCommandList* list = UploadContext.GetCommandList();
-	list->CopyBufferRegion(mVertices.Get(), 0, tempVertexBuffer.Get(), 0, vertexBufferSize);
-	list->CopyBufferRegion(mIndices.Get(), 0, tempIdxBuffer.Get(), 0, indexBufferSize);
 
-	auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(mVertices.Get(),
-														D3D12_RESOURCE_STATE_COPY_DEST,
-														D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
+	UploadContext.UploadBuffer(mVertices.Get(),
+		tempVertexBuffer.Get(),
+		vertexBufferSize,
+		D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
 
-	list->ResourceBarrier(1, &barrier);
-
-	auto barrier2 = CD3DX12_RESOURCE_BARRIER::Transition(mIndices.Get(),
-														 D3D12_RESOURCE_STATE_COPY_DEST,
-														 D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
-
-	list->ResourceBarrier(1, &barrier2);
-
-	if (!UploadContext.SubmitAndWait()) return false;
-
+	UploadContext.UploadBuffer(mIndices.Get(),
+		tempIdxBuffer.Get(),
+		indexBufferSize,
+		D3D12_RESOURCE_STATE_INDEX_BUFFER);
 
 	mVbView.BufferLocation = mVertices->GetGPUVirtualAddress();
 	mVbView.SizeInBytes = vertexBufferSize;

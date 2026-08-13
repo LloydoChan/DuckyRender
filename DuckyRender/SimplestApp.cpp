@@ -50,8 +50,6 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 
 	if (!mUploadContext.Init( mDeviceManager->GetDevice(), mDeviceManager->GetCommandQueue())) return false;
 
-	if (!mUploadContext.Begin()) return false;
-
 	mScene.Init(DuckyFile, mDeviceManager.get(), mUploadContext);
 
 	InitDebugDrawsVBAndIB();

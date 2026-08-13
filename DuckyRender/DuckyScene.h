@@ -16,14 +16,14 @@ class DuckyScene
         const std::vector<DuckyMaterial>& GetMaterials() const { return mMaterials; }
         const std::vector<DescriptorHeapResource>& GetTextures() const { return mTextures; }
 
-        const  MappedDescriptorHeapResource& GetInstancesHeapBuffer() const { return mGPUInstances; }
+        const  DescriptorHeapResource& GetInstancesHeapBuffer() const { return mGPUInstances; }
         const  MappedDescriptorHeapResource& GetMaterialsHeapBuffer() const { return mGPUMaterials; }
         const  MappedDescriptorHeapResource& GetDrawsHeapBuffer() const     { return mGPUDraws; }
 
         const D3D12_VERTEX_BUFFER_VIEW& GetVertexBufferView() const { return mVbView; }
         const D3D12_INDEX_BUFFER_VIEW& GetIndexBufferView() const { return mIbView; }
     private:
-        bool InitInstanceData(std::ifstream& InFile, D3DDeviceManager* DeviceManager);
+        bool InitInstanceData(std::ifstream& InFile, D3DDeviceManager* DeviceManager, DuckyUploadContext& UploadContext);
         bool InitMaterials(std::ifstream& InFile, D3DDeviceManager* DeviceManager);
         bool InitTextures(std::ifstream& InFile, D3DDeviceManager* DeviceManager);
         bool InitMeshes(std::ifstream& InFile, D3DDeviceManager* DeviceManager);
@@ -34,7 +34,7 @@ class DuckyScene
         std::vector<DuckyMaterial>          mMaterials;
         std::vector<DescriptorHeapResource> mTextures;
 
-        MappedDescriptorHeapResource mGPUInstances;
+        DescriptorHeapResource mGPUInstances;
         MappedDescriptorHeapResource mGPUMaterials;
         MappedDescriptorHeapResource mGPUDraws;
 
