@@ -12,6 +12,8 @@ public:
     bool SubmitAndWait();
     bool UploadBuffer( ID3D12Resource* destination, ID3D12Resource* upload, size_t size,D3D12_RESOURCE_STATES finalState);
 
+    bool UploadData(D3DDeviceManager* deviceManager, ID3D12Resource* destination, const void* sourceData, size_t size, D3D12_RESOURCE_STATES finalState);
+
 private:
     ID3D12CommandQueue* mQueue = nullptr;
 

@@ -8,7 +8,7 @@ bool DuckyScene::Init(std::ifstream& InFile, D3DDeviceManager* DeviceManager, Du
 
 	InitInstanceData(InFile, DeviceManager, UploadContext);
 	InitTextures(InFile, DeviceManager);
-	InitMaterials(InFile, DeviceManager);
+	InitMaterials(InFile, DeviceManager, UploadContext);
 	InitMeshes(InFile, DeviceManager);
 	InitVertexAndIndexMegaBuffer(InFile, DeviceManager, UploadContext);
 
@@ -59,99 +59,94 @@ bool DuckyScene::InitInstanceData(std::ifstream& InFile, D3DDeviceManager* Devic
 
 	if (!mGPUInstances.buffer) return false;
 
-	auto upload = DeviceManager->CreateUploadBuffer(bufferSize);
-
-	if (!upload) return false;
-
-	void* mapped = nullptr;
-
-	HRESULT hr = upload->Map(0, nullptr, &mapped);
-
-	if (FAILED(hr)) return false;
-
-	memcpy(mapped, gpuInstances.data(), bufferSize);
-
-	upload->Unmap(0, nullptr);
-
-	if (!UploadContext.UploadBuffer(mGPUInstances.buffer.Get(), upload.Get(), bufferSize, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE)) return false;
+	if (!UploadContext.UploadData(
+		DeviceManager,
+		mGPUInstances.buffer.Get(),
+		gpuInstances.data(),
+		bufferSize,
+		D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE))
+	{
+		return false;
+	}
 	
 	return true;
 }
 
-bool DuckyScene::InitMaterials(std::ifstream& InFile, D3DDeviceManager* DeviceManager)
+bool DuckyScene::InitMaterials(std::ifstream& InFile, D3DDeviceManager* DeviceManager, DuckyUploadContext& UploadContext)
 {
 	size_t numMaterials = 0;
 	InFile.read((char*)&numMaterials, sizeof(size_t));
 
+	std::vector<GPUMaterial> gpuMaterials;
+
+	for (int i = 0; i < numMaterials; i++)
+	{
+		DuckyMaterial nextMaterial{};
+		InFile.read((char*)&nextMaterial, sizeof(DuckyMaterial));
+
+		GPUMaterial gpuFriendly{};
+
+		gpuFriendly.alphaCutoff = nextMaterial.constants.alphaCutoff;
+		gpuFriendly.alphaMode = static_cast<uint32_t>(nextMaterial.constants.alphaMode);
+		gpuFriendly.doubleSided = nextMaterial.constants.doubleSided;
+		gpuFriendly.RoughnessFactor = nextMaterial.constants.mRoughnessFactor;
+		gpuFriendly.MetallicFactor = nextMaterial.constants.mMetallicFactor;
+		gpuFriendly.NormalScale = nextMaterial.constants.mNormalScale;
+		gpuFriendly.BaseColorFactor = nextMaterial.constants.mBaseColorFactor;
+
+		if (nextMaterial.mBaseColorTexture != -1)
+		{
+			gpuFriendly.BaseColorTexture = mTextures[nextMaterial.mBaseColorTexture].heapOffset;
+		}
+		else
+		{
+			gpuFriendly.BaseColorTexture = mTextures[mBaseColorFallbackHandle].heapOffset;
+		}
+
+		if (nextMaterial.mNormalTexture != -1)
+		{
+			gpuFriendly.NormalTexture = mTextures[nextMaterial.mNormalTexture].heapOffset;
+		}
+		else
+		{
+			gpuFriendly.NormalTexture = mTextures[mNormalColorFallbackHandle].heapOffset;
+		}
+
+		if (nextMaterial.mMetallicRoughnessTexture != -1)
+		{
+			gpuFriendly.MetallicRoughnessTexture = mTextures[nextMaterial.mMetallicRoughnessTexture].heapOffset;
+		}
+		else
+		{
+			gpuFriendly.MetallicRoughnessTexture = mTextures[mMetallicRougnessFallbackHandle].heapOffset;
+		}
+
+		if (nextMaterial.mEmissive != -1)
+		{
+			gpuFriendly.EmissiveTexture = mTextures[nextMaterial.mEmissive].heapOffset;
+		}
+		else
+		{
+			gpuFriendly.EmissiveTexture = mTextures[mEmissiveColorFallbackHandle].heapOffset;
+		}
+
+		mMaterials.push_back(nextMaterial);
+		gpuMaterials.push_back(gpuFriendly);
+	}
+	
+
 	// get a buffer for the materials and copy into mapped dest
 	size_t bufferSize = numMaterials * sizeof(GPUMaterial);
-	
-	mGPUMaterials = DeviceManager->CreateStructuredBuffer(bufferSize, sizeof(GPUMaterial));
+	mGPUMaterials = DeviceManager->CreateDefaultStructuredBuffer(bufferSize, sizeof(GPUMaterial));
 
-	HRESULT result = mGPUMaterials.buffer->Map(0, nullptr, &mGPUMaterials.mapped);
-	GPUMaterial* dst = (GPUMaterial*)mGPUMaterials.mapped;
+	if (!mGPUMaterials.buffer) return false;
 
-	if (!FAILED(result))
-	{
-		for (int i = 0; i < numMaterials; i++)
-		{
-			DuckyMaterial nextMaterial{};
-			InFile.read((char*)&nextMaterial, sizeof(DuckyMaterial));
-
-			GPUMaterial gpuFriendly{};
-
-			gpuFriendly.alphaCutoff = nextMaterial.constants.alphaCutoff;
-			gpuFriendly.alphaMode = static_cast<uint32_t>(nextMaterial.constants.alphaMode);
-			gpuFriendly.doubleSided = nextMaterial.constants.doubleSided;
-			gpuFriendly.RoughnessFactor = nextMaterial.constants.mRoughnessFactor;
-			gpuFriendly.MetallicFactor = nextMaterial.constants.mMetallicFactor;
-			gpuFriendly.NormalScale = nextMaterial.constants.mNormalScale;
-			gpuFriendly.BaseColorFactor = nextMaterial.constants.mBaseColorFactor;
-
-			if (nextMaterial.mBaseColorTexture != -1)
-			{
-				gpuFriendly.BaseColorTexture = mTextures[nextMaterial.mBaseColorTexture].heapOffset;
-			}
-			else
-			{
-				gpuFriendly.BaseColorTexture = mTextures[mBaseColorFallbackHandle].heapOffset;
-			}
-
-			if (nextMaterial.mNormalTexture != -1)
-			{
-				gpuFriendly.NormalTexture = mTextures[nextMaterial.mNormalTexture].heapOffset;
-			}
-			else
-			{
-				gpuFriendly.NormalTexture = mTextures[mNormalColorFallbackHandle].heapOffset;
-			}
-
-			if (nextMaterial.mMetallicRoughnessTexture != -1)
-			{
-				gpuFriendly.MetallicRoughnessTexture = mTextures[nextMaterial.mMetallicRoughnessTexture].heapOffset;
-			}
-			else
-			{
-				gpuFriendly.MetallicRoughnessTexture = mTextures[mMetallicRougnessFallbackHandle].heapOffset;
-			}
-
-			if (nextMaterial.mEmissive != -1)
-			{
-				gpuFriendly.EmissiveTexture = mTextures[nextMaterial.mEmissive].heapOffset;
-			}
-			else
-			{
-				gpuFriendly.EmissiveTexture = mTextures[mEmissiveColorFallbackHandle].heapOffset;
-			}
-
-			memcpy(dst, &gpuFriendly, sizeof(GPUMaterial));
-
-			dst++;
-
-			mMaterials.push_back(nextMaterial);
-		}
-	}
-	else
+	if (!UploadContext.UploadData(
+		DeviceManager,
+		mGPUMaterials.buffer.Get(),
+		gpuMaterials.data(),
+		bufferSize,
+		D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE))
 	{
 		return false;
 	}
