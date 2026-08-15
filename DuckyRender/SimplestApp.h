@@ -67,7 +67,7 @@ struct SortRecord
 class SimplestApp : public DuckyApp
 {
 	public:
-		SimplestApp() : mWholeScreenViewPortScissor(1920, 1080) {};
+		SimplestApp(int HorizontalRes, int VerticalRes) : mWholeScreenViewPortScissor(HorizontalRes, VerticalRes) {};
 		~SimplestApp();
 		virtual bool Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* WindowName) override;
 		virtual LRESULT WindowProcedure(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam);
