@@ -568,7 +568,7 @@ void SimplestApp::AppMainLoop()
 		PerFrameConstants* asFrameConstants = reinterpret_cast<PerFrameConstants*>(constantAllocation.mCpuAddress);
 		XMStoreFloat4x4(static_cast<XMFLOAT4X4*>(&asFrameConstants->mViewProjection), XMMatrixTranspose(sceneCamera->GetViewProjection()));
 		XMStoreFloat4(static_cast<XMFLOAT4*>(&asFrameConstants->mCameraPosition), sceneCamera->GetEye());
-		asFrameConstants->mLightColor = XMFLOAT4(1.f, 1.f, 1.f, 1.f);
+		asFrameConstants->mLightColor = XMFLOAT4(1.f, 0.95f, 0.85f, 1.f);
 		asFrameConstants->mLightDirection = XMFLOAT4(-0.4f, -1.0f, 0.2f, 0.f);
 		asFrameConstants->mVisualisationMode = mVisualizationMode;
 		asFrameConstants->mMaterialBufferIndex = mScene.GetMaterialsHeapBuffer().heapOffset;
