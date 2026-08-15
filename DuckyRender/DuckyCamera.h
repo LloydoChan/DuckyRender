@@ -20,6 +20,8 @@ public:
 	const XMMATRIX& GetViewProjection() const { return mViewProjection; }
 
 	const XMVECTOR& GetEye() const { return mEye; }
+
+	DuckyFrustum GetViewFrustum();
 private:
 	XMVECTOR mAt;
 	XMVECTOR mEye;

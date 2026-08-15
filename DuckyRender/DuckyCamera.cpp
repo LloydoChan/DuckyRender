@@ -1,4 +1,5 @@
 #include "pch.h"
+#include "DuckyMesh.h"
 #include "DuckyCamera.h"
 
 constexpr float MOUSE_YAW_SENSITIVITY = 0.003f;
@@ -63,4 +64,39 @@ void DuckyCamera::Update(float DeltaTime, const MovementStruct& Movement, float 
 
     mView = XMMatrixLookAtLH(mEye, mAt, up);
     mViewProjection = mView * mProjection;
+}
+
+DuckyFrustum DuckyCamera::GetViewFrustum()
+{
+    DuckyFrustum frustum;
+    XMFLOAT4X4 m;
+    XMStoreFloat4x4(&m, mViewProjection);
+
+    // left
+    frustum.mPlanes[0] = { m._14 + m._11, m._24 + m._21, m._34 + m._31, m._44 + m._41 };
+
+    // right
+    frustum.mPlanes[1] = { m._14 - m._11, m._24 - m._21, m._34 - m._31, m._44 - m._41 };
+
+    // bottom
+    frustum.mPlanes[2] = { m._14 + m._12, m._24 + m._22, m._34 + m._32, m._44 + m._42 };
+
+    // top
+    frustum.mPlanes[3] = { m._14 - m._12, m._24 - m._22, m._34 - m._32, m._44 - m._42 };
+
+    // near
+    frustum.mPlanes[4] = { m._13, m._23, m._33, m._43 };
+
+    // far
+    frustum.mPlanes[5] = { m._14 - m._13, m._24 - m._23, m._34 - m._33, m._44 - m._43 };
+
+    for (int i = 0; i < 6; ++i)
+    {
+        XMVECTOR p = XMLoadFloat4(&frustum.mPlanes[i]);
+        p = XMPlaneNormalize(p);
+        XMStoreFloat4(&frustum.mPlanes[i], p);
+    }
+
+    return frustum;
+
 }

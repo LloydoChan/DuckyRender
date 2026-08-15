@@ -472,9 +472,7 @@ void SimplestApp::AppMainLoop()
 		mMouseDeltaX = mMouseDeltaY = 0;
 		mScrollAmount = 0;
 
-		XMFLOAT4X4 viewProj;
-		XMStoreFloat4x4(&viewProj, sceneCamera->GetViewProjection());
-		DuckyFrustum frameFrustum = ExtractFrustumFromViewProjection(viewProj);
+		DuckyFrustum frameFrustum = sceneCamera->GetViewFrustum();
 
 		unsigned int numDrawableMeshes = 0;
 
@@ -566,6 +564,7 @@ void SimplestApp::AppMainLoop()
 		
 		ConstantBufferAllocation constantAllocation = cbvAllocator->AllocateConstantBuffer(sizeof(PerFrameConstants));
 		PerFrameConstants* asFrameConstants = reinterpret_cast<PerFrameConstants*>(constantAllocation.mCpuAddress);
+
 		XMStoreFloat4x4(static_cast<XMFLOAT4X4*>(&asFrameConstants->mViewProjection), XMMatrixTranspose(sceneCamera->GetViewProjection()));
 		XMStoreFloat4(static_cast<XMFLOAT4*>(&asFrameConstants->mCameraPosition), sceneCamera->GetEye());
 		asFrameConstants->mLightColor = XMFLOAT4(1.f, 0.95f, 0.85f, 1.f);
@@ -574,6 +573,7 @@ void SimplestApp::AppMainLoop()
 		asFrameConstants->mMaterialBufferIndex = mScene.GetMaterialsHeapBuffer().heapOffset;
 		asFrameConstants->mInstanceBufferIndex = mScene.GetInstancesHeapBuffer().heapOffset;
 		asFrameConstants->mDrawBufferIndex = mDrawsBuffer.heapOffset;
+
 		list->SetGraphicsRootConstantBufferView(0, constantAllocation.mGpuAddress);
 		
 
@@ -986,37 +986,4 @@ std::vector<TransformedDrawRecord> SimplestApp::FrustumCullUsingOBBs(const std::
 	}
 
 	return nonCulledRecords;
-}
-
-DuckyFrustum SimplestApp::ExtractFrustumFromViewProjection(const XMFLOAT4X4& ViewProjection)
-{
-	DuckyFrustum frustum;
-	const XMFLOAT4X4& m = ViewProjection;
-
-	// left
-	frustum.mPlanes[0] ={ m._14 + m._11, m._24 + m._21, m._34 + m._31, m._44 + m._41};
-
-	// right
-	frustum.mPlanes[1] = { m._14 - m._11, m._24 - m._21, m._34 - m._31, m._44 - m._41};
-
-	// bottom
-	frustum.mPlanes[2] = { m._14 + m._12, m._24 + m._22, m._34 + m._32, m._44 + m._42};
-
-	// top
-	frustum.mPlanes[3] = { m._14 - m._12, m._24 - m._22, m._34 - m._32, m._44 - m._42};
-
-	// near
-	frustum.mPlanes[4] = { m._13, m._23, m._33, m._43 };
-
-	// far
-	frustum.mPlanes[5] = { m._14 - m._13, m._24 - m._23, m._34 - m._33, m._44 - m._43};
-
-	for (int i = 0; i < 6; ++i)
-	{
-		XMVECTOR p = XMLoadFloat4(&frustum.mPlanes[i]);
-		p = XMPlaneNormalize(p);
-		XMStoreFloat4(&frustum.mPlanes[i], p);
-	}
-
-	return frustum;
 }

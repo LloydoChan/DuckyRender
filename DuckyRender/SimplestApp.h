@@ -89,7 +89,6 @@ class SimplestApp : public DuckyApp
 		uint32_t BuildIndirectCommands(const std::vector<SortRecord>& draws, IndirectCommand* destination);
 
 		std::vector<TransformedDrawRecord> FrustumCullUsingOBBs(const std::vector<TransformedDrawRecord>& TransformedOBBs, const DuckyFrustum& Frustum);
-		DuckyFrustum ExtractFrustumFromViewProjection(const XMFLOAT4X4& ViewProjection);
 
 	private:
 		bool mKeys[256] = {};
