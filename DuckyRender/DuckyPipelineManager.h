@@ -22,6 +22,13 @@ struct GraphicsPipelineDesc
 	PipelineType Type;
 };
 
+struct ComputePipelineDesc
+{
+	ShaderDesc CSShader;
+	D3D12_ROOT_PARAMETER* Params;
+	UINT NumParams;
+};
+
 struct PipelineAndRootSig
 {
 	ComPtr<ID3D12RootSignature> rootSig;
@@ -40,6 +47,7 @@ class DuckyPipelineManager
 		bool Init(std::wofstream* FilePtr, ID3D12Device* DevicePtr);
 		std::vector<D3D12_INPUT_ELEMENT_DESC> CreateInputLayout(ShaderCompilationOutput& shaderCompData);
 		PipelineAndRootSig CreatePSO(GraphicsPipelineDesc& MainDesc);
+		PipelineAndRootSig CreateComputePSO(ComputePipelineDesc& MainDesc);
 	private:
 		std::unique_ptr<DuckyCompiler> mCompiler;
 		ID3D12Device* mDevicePtr;

@@ -315,7 +315,7 @@ ComPtr<ID3D12Resource> D3DDeviceManager::CreateUploadBuffer(size_t BufferSize)
 	return resource;
 }
 
-ComPtr<ID3D12Resource> D3DDeviceManager::CreateDefaultBuffer(size_t BufferSize, D3D12_RESOURCE_STATES initialState)
+ComPtr<ID3D12Resource> D3DDeviceManager::CreateDefaultBuffer(size_t BufferSize, D3D12_RESOURCE_STATES InitialState, D3D12_RESOURCE_FLAGS ResourceFlags)
 {
 	D3D12_HEAP_PROPERTIES heap{};
 	heap.Type = D3D12_HEAP_TYPE_DEFAULT;
@@ -328,6 +328,7 @@ ComPtr<ID3D12Resource> D3DDeviceManager::CreateDefaultBuffer(size_t BufferSize, 
 	desc.MipLevels = 1;
 	desc.SampleDesc.Count = 1;
 	desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+	desc.Flags = ResourceFlags;
 
 	ComPtr<ID3D12Resource> resource;
 
@@ -335,7 +336,7 @@ ComPtr<ID3D12Resource> D3DDeviceManager::CreateDefaultBuffer(size_t BufferSize, 
 		&heap,
 		D3D12_HEAP_FLAG_NONE,
 		&desc,
-		initialState,
+		InitialState,
 		nullptr,
 		IID_PPV_ARGS(&resource));
 

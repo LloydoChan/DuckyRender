@@ -156,3 +156,52 @@ PipelineAndRootSig DuckyPipelineManager::CreatePSO(GraphicsPipelineDesc& mainDes
 
 	return newPipeline;
 }
+
+PipelineAndRootSig DuckyPipelineManager::CreateComputePSO(ComputePipelineDesc& MainDesc)
+{
+	RootSignatureDesc compSig = {};
+
+	for (int i = 0; i < MainDesc.NumParams; i++)
+	{
+		compSig.parameters.emplace_back(MainDesc.Params[i]);
+	}
+
+	PipelineAndRootSig newPipeline;
+
+	ShaderCompilationOutput computeShaderOutput;
+	if (!mCompiler->CompileShaderDXC(MainDesc.CSShader.File.c_str(), MainDesc.CSShader.Entry.c_str(), L"cs_6_6", computeShaderOutput)) return newPipeline;
+
+	D3D12_ROOT_SIGNATURE_DESC rootSigDesc = {};
+	rootSigDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_NONE;
+	rootSigDesc.NumParameters = static_cast<UINT>(compSig.parameters.size());
+	rootSigDesc.pParameters = compSig.parameters.empty() ? nullptr : compSig.parameters.data();
+	rootSigDesc.NumStaticSamplers = 0;
+	rootSigDesc.pStaticSamplers = nullptr;
+
+	ID3DBlob* rootSigBlob = nullptr;
+
+	HRESULT hResult = D3D12SerializeRootSignature(
+		&rootSigDesc,
+		D3D_ROOT_SIGNATURE_VERSION_1_0,
+		&rootSigBlob,
+		nullptr
+	);
+
+	if (FAILED(hResult) && !OutputErrorFromHResult(hResult, "couldn't serialize compute root sig ", *mFilePtr)) return newPipeline;
+
+	hResult = mDevicePtr->CreateRootSignature(0, rootSigBlob->GetBufferPointer(), rootSigBlob->GetBufferSize(), IID_PPV_ARGS(&newPipeline.rootSig));
+	rootSigBlob->Release();
+	if (FAILED(hResult) && !OutputErrorFromHResult(hResult, "couldn't create root sig ", *mFilePtr)) return newPipeline;
+
+	D3D12_COMPUTE_PIPELINE_STATE_DESC comDesc{};
+
+	comDesc.CS.BytecodeLength = computeShaderOutput.shaderBlob.Get()->GetBufferSize();
+	comDesc.CS.pShaderBytecode = computeShaderOutput.shaderBlob.Get()->GetBufferPointer();
+	comDesc.pRootSignature = newPipeline.rootSig.Get();
+
+	hResult = mDevicePtr->CreateComputePipelineState(&comDesc, IID_PPV_ARGS(&newPipeline.pipeLineState));
+
+	if (FAILED(hResult) && !OutputErrorFromHResult(hResult, "couldn't create compute pipeline ", *mFilePtr)) return newPipeline;
+
+	return newPipeline;
+}

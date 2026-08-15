@@ -82,7 +82,7 @@ class D3DDeviceManager
 		ComPtr<ID3D12Resource> CreateBuffer(size_t bufferSize);
 		DescriptorHeapResource CreateConstantBuffer(size_t bufferSize);
 		ComPtr<ID3D12Resource> CreateUploadBuffer(size_t BufferSize);
-		ComPtr<ID3D12Resource> CreateDefaultBuffer(size_t BufferSize, D3D12_RESOURCE_STATES initialState);
+		ComPtr<ID3D12Resource> CreateDefaultBuffer(size_t BufferSize, D3D12_RESOURCE_STATES initialState, D3D12_RESOURCE_FLAGS ResourceFlags = D3D12_RESOURCE_FLAG_NONE);
 
 		ID3D12CommandQueue* GetCommandQueue() { return mCommandQueue.Get(); }
 		ID3D12DescriptorHeap* GetDepthStencilBufferHeap() { return mDsvHeaps.Get(); }

@@ -57,28 +57,65 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 	CreateDrawRecords();
 	WorkOutGlobalBoundingBoxCenter();
 
-	size_t totalPrimitiveDraws = 0;
+	mTotalPrimitiveDraws = 0;
 
 	for (const DuckyMeshInstance& instance : mScene.GetInstances())
 	{
 		if (instance.mMeshDataIndex < 0 || instance.mMeshDataIndex >= static_cast<int>(mScene.GetMeshes().size())) continue;
 
-		totalPrimitiveDraws += mScene.GetMeshes()[instance.mMeshDataIndex].GetPrimitiveCount();
+		mTotalPrimitiveDraws += mScene.GetMeshes()[instance.mMeshDataIndex].GetPrimitiveCount();
 	}
 
-	mStructuredBufferOBBs = mDeviceManager->CreateStructuredBuffer(totalPrimitiveDraws * sizeof(GPUOBB), sizeof(GPUOBB));
+	std::vector<GPUCullDraw> culldraws;
+	culldraws.reserve(mTotalPrimitiveDraws);
+	uint32_t drawOffset = 0;
 	size_t obbOffset = 0;
+
+	mStructuredBufferOBBs = mDeviceManager->CreateStructuredBuffer(mTotalPrimitiveDraws * sizeof(GPUOBB), sizeof(GPUOBB));
+
 	for (int type = static_cast<int>(PipelineType::OPAQUE); type < static_cast<int>(PipelineType::DEBUG); type++)
 	{
 		mTransformedDrawTypes[type] = TransformAABBsToOBBs(mDrawTypes[type]);
-		CopyOBBsToGPU(mTransformedDrawTypes[type], obbOffset);
+
+		// Keep this for debug rendering
+		CopyOBBsToGPU(mTransformedDrawTypes[type],obbOffset);
+
 		obbOffset += mTransformedDrawTypes[type].size();
+
+		mDrawRanges[type].Offset = drawOffset;
+		mDrawRanges[type].Count = static_cast<uint32_t>(mTransformedDrawTypes[type].size());
+
+		for (const TransformedDrawRecord& record : mTransformedDrawTypes[type])
+		{
+			const DrawRecord& drawRecord = record.mDrawRecord;
+
+			const DuckyPrimitive& primitive = mScene.GetMeshes()[drawRecord.mMeshIndex].GetPrimitive(drawRecord.mPrimitiveIndex);
+
+			GPUCullDraw cullDraw;
+
+			cullDraw.mCenter		= record.mOBB.Center;
+			cullDraw.mExtents		= record.mOBB.Extents;
+			cullDraw.mOrientation   = record.mOBB.Orientation;
+
+			cullDraw.mBaseVertex = static_cast<int32_t>(primitive.GetVertexOffset());
+			cullDraw.mIndexCount = static_cast<int32_t>(primitive.GetNumIndices());
+			cullDraw.mStartIndex = static_cast<int32_t>(primitive.GetIndexOffset());
+
+			cullDraw.mDrawIndex = static_cast<uint32_t>(record.mDrawRecord.mGPUDrawIndex);
+
+			culldraws.push_back(cullDraw);
+		}
+
+		drawOffset += mDrawRanges[type].Count;
 	}
 
-	UINT64 neededCapacity = AlignConstantBufferSize(sizeof(PerFrameConstants));
+	mCullDrawBuffer = mDeviceManager->CreateDefaultBuffer(sizeof(GPUCullDraw) * mTotalPrimitiveDraws, D3D12_RESOURCE_STATE_COPY_DEST);
 
-	mDuckyContext = new DuckyGraphicsContext;
-	if(!mDuckyContext->Init(mDeviceManager.get(), neededCapacity, totalPrimitiveDraws, &mLogFile)) return false;
+	mUploadContext.Begin();
+
+	mUploadContext.UploadData(mDeviceManager.get(), mCullDrawBuffer.Get(), culldraws.data(), sizeof(GPUCullDraw) * mTotalPrimitiveDraws, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+
+	mUploadContext.SubmitAndWait();
 
 	RootSignatureDesc drawSig = {};
 
@@ -168,6 +205,53 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 
 	// DEBUG DRAW PSO END-------------------------------------------------------------------------------------------------------------------
 
+	// CREATE COMPUTE PSO ------------------------------------------------------------------------------------------------------------------
+	
+	D3D12_ROOT_PARAMETER frustumCullParams[3]{};
+
+	// b0
+	frustumCullParams[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+	frustumCullParams[0].Descriptor.ShaderRegister = 0;
+	frustumCullParams[0].Descriptor.RegisterSpace = 0;
+	frustumCullParams[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+
+	// t0
+	frustumCullParams[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
+	frustumCullParams[1].Descriptor.ShaderRegister = 0;
+	frustumCullParams[1].Descriptor.RegisterSpace = 0;
+	frustumCullParams[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+
+	// u0
+	frustumCullParams[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_UAV;
+	frustumCullParams[2].Descriptor.ShaderRegister = 0;
+	frustumCullParams[2].Descriptor.RegisterSpace = 0;
+	frustumCullParams[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+
+	ShaderDesc ComputeShaderCS;
+	ComputeShaderCS.File = L"FrustumCull.hlsl";
+
+	ComputePipelineDesc computeDesc;
+	computeDesc.CSShader = ComputeShaderCS;
+	computeDesc.NumParams = 3;
+	computeDesc.Params = frustumCullParams;
+
+	mFrustumCullComputePipeline =  mRenderer.GetPipelineManager()->CreateComputePSO(computeDesc);
+
+	if (!mFrustumCullComputePipeline.rootSig ||
+		!mFrustumCullComputePipeline.pipeLineState)
+	{
+		return false;
+	}
+
+	mVisibilityBuffer = mDeviceManager->CreateStructuredBuffer(mTotalPrimitiveDraws * sizeof(uint32_t),sizeof(uint32_t));
+
+	UINT64 neededCapacity = AlignConstantBufferSize(sizeof(PerFrameConstants) + sizeof(uint32_t) * mTotalPrimitiveDraws);
+
+	mDuckyContext = new DuckyGraphicsContext;
+	if (!mDuckyContext->Init(mDeviceManager.get(), neededCapacity, mTotalPrimitiveDraws, &mLogFile)) return false;
+
+	// CREATE COMPUTE PSO END --------------------------------------------------------------------------------------------------------------
+	
 	mWholeScreenViewPortScissor.scissor.left = 0;
 	mWholeScreenViewPortScissor.scissor.right = WindowWidth;
 	mWholeScreenViewPortScissor.scissor.top = 0;
@@ -510,6 +594,9 @@ void SimplestApp::AppMainLoop()
 
 		ImGui::Text("PS Invocations: %d ", gpuStats.PSInvocations);
 		ImGui::Text("VS Invocations: %d ", gpuStats.VSInvocations);
+		ImGui::Text("CS Invocations: %d ", gpuStats.CSInvocations);
+		ImGui::Text("Primitives Sent To Rasterizer: %d ", gpuStats.CInvocations);
+		ImGui::Text("Primitives Rasterized: %d ", gpuStats.CPrimitives);
 		ImGui::Text("IA Vertices: %d", gpuStats.IAVertices);
 		ImGui::Text("IA Primitives: %d", gpuStats.IAPrimitives);
 		ImGui::Text("Number Meshes Pre-cull: %d", mNumMeshes);
@@ -520,28 +607,66 @@ void SimplestApp::AppMainLoop()
 
 		ID3D12PipelineState* opaqueState = mRenderer.GetPipelineSig(PipelineType::OPAQUE).pipeLineState.Get();
 		if (!mDuckyContext->BeginFrame(currentFrame, mFence.Get(), opaqueState, mFenceEvent, &mLogFile)) break;
-		
+
 		ConstantBufferAllocator* cbvAllocator = mDuckyContext->GetBufferAllocator(currentFrame);
+		ConstantBufferAllocation cullAllocation = cbvAllocator->AllocateConstantBuffer(sizeof(GPUCullConstants));
 
-		IndirectCommand* indirectDst = mDuckyContext->GetIndirectCommandPtr(currentFrame);
-		uint32_t commandOffset = 0;
+		auto* cullConstants = reinterpret_cast<GPUCullConstants*>(cullAllocation.mCpuAddress);
 
-		uint32_t Offsets[static_cast<int>(PipelineType::COUNT)];
+		for (int i = 0; i < 6; ++i) cullConstants->mFrustumPlanes[i] = frameFrustum.mPlanes[i];
+
+		cullConstants->mDrawCount = mTotalPrimitiveDraws;
+		
+		list->SetPipelineState(mFrustumCullComputePipeline.pipeLineState.Get());
+		list->SetComputeRootSignature(mFrustumCullComputePipeline.rootSig.Get());
+		list->SetComputeRootConstantBufferView(0, cullAllocation.mGpuAddress);
 
 
-		for (int type = static_cast<int>(PipelineType::OPAQUE); type < static_cast<int>(PipelineType::DEBUG); type++)
-		{
-			PIXScopedEvent(PIX_COLOR(255, 0, 0), "build indirect commands");
-			Offsets[type] = commandOffset;
-			commandOffset += BuildIndirectCommands(sortedRecords[type], indirectDst + commandOffset);
-		}
+		const uint32_t groupCount = (mTotalPrimitiveDraws + 63) / 64;
 
 		gpuTime = GetGPUFrameMilliSeconds(currentFrame);
 
 		StartGPUTimeStamp(list, currentFrame);
+		StartGpuStats(list, currentFrame);
 
-		D3D12_RESOURCE_BARRIER barrier = mDeviceManager->GetBarrier();
-		list->ResourceBarrier(1, &barrier);
+		
+		ComPtr<ID3D12Resource> indirectBuffer = mDuckyContext->GetIndirectBuffer(currentFrame);
+		D3D12_RESOURCE_BARRIER indirectBarrier{};
+
+		indirectBarrier.Type =
+			D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+
+		indirectBarrier.Flags =
+			D3D12_RESOURCE_BARRIER_FLAG_NONE;
+
+		indirectBarrier.Transition.pResource =
+			indirectBuffer.Get();
+
+		indirectBarrier.Transition.Subresource =
+			D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+
+		indirectBarrier.Transition.StateBefore =
+			D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT;
+
+		indirectBarrier.Transition.StateAfter =
+			D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+
+		list->ResourceBarrier(1, &indirectBarrier);
+
+		list->SetComputeRootShaderResourceView(1, mCullDrawBuffer->GetGPUVirtualAddress());
+
+
+		list->SetComputeRootUnorderedAccessView(2, indirectBuffer->GetGPUVirtualAddress());
+		list->Dispatch(groupCount, 1, 1);
+
+
+		indirectBarrier.Transition = {
+			mDuckyContext->GetIndirectBuffer(currentFrame).Get(),
+			0,
+			D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+			D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT };
+
+		list->ResourceBarrier(1, &indirectBarrier);
 		list->SetPipelineState(opaqueState);
 
 		D3D12_CPU_DESCRIPTOR_HANDLE rtvHeap = mDeviceManager->IncrementAndReturnRTVHeaps();
@@ -581,18 +706,16 @@ void SimplestApp::AppMainLoop()
 		list->IASetVertexBuffers(0, 1, &mScene.GetVertexBufferView());
 		list->IASetIndexBuffer(&mScene.GetIndexBufferView());
 
-
-		StartGpuStats(list, currentFrame);
-
-		ComPtr<ID3D12Resource> indirectBuffer = mDuckyContext->GetIndirectBuffer(currentFrame);
 		
 		for (int type = static_cast<int>(PipelineType::OPAQUE); type < static_cast<int>(PipelineType::DEBUG); type++)
 		{
+			const DrawRange& range = mDrawRanges[type];
+
 			mRenderer.ExecuteDraws(list,
 				static_cast<PipelineType>(type),
 				indirectBuffer.Get(),
-				static_cast<UINT>(sortedRecords[type].size()),
-				static_cast<UINT64>(Offsets[type]) * sizeof(IndirectCommand));
+				static_cast<UINT>(range.Count),
+				static_cast<UINT64>(range.Offset) * sizeof(IndirectCommand));
 		}
 
 
@@ -623,10 +746,11 @@ void SimplestApp::AppMainLoop()
 
 		EndGPUTimeStamp(list, currentFrame);
 
+		D3D12_RESOURCE_BARRIER backBufferBarrier = mDeviceManager->GetBarrier();
 
-		barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
-		barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
-		list->ResourceBarrier(1, &barrier);
+		backBufferBarrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+		backBufferBarrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
+		list->ResourceBarrier(1, &backBufferBarrier);
 		HRESULT hResult = list->Close();
 		if (FAILED(hResult)) break;
 
@@ -924,8 +1048,7 @@ void SimplestApp::CopyOBBsToGPU(const std::vector<TransformedDrawRecord>& Transf
 
 std::vector<SortRecord> SimplestApp::SortAndCull(const std::vector<TransformedDrawRecord>& records,const DuckyFrustum& frustum,const XMMATRIX& view,bool alphaPass)
 {
-	auto visible = FrustumCullUsingOBBs(records, frustum);
-	return SortDrawRecords(view, visible, alphaPass);
+	return SortDrawRecords(view, records, alphaPass);
 }
 
 uint32_t SimplestApp::BuildIndirectCommands(const std::vector<SortRecord>& draws, IndirectCommand* destination)
@@ -948,42 +1071,4 @@ uint32_t SimplestApp::BuildIndirectCommands(const std::vector<SortRecord>& draws
 	}
 
 	return static_cast<uint32_t>(draws.size());
-}
-
-std::vector<TransformedDrawRecord> SimplestApp::FrustumCullUsingOBBs(const std::vector<TransformedDrawRecord>& TransformedOBBs, const DuckyFrustum& Frustum)
-{
-	std::vector<TransformedDrawRecord> nonCulledRecords;
-	nonCulledRecords.reserve(TransformedOBBs.size());
-
-	for (const auto& record : TransformedOBBs)
-	{
-		const GPUOBB& obb = record.mOBB;
-
-		XMVECTOR q = XMLoadFloat4(&obb.Orientation);
-
-		XMVECTOR axisX = XMVector3Rotate( XMVectorSet(1, 0, 0, 0), q);
-		XMVECTOR axisY = XMVector3Rotate( XMVectorSet(0, 1, 0, 0), q);
-		XMVECTOR axisZ = XMVector3Rotate( XMVectorSet(0, 0, 1, 0), q);
-
-		bool bPass = true;
-
-		for (int i = 0; i < 6; ++i)
-		{
-			XMVECTOR plane = XMLoadFloat4(&Frustum.mPlanes[i]);
-			XMVECTOR normal = XMVectorSet(Frustum.mPlanes[i].x, Frustum.mPlanes[i].y, Frustum.mPlanes[i].z, 0.0f);
-			XMVECTOR center = XMLoadFloat3(&obb.Center);
-
-			float distance = XMVectorGetX(XMVector3Dot(center, normal)) + Frustum.mPlanes[i].w;
-
-			float radius = obb.Extents.x * std::abs(XMVectorGetX( XMVector3Dot(axisX, normal))) +
-							obb.Extents.y * std::abs(XMVectorGetX( XMVector3Dot(axisY, normal))) +
-							obb.Extents.z * std::abs(XMVectorGetX( XMVector3Dot(axisZ, normal)));
-
-			if (distance + radius < 0.0f) bPass = false;
-		}
-
-		if (bPass) nonCulledRecords.emplace_back(record);
-	}
-
-	return nonCulledRecords;
 }

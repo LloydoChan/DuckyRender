@@ -18,6 +18,29 @@ struct IndirectCommand
     D3D12_DRAW_INDEXED_ARGUMENTS mDraw;
 };
 
+struct GPUCullConstants
+{
+    XMFLOAT4 mFrustumPlanes[6];
+    uint32_t mDrawCount;
+};
+
+struct GPUCullDraw
+{
+    XMFLOAT3    mCenter;
+    XMFLOAT3    mExtents;
+    XMFLOAT4    mOrientation;
+    uint32_t    mDrawIndex;
+    uint32_t    mIndexCount;
+    uint32_t    mStartIndex;
+    int32_t     mBaseVertex;
+};
+
+struct DrawRange
+{
+    uint32_t Offset = 0;
+    uint32_t Count = 0;
+};
+
 #ifdef OPAQUE
 #undef OPAQUE
 #endif

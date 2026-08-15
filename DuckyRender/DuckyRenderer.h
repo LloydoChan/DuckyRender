@@ -17,6 +17,7 @@ class DuckyRenderer
 
 		const PipelineAndRootSig& GetPipelineSig(PipelineType Type) { return mPipelines[(int)Type]; }
 		ID3D12CommandSignature* GetCommandSig() { return mDrawCommandSignature.Get(); }
+		DuckyPipelineManager* GetPipelineManager() { return &mPipelineManager; }
 	private:
 		std::array<PipelineAndRootSig, static_cast<size_t>(PipelineType::COUNT)> mPipelines;
 

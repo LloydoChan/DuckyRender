@@ -15,13 +15,11 @@ bool DuckyGraphicsContext::Init(D3DDeviceManager* DeviceManager, UINT64 CBVCapac
 		frame.mBufferAllocator.Init(DeviceManager->GetDevice(), CBVCapacity);
 		if (frame.mBufferAllocator.mResourceBuffer.Get() == nullptr) return false;
 
-		frame.mIndirectBuffer = DeviceManager->CreateBuffer(indirectBufferSize);
+		frame.mIndirectBuffer = DeviceManager->CreateDefaultBuffer(indirectBufferSize, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
 
 		if (!frame.mIndirectBuffer) return false;
 
-		HRESULT hr = frame.mIndirectBuffer->Map(0, nullptr, reinterpret_cast<void**>(&frame.mMappedIndirectCommand));
-
-		if (FAILED(hr)) return false;
+		frame.mMappedIndirectCommand = nullptr;
 	}
 
 	HRESULT hResult = DeviceManager->GetDevice()->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, mFrames[0].mCmdAllocator.Get(), nullptr, IID_PPV_ARGS(&mCommandList));

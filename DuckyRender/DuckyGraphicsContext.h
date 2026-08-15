@@ -11,7 +11,7 @@ struct ID3D12CommandQueue;
 struct ID3D12Fence;
 struct ID3D12PipelineState;
 
-const unsigned int FrameCount = 3;
+const unsigned int FrameCount = 2;
 
 class DuckyGraphicsContext
 {

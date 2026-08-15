@@ -122,4 +122,14 @@ class SimplestApp : public DuckyApp
 		unsigned int mNumMeshes = 0;
 
 		std::vector<TransformedDrawRecord> mTransformedDrawTypes[static_cast<int>(PipelineType::DEBUG)];
+		ComPtr<ID3D12Resource> mCullDrawBuffer;
+		DrawRange mDrawRanges[static_cast<int>(PipelineType::DEBUG)];
+
+
+		PipelineAndRootSig mFrustumCullComputePipeline;
+
+		MappedDescriptorHeapResource mVisibilityBuffer;
+
+		uint32_t mTotalPrimitiveDraws = 0;
+
 };
