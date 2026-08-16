@@ -51,11 +51,11 @@ struct DrawRange
 enum class PipelineType : uint32_t
 {
 	OPAQUE,
-	ALPHA,
 	MASKED,
 	OPAQUE_DBL,
-	ALPHA_DBL,
 	MASKED_DBL,
+    ALPHA,
+	ALPHA_DBL,
 	DEBUG,
 	COUNT
 };

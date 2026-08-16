@@ -210,7 +210,7 @@ float4 main(Input input,
     color += ambient;
   
     if (visualisationMode == DEPTH)
-        return float4((input.svpos.z / input.svpos.w).xxx, 1.f);
+        return float4(input.svpos.z.xxx, 1.f);
     
     if (visualisationMode == ROUGHNESS)
         return float4(roughness.xxx, 1.f);

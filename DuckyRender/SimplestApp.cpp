@@ -162,10 +162,10 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 	GraphicsPipelineDesc descs[7] = { mainDesc ,mainDesc ,mainDesc ,mainDesc ,mainDesc ,mainDesc , mainDesc };
 
 	descs[0].Type = PipelineType::OPAQUE;
-	descs[1].Type = PipelineType::ALPHA;
-	descs[2].Type = PipelineType::MASKED;
-	descs[3].Type = PipelineType::OPAQUE_DBL;
-	descs[4].Type = PipelineType::MASKED_DBL;
+	descs[1].Type = PipelineType::MASKED;
+	descs[2].Type = PipelineType::OPAQUE_DBL;
+	descs[3].Type = PipelineType::MASKED_DBL;
+	descs[4].Type = PipelineType::ALPHA;
 	descs[5].Type = PipelineType::ALPHA_DBL;
 
 
@@ -596,7 +596,7 @@ void SimplestApp::AppMainLoop()
 
 		std::vector<SortRecord> sortedRecords[static_cast<int>(PipelineType::DEBUG)];
 
-		for (int type = static_cast<int>(PipelineType::OPAQUE); type < static_cast<int>(PipelineType::DEBUG); type++)
+		/*for (int type = static_cast<int>(PipelineType::OPAQUE); type < static_cast<int>(PipelineType::DEBUG); type++)
 		{
 			char debugString[50];
 			snprintf(debugString, 50, "Sort And Cull %d", type);
@@ -608,7 +608,7 @@ void SimplestApp::AppMainLoop()
 
 			sortedRecords[type] = SortAndCull(mTransformedDrawTypes[type], frameFrustum, sceneCamera->GetViewProjection(), alphaPass);
 			numDrawableMeshes += sortedRecords[type].size();
-		}
+		}*/
 
 		float clearColor[] = { 0.5f, 0.8f, 0.9f, 1.f };
 
@@ -642,16 +642,27 @@ void SimplestApp::AppMainLoop()
 		ID3D12PipelineState* opaqueState = mRenderer.GetPipelineSig(PipelineType::OPAQUE).pipeLineState.Get();
 		if (!mDuckyContext->BeginFrame(currentFrame, mFence.Get(), opaqueState, mFenceEvent, &mLogFile)) break;
 
-		D3D12_RESOURCE_BARRIER uavBarrier{};
-		uavBarrier.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV;
-		uavBarrier.UAV.pResource = mDuckyContext->GetVisibleDrawCounts(currentFrame).Get();
+		ComPtr<ID3D12Resource> visibleBuffer = mDuckyContext->GetVisibleDrawCounts(currentFrame);
 
+		D3D12_RESOURCE_BARRIER visibilityBarrier{};
+		visibilityBarrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+		visibilityBarrier.Transition.pResource = visibleBuffer.Get();
+		visibilityBarrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+		visibilityBarrier.Transition.StateBefore = D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT;
+		visibilityBarrier.Transition.StateAfter =  D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+
+		list->ResourceBarrier(1, &visibilityBarrier);
 		list->SetPipelineState(mComputeClearPipeline.pipeLineState.Get());
 		list->SetComputeRootSignature(mComputeClearPipeline.rootSig.Get());
-		list->SetComputeRootUnorderedAccessView(0, mDuckyContext->GetVisibleDrawCounts(currentFrame).Get()->GetGPUVirtualAddress());
+		list->SetComputeRootUnorderedAccessView(0, visibleBuffer.Get()->GetGPUVirtualAddress());
 
 		list->Dispatch(1, 1, 1);
-		list->ResourceBarrier(1, &uavBarrier);
+
+		D3D12_RESOURCE_BARRIER counterUavBarrier{};
+		counterUavBarrier.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV;
+		counterUavBarrier.UAV.pResource = visibleBuffer.Get();
+
+		list->ResourceBarrier(1, &counterUavBarrier);
 
 		ConstantBufferAllocator* cbvAllocator = mDuckyContext->GetBufferAllocator(currentFrame);
 
@@ -673,9 +684,10 @@ void SimplestApp::AppMainLoop()
 		indirectBarrier.Transition.StateBefore = D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT;
 		indirectBarrier.Transition.StateAfter = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
 
+
 		list->ResourceBarrier(1, &indirectBarrier);
 
-		for (uint32_t type = 0; type < static_cast<uint32_t>(PipelineType::DEBUG); ++type)
+		for (uint32_t type = static_cast<uint32_t>(PipelineType::OPAQUE); type < static_cast<uint32_t>(PipelineType::DEBUG); ++type)
 		{
 			const DrawRange& range = mDrawRanges[type];
 
@@ -697,18 +709,23 @@ void SimplestApp::AppMainLoop()
 
 			list->SetComputeRootShaderResourceView(1, mCullDrawBuffer->GetGPUVirtualAddress());
 			list->SetComputeRootUnorderedAccessView(2, indirectBuffer->GetGPUVirtualAddress());
-			list->SetComputeRootUnorderedAccessView(3, mDuckyContext->GetVisibleDrawCounts(currentFrame).Get()->GetGPUVirtualAddress());
+			list->SetComputeRootUnorderedAccessView(3, visibleBuffer->GetGPUVirtualAddress());
 			list->Dispatch(groupCount, 1, 1);
-
 		}
 
-		indirectBarrier.Transition = {
-			mDuckyContext->GetIndirectBuffer(currentFrame).Get(),
-			0,
-			D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
-			D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT };
+		indirectBarrier.Transition.StateBefore = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+		indirectBarrier.Transition.StateAfter = D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT;
 
 		list->ResourceBarrier(1, &indirectBarrier);
+
+		D3D12_RESOURCE_BARRIER countToIndirect{};
+		countToIndirect.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+		countToIndirect.Transition.pResource = visibleBuffer.Get();
+		countToIndirect.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+		countToIndirect.Transition.StateBefore = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+		countToIndirect.Transition.StateAfter = D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT;
+
+		list->ResourceBarrier(1, &countToIndirect);
 
 		list->SetPipelineState(opaqueState);
 
@@ -750,7 +767,7 @@ void SimplestApp::AppMainLoop()
 		list->IASetIndexBuffer(&mScene.GetIndexBufferView());
 
 		
-		for (int type = static_cast<int>(PipelineType::OPAQUE); type < static_cast<int>(PipelineType::DEBUG); type++)
+		for (int type = static_cast<uint32_t>(PipelineType::OPAQUE); type < static_cast<int>(PipelineType::DEBUG); type++)
 		{
 			const DrawRange& range = mDrawRanges[type];
 
@@ -776,7 +793,7 @@ void SimplestApp::AppMainLoop()
 			list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_LINELIST);
 			list->IASetVertexBuffers(0,1,&mVbDebugView);
 			list->IASetIndexBuffer(&mIbDebugView);
-			list->DrawIndexedInstanced(24, sortedRecords[static_cast<int>(PipelineType::OPAQUE_DBL)].size(), 0, 0, 0);
+			list->DrawIndexedInstanced(24, mTotalPrimitiveDraws, 0, 0, 0);
 		}
 
 		mImGui.Render(list);
