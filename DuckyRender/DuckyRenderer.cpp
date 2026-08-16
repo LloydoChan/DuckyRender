@@ -39,7 +39,12 @@ bool DuckyRenderer::Init(std::wofstream* LogFile, D3DDeviceManager* Manager, Gra
     return true;
 }
 
-void DuckyRenderer::ExecuteDraws(ID3D12GraphicsCommandList* list, PipelineType type, ID3D12Resource* indirectBuffer, UINT drawCount, UINT64 offset)
+void DuckyRenderer::ExecuteDraws(ID3D12GraphicsCommandList* list, 
+								 PipelineType type, 
+								 ID3D12Resource* indirectBuffer, 
+								 UINT drawCount, 
+								 UINT64 offset, 
+								 ID3D12Resource* DrawCountBuffer)
 {
 	const auto& pipeline = mPipelines[static_cast<size_t>(type)];
 
@@ -49,6 +54,6 @@ void DuckyRenderer::ExecuteDraws(ID3D12GraphicsCommandList* list, PipelineType t
 						  drawCount,
 						  indirectBuffer,
 						  offset,
-						  nullptr,
-						  0);
+						  DrawCountBuffer,
+						  UINT64(type) * sizeof(uint32_t));
 }

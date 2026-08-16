@@ -23,6 +23,7 @@ public:
 
     IndirectCommand* GetIndirectCommandPtr(UINT CurrentFrame) { return mFrames[CurrentFrame].mMappedIndirectCommand; }
     ComPtr<ID3D12Resource> GetIndirectBuffer(UINT CurrentFrame) { return mFrames[CurrentFrame].mIndirectBuffer; }
+    ComPtr<ID3D12Resource> GetVisibleDrawCounts(UINT CurrentFrame) { return mFrames[CurrentFrame].mVisibleDrawCounts; }
 
     ID3D12GraphicsCommandList* GetCommandList()
     {
@@ -38,6 +39,7 @@ private:
         UINT64 fenceValue = 0;
         ConstantBufferAllocator mBufferAllocator;
         ComPtr<ID3D12Resource> mIndirectBuffer;
+        ComPtr<ID3D12Resource> mVisibleDrawCounts;
         IndirectCommand* mMappedIndirectCommand;
     };
 

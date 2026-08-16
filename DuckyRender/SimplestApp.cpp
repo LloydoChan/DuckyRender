@@ -205,9 +205,9 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 
 	// DEBUG DRAW PSO END-------------------------------------------------------------------------------------------------------------------
 
-	// CREATE COMPUTE PSO ------------------------------------------------------------------------------------------------------------------
+	// CREATE COMPUTE CULL PSO ------------------------------------------------------------------------------------------------------------------
 	
-	D3D12_ROOT_PARAMETER frustumCullParams[3]{};
+	D3D12_ROOT_PARAMETER frustumCullParams[4]{};
 
 	// b0
 	frustumCullParams[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
@@ -227,12 +227,18 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 	frustumCullParams[2].Descriptor.RegisterSpace = 0;
 	frustumCullParams[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
 
+	// u1
+	frustumCullParams[3].ParameterType = D3D12_ROOT_PARAMETER_TYPE_UAV;
+	frustumCullParams[3].Descriptor.ShaderRegister = 1;
+	frustumCullParams[3].Descriptor.RegisterSpace = 0;
+	frustumCullParams[3].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+
 	ShaderDesc ComputeShaderCS;
 	ComputeShaderCS.File = L"FrustumCull.hlsl";
 
 	ComputePipelineDesc computeDesc;
 	computeDesc.CSShader = ComputeShaderCS;
-	computeDesc.NumParams = 3;
+	computeDesc.NumParams = 4;
 	computeDesc.Params = frustumCullParams;
 
 	mFrustumCullComputePipeline =  mRenderer.GetPipelineManager()->CreateComputePSO(computeDesc);
@@ -242,15 +248,43 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 	{
 		return false;
 	}
+	// CREATE COMPUTE CULL PSO END --------------------------------------------------------------------------------------------------------------
 
-	mVisibilityBuffer = mDeviceManager->CreateStructuredBuffer(mTotalPrimitiveDraws * sizeof(uint32_t),sizeof(uint32_t));
+	D3D12_ROOT_PARAMETER clearParams[1]{};
 
-	UINT64 neededCapacity = AlignConstantBufferSize(sizeof(PerFrameConstants) + sizeof(uint32_t) * mTotalPrimitiveDraws);
+	// b0
+	clearParams[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_UAV;
+	clearParams[0].Descriptor.ShaderRegister = 0;
+	clearParams[0].Descriptor.RegisterSpace = 0;
+	clearParams[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+
+	ShaderDesc ComputeClearShaderCS;
+	ComputeClearShaderCS.File = L"ClearCountersCompute.hlsl";
+
+	ComputePipelineDesc computeDescNew;
+	computeDescNew.CSShader = ComputeClearShaderCS;
+	computeDescNew.NumParams = 1;
+	computeDescNew.Params = clearParams;
+
+	mComputeClearPipeline = mRenderer.GetPipelineManager()->CreateComputePSO(computeDescNew);
+
+	if (!mComputeClearPipeline.rootSig ||
+		!mComputeClearPipeline.pipeLineState)
+	{
+		return false;
+	}
+
+	// CREATE COMPUTE CLEAR PSO START -----------------------------------------------------------------------------------------------------------
+	// CREATE COMPUTE CLEAR PSO END -------------------------------------------------------------------------------------------------------------
+	UINT64 FrameConstantSize =  AlignConstantBufferSize(sizeof(PerFrameConstants));
+	UINT64 numTypes = static_cast<UINT64>(PipelineType::DEBUG);
+	UINT64 TotalCullConstants = numTypes * AlignConstantBufferSize(sizeof(GPUCullConstants));
+	UINT64 neededCapacity = FrameConstantSize  + TotalCullConstants;
 
 	mDuckyContext = new DuckyGraphicsContext;
 	if (!mDuckyContext->Init(mDeviceManager.get(), neededCapacity, mTotalPrimitiveDraws, &mLogFile)) return false;
 
-	// CREATE COMPUTE PSO END --------------------------------------------------------------------------------------------------------------
+	
 	
 	mWholeScreenViewPortScissor.scissor.left = 0;
 	mWholeScreenViewPortScissor.scissor.right = WindowWidth;
@@ -561,7 +595,7 @@ void SimplestApp::AppMainLoop()
 		unsigned int numDrawableMeshes = 0;
 
 		std::vector<SortRecord> sortedRecords[static_cast<int>(PipelineType::DEBUG)];
-	
+
 		for (int type = static_cast<int>(PipelineType::OPAQUE); type < static_cast<int>(PipelineType::DEBUG); type++)
 		{
 			char debugString[50];
@@ -608,57 +642,65 @@ void SimplestApp::AppMainLoop()
 		ID3D12PipelineState* opaqueState = mRenderer.GetPipelineSig(PipelineType::OPAQUE).pipeLineState.Get();
 		if (!mDuckyContext->BeginFrame(currentFrame, mFence.Get(), opaqueState, mFenceEvent, &mLogFile)) break;
 
+		D3D12_RESOURCE_BARRIER uavBarrier{};
+		uavBarrier.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV;
+		uavBarrier.UAV.pResource = mDuckyContext->GetVisibleDrawCounts(currentFrame).Get();
+
+		list->SetPipelineState(mComputeClearPipeline.pipeLineState.Get());
+		list->SetComputeRootSignature(mComputeClearPipeline.rootSig.Get());
+		list->SetComputeRootUnorderedAccessView(0, mDuckyContext->GetVisibleDrawCounts(currentFrame).Get()->GetGPUVirtualAddress());
+
+		list->Dispatch(1, 1, 1);
+		list->ResourceBarrier(1, &uavBarrier);
+
 		ConstantBufferAllocator* cbvAllocator = mDuckyContext->GetBufferAllocator(currentFrame);
-		ConstantBufferAllocation cullAllocation = cbvAllocator->AllocateConstantBuffer(sizeof(GPUCullConstants));
-
-		auto* cullConstants = reinterpret_cast<GPUCullConstants*>(cullAllocation.mCpuAddress);
-
-		for (int i = 0; i < 6; ++i) cullConstants->mFrustumPlanes[i] = frameFrustum.mPlanes[i];
-
-		cullConstants->mDrawCount = mTotalPrimitiveDraws;
-		
-		list->SetPipelineState(mFrustumCullComputePipeline.pipeLineState.Get());
-		list->SetComputeRootSignature(mFrustumCullComputePipeline.rootSig.Get());
-		list->SetComputeRootConstantBufferView(0, cullAllocation.mGpuAddress);
-
-
-		const uint32_t groupCount = (mTotalPrimitiveDraws + 63) / 64;
 
 		gpuTime = GetGPUFrameMilliSeconds(currentFrame);
 
 		StartGPUTimeStamp(list, currentFrame);
 		StartGpuStats(list, currentFrame);
 
-		
-		ComPtr<ID3D12Resource> indirectBuffer = mDuckyContext->GetIndirectBuffer(currentFrame);
+		list->SetPipelineState(mFrustumCullComputePipeline.pipeLineState.Get());
+		list->SetComputeRootSignature(mFrustumCullComputePipeline.rootSig.Get());
+
 		D3D12_RESOURCE_BARRIER indirectBarrier{};
+		ComPtr<ID3D12Resource> indirectBuffer = mDuckyContext->GetIndirectBuffer(currentFrame);
 
-		indirectBarrier.Type =
-			D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-
-		indirectBarrier.Flags =
-			D3D12_RESOURCE_BARRIER_FLAG_NONE;
-
-		indirectBarrier.Transition.pResource =
-			indirectBuffer.Get();
-
-		indirectBarrier.Transition.Subresource =
-			D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-
-		indirectBarrier.Transition.StateBefore =
-			D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT;
-
-		indirectBarrier.Transition.StateAfter =
-			D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+		indirectBarrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+		indirectBarrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+		indirectBarrier.Transition.pResource = indirectBuffer.Get();
+		indirectBarrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+		indirectBarrier.Transition.StateBefore = D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT;
+		indirectBarrier.Transition.StateAfter = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
 
 		list->ResourceBarrier(1, &indirectBarrier);
 
-		list->SetComputeRootShaderResourceView(1, mCullDrawBuffer->GetGPUVirtualAddress());
+		for (uint32_t type = 0; type < static_cast<uint32_t>(PipelineType::DEBUG); ++type)
+		{
+			const DrawRange& range = mDrawRanges[type];
 
+			if (range.Count == 0) continue;
 
-		list->SetComputeRootUnorderedAccessView(2, indirectBuffer->GetGPUVirtualAddress());
-		list->Dispatch(groupCount, 1, 1);
+			ConstantBufferAllocation cullAllocation = cbvAllocator->AllocateConstantBuffer(sizeof(GPUCullConstants));
 
+			list->SetComputeRootConstantBufferView(0, cullAllocation.mGpuAddress);
+
+			GPUCullConstants* constants = reinterpret_cast<GPUCullConstants*>(cullAllocation.mCpuAddress);
+			for (int i = 0; i < 6; ++i) constants->mFrustumPlanes[i] = frameFrustum.mPlanes[i];
+
+			constants->mInputOffset = range.Offset;
+			constants->mOutputOffset = range.Offset;
+			constants->mDrawCount = range.Count;
+			constants->mCounterIndex = type;
+
+			const uint32_t groupCount = (range.Count + 63) / 64;
+
+			list->SetComputeRootShaderResourceView(1, mCullDrawBuffer->GetGPUVirtualAddress());
+			list->SetComputeRootUnorderedAccessView(2, indirectBuffer->GetGPUVirtualAddress());
+			list->SetComputeRootUnorderedAccessView(3, mDuckyContext->GetVisibleDrawCounts(currentFrame).Get()->GetGPUVirtualAddress());
+			list->Dispatch(groupCount, 1, 1);
+
+		}
 
 		indirectBarrier.Transition = {
 			mDuckyContext->GetIndirectBuffer(currentFrame).Get(),
@@ -667,6 +709,7 @@ void SimplestApp::AppMainLoop()
 			D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT };
 
 		list->ResourceBarrier(1, &indirectBarrier);
+
 		list->SetPipelineState(opaqueState);
 
 		D3D12_CPU_DESCRIPTOR_HANDLE rtvHeap = mDeviceManager->IncrementAndReturnRTVHeaps();
@@ -715,7 +758,8 @@ void SimplestApp::AppMainLoop()
 				static_cast<PipelineType>(type),
 				indirectBuffer.Get(),
 				static_cast<UINT>(range.Count),
-				static_cast<UINT64>(range.Offset) * sizeof(IndirectCommand));
+				static_cast<UINT64>(range.Offset) * sizeof(IndirectCommand),
+				mDuckyContext->GetVisibleDrawCounts(currentFrame).Get());
 		}
 
 

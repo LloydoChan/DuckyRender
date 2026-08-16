@@ -13,7 +13,8 @@ class DuckyRenderer
 				PipelineType type,
 				ID3D12Resource* indirectBuffer,
 				UINT drawCount,
-				UINT64 offset);
+				UINT64 offset,
+			    ID3D12Resource* DrawCountBuffer);
 
 		const PipelineAndRootSig& GetPipelineSig(PipelineType Type) { return mPipelines[(int)Type]; }
 		ID3D12CommandSignature* GetCommandSig() { return mDrawCommandSignature.Get(); }

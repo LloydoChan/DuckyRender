@@ -127,6 +127,7 @@ class SimplestApp : public DuckyApp
 
 
 		PipelineAndRootSig mFrustumCullComputePipeline;
+		PipelineAndRootSig mComputeClearPipeline;
 
 		MappedDescriptorHeapResource mVisibilityBuffer;
 

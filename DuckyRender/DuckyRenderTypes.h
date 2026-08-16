@@ -21,7 +21,10 @@ struct IndirectCommand
 struct GPUCullConstants
 {
     XMFLOAT4 mFrustumPlanes[6];
+    uint32_t mInputOffset;
+    uint32_t mOutputOffset;
     uint32_t mDrawCount;
+    uint32_t mCounterIndex;
 };
 
 struct GPUCullDraw

@@ -129,6 +129,9 @@
     <FxCompile Include="FrustumCull.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
+    <FxCompile Include="ClearCountersCompute.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="DuckyApp.h">

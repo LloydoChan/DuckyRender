@@ -20,6 +20,10 @@ bool DuckyGraphicsContext::Init(D3DDeviceManager* DeviceManager, UINT64 CBVCapac
 		if (!frame.mIndirectBuffer) return false;
 
 		frame.mMappedIndirectCommand = nullptr;
+
+		const UINT64 countBufferSize = sizeof(uint32_t) * static_cast<uint32_t>(PipelineType::DEBUG);
+
+		frame.mVisibleDrawCounts = DeviceManager->CreateDefaultBuffer(countBufferSize, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
 	}
 
 	HRESULT hResult = DeviceManager->GetDevice()->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, mFrames[0].mCmdAllocator.Get(), nullptr, IID_PPV_ARGS(&mCommandList));
