@@ -1052,47 +1052,6 @@ std::vector<TransformedDrawRecord> SimplestApp::TransformAABBsToOBBs(const std::
 	return transformedRecords;
 }
 
-std::vector<SortRecord> SimplestApp::SortDrawRecords(const XMMATRIX& View, const std::vector<TransformedDrawRecord>& RecordsToSort, bool bAlphaPass)
-{
-	PIXScopedEvent(PIX_COLOR(255, 0, 0), "SortDrawRecords");
-
-	std::vector<SortRecord> sortedRecords;
-	sortedRecords.reserve(RecordsToSort.size());
-
-	for (const TransformedDrawRecord& record : RecordsToSort)
-	{
-		SortRecord newRecord;
-		newRecord.record = record.mDrawRecord;
-		const XMFLOAT3& center = record.mOBB.Center;
-		const XMFLOAT3& extents = record.mOBB.Extents;
-		XMFLOAT3 newPoints[8] = {
-
-			{center.x + extents.x, center.y - extents.y, center.z - extents.z},
-			{center.x + extents.x, center.y - extents.y, center.z + extents.z},
-			{center.x + extents.x, center.y + extents.y, center.z - extents.z},
-			{center.x + extents.x, center.y + extents.y, center.z + extents.z},
-
-			{center.x - extents.x, center.y - extents.y, center.z - extents.z},
-			{center.x - extents.x, center.y - extents.y, center.z + extents.z},
-			{center.x - extents.x, center.y + extents.y, center.z - extents.z},
-			{center.x - extents.x, center.y + extents.y, center.z + extents.z}
-
-		};
-
-		for (int i = 0; i < 8; ++i)
-		{
-			if(newPoints[i].z < newRecord.minZ) newRecord.minZ = newPoints[i].z;
-		}
-
-		sortedRecords.emplace_back(std::move(newRecord));
-	}
-
-	if (bAlphaPass) sort(sortedRecords.begin(), sortedRecords.end(), [](const SortRecord& a, const SortRecord& b) { return a.minZ > b.minZ;});
-	else sort(sortedRecords.begin(), sortedRecords.end(), [](const SortRecord& a, const SortRecord& b) { return a.minZ < b.minZ;});
-
-	return sortedRecords;
-}
-
 void SimplestApp::CopyOBBsToGPU(const std::vector<TransformedDrawRecord>& TransformedOBBs, size_t Offset)
 {
 	mStructuredBufferOBBs.buffer->Map(0, nullptr, &mStructuredBufferOBBs.mapped);
@@ -1105,11 +1064,6 @@ void SimplestApp::CopyOBBsToGPU(const std::vector<TransformedDrawRecord>& Transf
 		const GPUOBB& box = TransformedOBBs[i].mOBB;
 		dst[i] = box;
 	}
-}
-
-std::vector<SortRecord> SimplestApp::SortAndCull(const std::vector<TransformedDrawRecord>& records,const DuckyFrustum& frustum,const XMMATRIX& view,bool alphaPass)
-{
-	return SortDrawRecords(view, records, alphaPass);
 }
 
 uint32_t SimplestApp::BuildIndirectCommands(const std::vector<SortRecord>& draws, IndirectCommand* destination)
