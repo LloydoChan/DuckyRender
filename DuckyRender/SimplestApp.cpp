@@ -40,11 +40,11 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 	if (!DuckyApp::Init(WindowWidth, WindowHeight, WindowName)) return false;
 
 	std::ifstream DuckyFile;
-	DuckyFile.open(mInputFilePath, std::ios::binary);
+	DuckyFile.open(mInputFileDirectory / "CookedData.Ducky", std::ios::binary);
 	if (!DuckyFile)
 	{
 		std::error_code ec(errno, std::generic_category());
-		std::string errorMessage = ec.message();
+		std::string errorMessage = ec.message() + mInputFileDirectory.string() + "check";
 		std::wstring w_str(errorMessage.begin(), errorMessage.end());
 		DuckyLog::Error(w_str);
 		return false;
@@ -52,7 +52,7 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 
 	if (!mUploadContext.Init( mDeviceManager->GetDevice(), mDeviceManager->GetCommandQueue())) return false;
 
-	mScene.Init(DuckyFile, mDeviceManager.get(), mUploadContext);
+	mScene.Init(DuckyFile, mInputFileDirectory, mDeviceManager.get(), mUploadContext);
 	mNumMeshes = mScene.GetInstances().size();
 
 	InitDebugDrawsVBAndIB();
@@ -246,7 +246,11 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 	frustumCullParams[3].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
 
 	ShaderDesc ComputeShaderCS;
+#ifdef _DEBUG
 	ComputeShaderCS.File = L"FrustumCull.hlsl";
+#else
+	ComputeShaderCS.File = L"FrustumCull.cso";
+#endif
 
 	ComputePipelineDesc computeDesc;
 	computeDesc.CSShader = ComputeShaderCS;
@@ -271,7 +275,11 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 	clearParams[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
 
 	ShaderDesc ComputeClearShaderCS;
+#ifdef _DEBUG
 	ComputeClearShaderCS.File = L"ClearCountersCompute.hlsl";
+#else
+	ComputeClearShaderCS.File = L"ClearCountersCompute.cso";
+#endif
 
 	ComputePipelineDesc computeDescNew;
 	computeDescNew.CSShader = ComputeClearShaderCS;

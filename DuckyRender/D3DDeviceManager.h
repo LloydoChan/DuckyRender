@@ -114,7 +114,7 @@ class D3DDeviceManager
 
 		bool Resize(UINT WindowWidth, UINT WindowHeight);
 
-		DescriptorHeapResource CreateTexture(const wchar_t* Filepath);
+		DescriptorHeapResource CreateTexture(const std::filesystem::path TexturePath);
 		DescriptorHeapResource CreateFallbackTexture(const wchar_t* Name, const XMFLOAT4& Color, DXGI_FORMAT Format);
 
 	private:

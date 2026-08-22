@@ -47,9 +47,8 @@ bool DuckyApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* WindowNa
 
 			auto assets = homePath / L"Assets" / L"CookedAssets";
 			std::wstring asset(argv[i + 1]);
-			std::wstring suffix = L"CookedData.Ducky";
 
-			mInputFilePath = assets / asset / suffix;
+			mInputFileDirectory = assets / asset;
 		}
 	}
 	LocalFree(argv);

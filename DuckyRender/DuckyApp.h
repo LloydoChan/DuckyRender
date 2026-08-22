@@ -50,7 +50,7 @@ protected:
 
 	bool mMinimized = false;
 
-	std::filesystem::path mInputFilePath;
+	std::filesystem::path mInputFileDirectory;
 
 	ID3D12CommandQueue* mCommandQueue = nullptr;
 

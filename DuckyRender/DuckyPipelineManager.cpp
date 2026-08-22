@@ -191,12 +191,16 @@ PipelineAndRootSig DuckyPipelineManager::CreateComputePSO(ComputePipelineDesc& M
 
 	PipelineAndRootSig newPipeline;
 
+#ifdef _DEBUG
 	ShaderCompilationOutput computeShaderOutput;
 	if (!mCompiler->CompileShaderDXC(MainDesc.CSShader.File.c_str(), MainDesc.CSShader.Entry.c_str(), L"cs_6_6", computeShaderOutput))
 	{
 		DuckyLog::Error(std::wstring_view(L"Couldn't Compile vertex shader: " + MainDesc.CSShader.File));
 		return newPipeline;
 	}
+#else
+	std::vector<std::byte> cs = LoadShaderBytecode(mShaderPath / MainDesc.CSShader.File.c_str());
+#endif
 
 	D3D12_ROOT_SIGNATURE_DESC rootSigDesc = {};
 	rootSigDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_NONE;
@@ -221,9 +225,14 @@ PipelineAndRootSig DuckyPipelineManager::CreateComputePSO(ComputePipelineDesc& M
 	if (!DuckyLog::CheckHRESULT(hResult, std::wstring_view(L"couldn't create root sig"))) return newPipeline;
 
 	D3D12_COMPUTE_PIPELINE_STATE_DESC comDesc{};
-
+#ifdef _DEBUG
 	comDesc.CS.BytecodeLength = computeShaderOutput.shaderBlob.Get()->GetBufferSize();
 	comDesc.CS.pShaderBytecode = computeShaderOutput.shaderBlob.Get()->GetBufferPointer();
+#else
+	comDesc.CS.BytecodeLength = cs.size();
+	comDesc.CS.pShaderBytecode = cs.data();
+#endif
+
 	comDesc.pRootSignature = newPipeline.rootSig.Get();
 
 	hResult = mDevicePtr->CreateComputePipelineState(&comDesc, IID_PPV_ARGS(&newPipeline.pipeLineState));
@@ -237,7 +246,10 @@ std::vector<std::byte> LoadShaderBytecode(const std::filesystem::path& path)
 {
 	std::ifstream file(path, std::ios::binary | std::ios::ate);
 
-	if (!file) throw std::runtime_error("Failed to open shader");
+	if (!file)
+	{
+		DuckyLog::Error(std::wstring_view(L"Can't load shader:"));
+	}
 
 	const auto size = file.tellg();
 	file.seekg(0);

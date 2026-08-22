@@ -309,12 +309,12 @@ void WriteOutTextureData(int index,
 			string expectedDDSPathStr = expectedDdsPath.string();
 			size_t expectedDDSPathLength = expectedDDSPathStr.length();
 
-			orderedNames[index] = expectedDDSPathStr;
+			orderedNames[index] = OutFilenameString;
 			const std::filesystem::path expectedInputPath = InputPath / textureName;
 
 			ConvertToDds(Type, "texConv.exe", expectedInputPath.string(), outputDirStr, prefixString);
 
-			assignedNames[textureName] = expectedDDSPathStr;
+			assignedNames[textureName] = OutFilenameString;
 		}
 		else
 		{

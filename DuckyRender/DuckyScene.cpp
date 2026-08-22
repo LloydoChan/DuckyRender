@@ -2,12 +2,12 @@
 #include "DuckyScene.h"
 #include "DuckyRenderTypes.h"
 
-bool DuckyScene::Init(std::ifstream& InFile, D3DDeviceManager* DeviceManager, DuckyUploadContext& UploadContext)
+bool DuckyScene::Init(std::ifstream& InFile, const std::filesystem::path& AssetDirectory, D3DDeviceManager* DeviceManager, DuckyUploadContext& UploadContext)
 {
 	if (!UploadContext.Begin()) return false;
 
 	InitInstanceData(InFile, DeviceManager, UploadContext);
-	InitTextures(InFile, DeviceManager);
+	InitTextures(InFile, AssetDirectory, DeviceManager);
 	InitMaterials(InFile, DeviceManager, UploadContext);
 	InitMeshes(InFile, DeviceManager);
 	InitVertexAndIndexMegaBuffer(InFile, DeviceManager, UploadContext);
@@ -94,7 +94,7 @@ bool DuckyScene::InitMaterials(std::ifstream& InFile, D3DDeviceManager* DeviceMa
 		gpuFriendly.NormalScale = nextMaterial.constants.mNormalScale;
 		gpuFriendly.BaseColorFactor = nextMaterial.constants.mBaseColorFactor;
 
-		if (nextMaterial.mBaseColorTexture != -1)
+		if (nextMaterial.mBaseColorTexture != INVALID_HANDLE)
 		{
 			gpuFriendly.BaseColorTexture = mTextures[nextMaterial.mBaseColorTexture].heapOffset;
 		}
@@ -103,7 +103,7 @@ bool DuckyScene::InitMaterials(std::ifstream& InFile, D3DDeviceManager* DeviceMa
 			gpuFriendly.BaseColorTexture = mTextures[mBaseColorFallbackHandle].heapOffset;
 		}
 
-		if (nextMaterial.mNormalTexture != -1)
+		if (nextMaterial.mNormalTexture != INVALID_HANDLE)
 		{
 			gpuFriendly.NormalTexture = mTextures[nextMaterial.mNormalTexture].heapOffset;
 		}
@@ -112,7 +112,7 @@ bool DuckyScene::InitMaterials(std::ifstream& InFile, D3DDeviceManager* DeviceMa
 			gpuFriendly.NormalTexture = mTextures[mNormalColorFallbackHandle].heapOffset;
 		}
 
-		if (nextMaterial.mMetallicRoughnessTexture != -1)
+		if (nextMaterial.mMetallicRoughnessTexture != INVALID_HANDLE)
 		{
 			gpuFriendly.MetallicRoughnessTexture = mTextures[nextMaterial.mMetallicRoughnessTexture].heapOffset;
 		}
@@ -121,7 +121,7 @@ bool DuckyScene::InitMaterials(std::ifstream& InFile, D3DDeviceManager* DeviceMa
 			gpuFriendly.MetallicRoughnessTexture = mTextures[mMetallicRougnessFallbackHandle].heapOffset;
 		}
 
-		if (nextMaterial.mEmissive != -1)
+		if (nextMaterial.mEmissive != INVALID_HANDLE)
 		{
 			gpuFriendly.EmissiveTexture = mTextures[nextMaterial.mEmissive].heapOffset;
 		}
@@ -154,7 +154,7 @@ bool DuckyScene::InitMaterials(std::ifstream& InFile, D3DDeviceManager* DeviceMa
 	return true;
 }
 
-bool DuckyScene::InitTextures(std::ifstream& InFile, D3DDeviceManager* DeviceManager)
+bool DuckyScene::InitTextures(std::ifstream& InFile, const std::filesystem::path& AssetDirectory, D3DDeviceManager* DeviceManager)
 {
 	size_t numTextures = 0;
 	InFile.read((char*)&numTextures, sizeof(size_t));
@@ -174,11 +174,11 @@ bool DuckyScene::InitTextures(std::ifstream& InFile, D3DDeviceManager* DeviceMan
 
 		InFile.read((char*)&fileName[0], textureNameLength);
 
+		std::filesystem::path texturePath = AssetDirectory / "Textures" / fileName;
+
 		if (!InFile) return false;
 
-		const std::wstring wideTextureName(fileName.begin(), fileName.end());
-
-		DescriptorHeapResource newResource = DeviceManager->CreateTexture(wideTextureName.c_str());
+		DescriptorHeapResource newResource = DeviceManager->CreateTexture(texturePath);
 		if (newResource.buffer == nullptr) return false;
 		mTextures.emplace_back(newResource);
 	}

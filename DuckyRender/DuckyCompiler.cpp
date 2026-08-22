@@ -61,6 +61,7 @@ bool DuckyCompiler::CompileShaderDXC(LPCWSTR ShaderFilePath, LPCWSTR entryPoint,
 		{
 			const wchar_t* wide_ptr = reinterpret_cast<const wchar_t*>(errors->GetStringPointer());
 			size_t wide_count = errors->GetStringLength() / sizeof(wchar_t);
+			DuckyLog::Error(L"pre-amble");
 			DuckyLog::Error(std::wstring_view(wide_ptr,wide_count));
 		}
 

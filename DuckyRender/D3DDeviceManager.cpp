@@ -438,7 +438,7 @@ DescriptorAllocation D3DDeviceManager::AllocateCbvSrvUavDescriptor(UINT descript
 	return allocation;
 }
 
-DescriptorHeapResource D3DDeviceManager::CreateTexture(const wchar_t* Filepath)
+DescriptorHeapResource D3DDeviceManager::CreateTexture(const std::filesystem::path TexturePath)
 {
 	TexMetadata metaData = {};
 	ScratchImage imageData = {};
@@ -447,10 +447,9 @@ DescriptorHeapResource D3DDeviceManager::CreateTexture(const wchar_t* Filepath)
 
 	HRESULT hResult;
 
-	const std::filesystem::path path(Filepath);
 
-	if (path.extension() == L".dds") hResult = LoadFromDDSFile(Filepath, DDS_FLAGS_NONE, &metaData, imageData);
-	else hResult = LoadFromWICFile( Filepath, WIC_FLAGS_NONE, &metaData,imageData);
+	if (TexturePath.extension() == L".dds") hResult = LoadFromDDSFile(TexturePath.c_str(), DDS_FLAGS_NONE, &metaData, imageData);
+	else hResult = LoadFromWICFile(TexturePath.c_str(), WIC_FLAGS_NONE, &metaData, imageData);
 
 	if (!DuckyLog::CheckHRESULT(hResult, std::wstring_view(L"couldn't load texture"))) return newTexture;
 
@@ -488,7 +487,7 @@ DescriptorHeapResource D3DDeviceManager::CreateTexture(const wchar_t* Filepath)
 
 	if (!DuckyLog::CheckHRESULT(hResult, std::wstring_view(L"couldn't create texture resource"))) return newTexture;
 	
-	newTexture.buffer->SetName(Filepath);
+	newTexture.buffer->SetName(TexturePath.c_str());
 
 	for (size_t subresourceIndex = 0; subresourceIndex < imgCount; ++subresourceIndex)
 	{

@@ -9,7 +9,7 @@ const XMFLOAT4 EmissiveFallback{ 0.f,0.f,0.f, 0.f };
 class DuckyScene
 {
     public:
-        bool Init(std::ifstream& InFile, D3DDeviceManager* DeviceManager, DuckyUploadContext& UploadContext);
+        bool Init(std::ifstream& InFile, const std::filesystem::path& AssetDirectory, D3DDeviceManager* DeviceManager, DuckyUploadContext& UploadContext);
 
         const std::vector<DuckyMeshData>& GetMeshes() const { return mMeshes; }
         const std::vector<DuckyMeshInstance>& GetInstances() const { return mInstances; }
@@ -25,7 +25,7 @@ class DuckyScene
     private:
         bool InitInstanceData(std::ifstream& InFile, D3DDeviceManager* DeviceManager, DuckyUploadContext& UploadContext);
         bool InitMaterials(std::ifstream& InFile, D3DDeviceManager* DeviceManager, DuckyUploadContext& UploadContext);
-        bool InitTextures(std::ifstream& InFile, D3DDeviceManager* DeviceManager);
+        bool InitTextures(std::ifstream& InFile, const std::filesystem::path& AssetDirectory, D3DDeviceManager* DeviceManager);
         bool InitMeshes(std::ifstream& InFile, D3DDeviceManager* DeviceManager);
         bool InitVertexAndIndexMegaBuffer(std::ifstream& ModelFile, D3DDeviceManager* DeviceManager, DuckyUploadContext& UploadContext);
 
