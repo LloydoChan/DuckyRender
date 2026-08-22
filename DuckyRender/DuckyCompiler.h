@@ -13,13 +13,11 @@ struct ShaderCompilationOutput
 class DuckyCompiler
 {
 public:
-	bool Init(std::wofstream* LogFilePtr);
+	bool Init();
 	bool CompileShaderDXC(LPCWSTR ShaderFilePath, LPCWSTR entryPoint, LPCWSTR profile, ShaderCompilationOutput& newOutput);
 	bool CreateReflectionData(DxcBuffer* ReflectionBlob, ID3D12ShaderReflection** ReflectionDataResult);
 private:
 	ComPtr<IDxcCompiler3> mCompiler;
 	ComPtr<IDxcIncludeHandler> mIncludeHandler;
 	ComPtr<IDxcUtils> mUtils;
-
-	std::wofstream* mLogFilePtr = nullptr;
 };

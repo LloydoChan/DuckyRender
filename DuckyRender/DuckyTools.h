@@ -1,8 +1,20 @@
 #pragma once
 using namespace DirectX;
 
-bool OutputErrorFromHResult(HRESULT hResult, const char* message, std::wofstream& logFile);
+namespace DuckyLog
+{
+    bool Initialise();
+    void Shutdown();
+
+    void Info(std::wstring_view message);
+    void Warning(std::wstring_view message);
+    void Error(std::wstring_view message);
+
+    bool CheckHRESULT(HRESULT result, std::wstring_view context);
+}
+
 void DebugMatrix(XMMATRIX& nextTransform, std::wofstream& logFile);
+
 static std::wstring GetLatestWinPixGpuCapturerPath_Cpp17()
 {
     LPWSTR programFilesPath = nullptr;

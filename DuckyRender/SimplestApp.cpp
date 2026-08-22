@@ -201,7 +201,7 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 
 	descs[6] = debugDesc;
 
-	if(!mRenderer.Init(&mLogFile, mDeviceManager.get(), descs, 7)) return false;
+	if(!mRenderer.Init(mDeviceManager.get(), descs, 7)) return false;
 
 	// DEBUG DRAW PSO END-------------------------------------------------------------------------------------------------------------------
 

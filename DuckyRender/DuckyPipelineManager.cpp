@@ -4,11 +4,10 @@
 #include "DuckyRenderTypes.h"
 #include "DuckyPipelineStates.h"
 
-bool DuckyPipelineManager::Init(std::wofstream* FilePtr, ID3D12Device* DevicePtr)
+bool DuckyPipelineManager::Init(ID3D12Device* DevicePtr)
 {
-	mFilePtr = FilePtr;
 	mCompiler = std::make_unique<DuckyCompiler>();
-	if (!mCompiler->Init(FilePtr)) return false;
+	if (!mCompiler->Init()) return false;
 
 	mDevicePtr = DevicePtr;
 
@@ -124,11 +123,11 @@ PipelineAndRootSig DuckyPipelineManager::CreatePSO(GraphicsPipelineDesc& mainDes
 		nullptr
 	);
 
-	if (FAILED(hResult) && !OutputErrorFromHResult(hResult, "couldn't serialize root sig ", *mFilePtr)) return newPipeline;
+	if (!DuckyLog::CheckHRESULT(hResult, std::wstring_view(L"couldn't serialize root sig"))) return newPipeline;
 
 	hResult = mDevicePtr->CreateRootSignature(0, rootSigBlob->GetBufferPointer(), rootSigBlob->GetBufferSize(), IID_PPV_ARGS(&newPipeline.rootSig));
 	rootSigBlob->Release();
-	if (FAILED(hResult) && !OutputErrorFromHResult(hResult, "couldn't create root sig ", *mFilePtr)) return newPipeline;
+	if (!DuckyLog::CheckHRESULT(hResult, std::wstring_view(L"couldn't create root sig"))) return newPipeline;
 
 	D3D12_GRAPHICS_PIPELINE_STATE_DESC desc = mPipelineStateFactory[mainDesc.Type]();
 
@@ -151,8 +150,7 @@ PipelineAndRootSig DuckyPipelineManager::CreatePSO(GraphicsPipelineDesc& mainDes
 
 	hResult = mDevicePtr->CreateGraphicsPipelineState(&desc, IID_PPV_ARGS(&newPipeline.pipeLineState));
 
-	if (FAILED(hResult))
-		OutputErrorFromHResult(hResult, "couldn't create graphics pipeline ", *mFilePtr);
+	DuckyLog::CheckHRESULT(hResult, std::wstring_view(L"couldn't create pipeline")); 
 
 	return newPipeline;
 }
@@ -187,11 +185,11 @@ PipelineAndRootSig DuckyPipelineManager::CreateComputePSO(ComputePipelineDesc& M
 		nullptr
 	);
 
-	if (FAILED(hResult) && !OutputErrorFromHResult(hResult, "couldn't serialize compute root sig ", *mFilePtr)) return newPipeline;
+	if (!DuckyLog::CheckHRESULT(hResult, std::wstring_view(L"couldn't serialize root sig"))) return newPipeline;
 
 	hResult = mDevicePtr->CreateRootSignature(0, rootSigBlob->GetBufferPointer(), rootSigBlob->GetBufferSize(), IID_PPV_ARGS(&newPipeline.rootSig));
 	rootSigBlob->Release();
-	if (FAILED(hResult) && !OutputErrorFromHResult(hResult, "couldn't create root sig ", *mFilePtr)) return newPipeline;
+	if (!DuckyLog::CheckHRESULT(hResult, std::wstring_view(L"couldn't create root sig"))) return newPipeline;
 
 	D3D12_COMPUTE_PIPELINE_STATE_DESC comDesc{};
 
@@ -201,7 +199,7 @@ PipelineAndRootSig DuckyPipelineManager::CreateComputePSO(ComputePipelineDesc& M
 
 	hResult = mDevicePtr->CreateComputePipelineState(&comDesc, IID_PPV_ARGS(&newPipeline.pipeLineState));
 
-	if (FAILED(hResult) && !OutputErrorFromHResult(hResult, "couldn't create compute pipeline ", *mFilePtr)) return newPipeline;
+	DuckyLog::CheckHRESULT(hResult, std::wstring_view(L"couldn't create compute pipeline"));
 
 	return newPipeline;
 }

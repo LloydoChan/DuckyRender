@@ -8,9 +8,9 @@ namespace RootParameter
 	constexpr UINT Count = 2;
 };
 
-bool DuckyRenderer::Init(std::wofstream* LogFile, D3DDeviceManager* Manager, GraphicsPipelineDesc* Pipelines, UINT NumPipelines)
+bool DuckyRenderer::Init(D3DDeviceManager* Manager, GraphicsPipelineDesc* Pipelines, UINT NumPipelines)
 {
-    if (!mPipelineManager.Init(LogFile, Manager->GetDevice())) return false;
+    if (!mPipelineManager.Init(Manager->GetDevice())) return false;
 
     for (int i = 0; i < NumPipelines; i++)
     {

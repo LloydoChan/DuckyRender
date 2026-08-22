@@ -6,7 +6,7 @@
 class DuckyRenderer
 {
 	public:
-		bool Init(std::wofstream* LogFile, D3DDeviceManager* Manager, GraphicsPipelineDesc* Pipelines, UINT NumPipelines);
+		bool Init(D3DDeviceManager* Manager, GraphicsPipelineDesc* Pipelines, UINT NumPipelines);
 
 		void ExecuteDraws(ID3D12GraphicsCommandList* list,
 				PipelineType type,

@@ -70,7 +70,7 @@ const UINT MAX_NUM_DESCRIPTORS_PER_HEAP = 100;
 class D3DDeviceManager
 {
 	public:
-		bool Init(HWND hWnd, UINT WindowWidth, UINT WindowHeight, std::wofstream* LogFile);
+		bool Init(HWND hWnd, UINT WindowWidth, UINT WindowHeight);
 
 		ComPtr<ID3D12Fence> CreateFence(UINT64 FenceVal);
 		ComPtr<ID3D12CommandAllocator> CreateCommandAllocator();
@@ -132,6 +132,5 @@ class D3DDeviceManager
 		UINT mDescriptorHandleIndex = 0;
 		UINT mCbvUavSrvDescriptorHandle = 0;
 
-		std::wofstream* mLogFilePtr = nullptr;
 		std::unique_ptr<DuckySwapChain> mSwapChain;
 };

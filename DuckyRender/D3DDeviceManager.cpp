@@ -4,9 +4,8 @@
 #include "DuckyMaterial.h"
 
 
-bool D3DDeviceManager::Init(HWND hWnd, UINT WindowWidth, UINT WindowHeight, std::wofstream* LogFile)
+bool D3DDeviceManager::Init(HWND hWnd, UINT WindowWidth, UINT WindowHeight)
 {
-	mLogFilePtr = LogFile;
 	if (GetModuleHandle(L"WinPixGpuCapturer.dll") == 0)
 	{
 		LoadLibrary(GetLatestWinPixGpuCapturerPath_Cpp17().c_str());
@@ -16,13 +15,12 @@ bool D3DDeviceManager::Init(HWND hWnd, UINT WindowWidth, UINT WindowHeight, std:
 	ComPtr<IDXGIFactory6> factory;
 	HRESULT hResult = CreateDXGIFactory1(IID_PPV_ARGS(&factory));
 
-	if (FAILED(hResult) && !OutputErrorFromHResult(hResult, "problem creating factory: ", *mLogFilePtr)) return false;
+	if (!DuckyLog::CheckHRESULT(hResult, std::wstring_view(L"Problem creating factory"))) return false;
 
 	std::vector<ComPtr<IDXGIAdapter>> adapters;
 	
 
-	for (int i = 0; ;
-		i++)
+	for (int i = 0; ; i++)
 	{
 		ComPtr<IDXGIAdapter> tmpAdapter;
 
@@ -32,17 +30,17 @@ bool D3DDeviceManager::Init(HWND hWnd, UINT WindowWidth, UINT WindowHeight, std:
 
 		if (hResult == DXGI_ERROR_NOT_FOUND) break;
 
-		if (FAILED(hResult) && !OutputErrorFromHResult(hResult, "problem enumerating adapters: ", *mLogFilePtr)) return false;
+		if (!DuckyLog::CheckHRESULT(hResult, std::wstring_view(L"Problem enumerating adapters"))) return false;
 
 		DXGI_ADAPTER_DESC desc{};
 		tmpAdapter->GetDesc(&desc);
-		*mLogFilePtr << "found adapter " << desc.Description << std::endl;
+		DuckyLog::Info(std::wstring(L"Found adapter: ") + desc.Description);
 		adapters.emplace_back(std::move(tmpAdapter));
 	}
 
 	if (adapters.size() == 0)
 	{
-		*mLogFilePtr << "no adapters found " << std::endl;
+		DuckyLog::Info(L"no adapters found ");
 		return 1;
 	}
 
@@ -51,7 +49,7 @@ bool D3DDeviceManager::Init(HWND hWnd, UINT WindowWidth, UINT WindowHeight, std:
 
 	hResult = D3D12CreateDevice(chosenAdapter, D3D_FEATURE_LEVEL_12_1, IID_PPV_ARGS(&mDevice));
 
-	if (FAILED(hResult) && !OutputErrorFromHResult(hResult, "problem creating device: ", *mLogFilePtr)) return false;
+	if (!DuckyLog::CheckHRESULT(hResult, std::wstring_view(L"Problem creating device"))) return false;
 
 	D3D12_COMMAND_QUEUE_DESC cmdQueueDesc = {};
 	cmdQueueDesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
@@ -61,17 +59,17 @@ bool D3DDeviceManager::Init(HWND hWnd, UINT WindowWidth, UINT WindowHeight, std:
 
 	hResult = mDevice->CreateCommandQueue(&cmdQueueDesc, IID_PPV_ARGS(&mCommandQueue));
 
-	if (FAILED(hResult) && !OutputErrorFromHResult(hResult, "problem creating command queue: ", *mLogFilePtr)) return false;
+	if (!DuckyLog::CheckHRESULT(hResult, std::wstring_view(L"Problem creating cmd queue"))) return false;
 
 	mSwapChain =  std::make_unique<DuckySwapChain>();
-	if (!mSwapChain->Init(this, factory.Get(), hWnd, WindowWidth, WindowHeight, LogFile)) return false;
+	if (!mSwapChain->Init(this, factory.Get(), hWnd, WindowWidth, WindowHeight)) return false;
 
 	if (!CreateDepthBufferHeap()) return false;
 	if(!CreateDepthBuffer(WindowWidth, WindowHeight)) return false;
 
 	// init directxtex file reading
 	hResult = CoInitializeEx(0, COINITBASE_MULTITHREADED);
-	if (FAILED(hResult) && !OutputErrorFromHResult(hResult, "problem initializing com: ", *mLogFilePtr)) return false;
+	if (!DuckyLog::CheckHRESULT(hResult, std::wstring_view(L"Problem initializing com"))) return false;
 
 	mCbvUavSrvDescriptorHandle = CreateDescriptorHeap(D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 1024);
 
@@ -142,65 +140,35 @@ MappedDescriptorHeapResource D3DDeviceManager::CreateStructuredBuffer(size_t Buf
 			nullptr,
 			IID_PPV_ARGS(&newBuff.buffer));
 
-	if (FAILED(hResult))
-	{
-		OutputErrorFromHResult(
-			hResult,
-			"problem creating committed resource : ",
-			*mLogFilePtr);
-
-		return {};
-	}
-
+	
+	if (!DuckyLog::CheckHRESULT(hResult, std::wstring_view(L"Problem commiting resource"))) return {};
+	
 	D3D12_RANGE readRange = { 0, 0 };
 
-	HRESULT hr =
-		newBuff.buffer->Map(
-			0,
-			&readRange,
-			&newBuff.mapped);
+	HRESULT hr = newBuff.buffer->Map(0, &readRange, &newBuff.mapped);
 
-	if (FAILED(hr))
-		return {};
+	if (!DuckyLog::CheckHRESULT(hResult, std::wstring_view(L"couldn't map read range"))) return {};
 
 	// Create SRV
 	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
 
-	srvDesc.Format =
-		DXGI_FORMAT_UNKNOWN;
-
-	srvDesc.Shader4ComponentMapping =
-		D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-
-	srvDesc.ViewDimension =
-		D3D12_SRV_DIMENSION_BUFFER;
-
+	srvDesc.Format = DXGI_FORMAT_UNKNOWN;
+	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
 	srvDesc.Buffer.FirstElement = 0;
+	srvDesc.Buffer.NumElements = static_cast<UINT>(BufferSize / ElementSize);
+	srvDesc.Buffer.StructureByteStride = static_cast<UINT>(ElementSize);
+	srvDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
 
-	srvDesc.Buffer.NumElements =
-		static_cast<UINT>(
-			BufferSize / ElementSize);
-
-	srvDesc.Buffer.StructureByteStride =
-		static_cast<UINT>(ElementSize);
-
-	srvDesc.Buffer.Flags =
-		D3D12_BUFFER_SRV_FLAG_NONE;
-
-	DescriptorAllocation allocation =
-		AllocateCbvSrvUavDescriptor(
-			mCbvUavSrvDescriptorHandle);
+	DescriptorAllocation allocation = AllocateCbvSrvUavDescriptor(mCbvUavSrvDescriptorHandle);
 
 	mDevice->CreateShaderResourceView(
 		newBuff.buffer.Get(),
 		&srvDesc,
 		allocation.cpu);
 
-	newBuff.heapOffset =
-		allocation.descriptorIndex;
-
-	newBuff.descHandle =
-		allocation.gpu;
+	newBuff.heapOffset = allocation.descriptorIndex;
+	newBuff.descHandle = allocation.gpu;
 
 	return newBuff;
 }
@@ -240,7 +208,7 @@ ComPtr<ID3D12Resource> D3DDeviceManager::CreateBuffer(size_t bufferSize)
 		IID_PPV_ARGS(&newBuff)
 	);
 
-	if (FAILED(hResult) && !OutputErrorFromHResult(hResult, "problem creating committed resource : ", *mLogFilePtr)) return {};
+	if (!DuckyLog::CheckHRESULT(hResult, std::wstring_view(L"Problem creating committed resource"))) return {};
 
 	return newBuff;
 }
@@ -260,7 +228,7 @@ DescriptorHeapResource D3DDeviceManager::CreateConstantBuffer(size_t bufferSize)
 		nullptr,
 		IID_PPV_ARGS(&constantBuffer.buffer));
 
-	if (FAILED(hResult) && !OutputErrorFromHResult(hResult, "couldn't create const buffer ", *mLogFilePtr)) return constantBuffer;
+	if (!DuckyLog::CheckHRESULT(hResult, std::wstring_view(L"Problem create const buffer"))) return {};
 
 	DescriptorAllocation descriptor = AllocateCbvSrvUavDescriptor(mCbvUavSrvDescriptorHandle);
 
@@ -310,7 +278,7 @@ ComPtr<ID3D12Resource> D3DDeviceManager::CreateUploadBuffer(size_t BufferSize)
 		IID_PPV_ARGS(&resource)
 	);
 
-	if (FAILED(hResult) && !OutputErrorFromHResult(hResult, "problem creating committed resource : ", *mLogFilePtr)) return {};
+	if (!DuckyLog::CheckHRESULT(hResult, std::wstring_view(L"Problem creating committed resource"))) return {};
 
 	return resource;
 }
@@ -363,7 +331,7 @@ bool D3DDeviceManager::Resize(UINT WindowWidth, UINT WindowHeight)
 	// Release the old size-dependent depth resource.
 	mDepthBuffer.Reset();
 
-	if (!mSwapChain->Resize( this, WindowWidth, WindowHeight, mLogFilePtr)) return false;
+	if (!mSwapChain->Resize( this, WindowWidth, WindowHeight)) return false;
 
 	if (!CreateDepthBuffer(WindowWidth, WindowHeight)) return false;
 
@@ -408,7 +376,7 @@ bool D3DDeviceManager::CreateDepthBuffer(UINT WindowWidth, UINT WindowHeight)
 		&depthClearValue,
 		IID_PPV_ARGS(&mDepthBuffer));
 
-	if (FAILED(hResult) && !OutputErrorFromHResult(hResult, "problem initializing depth buffer ", *mLogFilePtr)) return false;
+	if (!DuckyLog::CheckHRESULT(hResult, std::wstring_view(L"Problem initializing depth buffer"))) return false;
 
 	mDepthBuffer->SetName(L"Depth Buffer");
 	mDsvHeaps->SetName(L"DSV Heap");
@@ -438,7 +406,8 @@ bool D3DDeviceManager::CreateDepthBufferHeap()
 	depthDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
 
 	HRESULT hResult = mDevice->CreateDescriptorHeap(&depthDesc, IID_PPV_ARGS(&mDsvHeaps));
-	if (FAILED(hResult) && !OutputErrorFromHResult(hResult, "problem initializing depth stencil heap ", *mLogFilePtr)) return false;
+	if (!DuckyLog::CheckHRESULT(hResult, std::wstring_view(L"Problem initializing depth stencil heap"))) return false;
+
 	return true;
 }
 
@@ -483,7 +452,7 @@ DescriptorHeapResource D3DDeviceManager::CreateTexture(const wchar_t* Filepath)
 	if (path.extension() == L".dds") hResult = LoadFromDDSFile(Filepath, DDS_FLAGS_NONE, &metaData, imageData);
 	else hResult = LoadFromWICFile( Filepath, WIC_FLAGS_NONE, &metaData,imageData);
 
-	if (FAILED(hResult) && !OutputErrorFromHResult(hResult, "couldn't load Texture ", *mLogFilePtr)) return newTexture;
+	if (!DuckyLog::CheckHRESULT(hResult, std::wstring_view(L"couldn't load texture"))) return newTexture;
 
 
 	auto img = imageData.GetImages();
@@ -517,7 +486,7 @@ DescriptorHeapResource D3DDeviceManager::CreateTexture(const wchar_t* Filepath)
 		nullptr,
 		IID_PPV_ARGS(&newTexture.buffer));
 
-	if (FAILED(hResult) && !OutputErrorFromHResult(hResult, "couldn't create texture ", *mLogFilePtr)) return newTexture;
+	if (!DuckyLog::CheckHRESULT(hResult, std::wstring_view(L"couldn't create texture resource"))) return newTexture;
 	
 	newTexture.buffer->SetName(Filepath);
 
@@ -533,7 +502,7 @@ DescriptorHeapResource D3DDeviceManager::CreateTexture(const wchar_t* Filepath)
 	}
 
 
-	if (FAILED(hResult) && !OutputErrorFromHResult(hResult, "couldn't write to subresource ", *mLogFilePtr)) return newTexture;
+	if (!DuckyLog::CheckHRESULT(hResult, std::wstring_view(L"couldn't write to sub resource root sig"))) return newTexture;
 
 	// create the resource view
 	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
@@ -583,7 +552,7 @@ DescriptorHeapResource D3DDeviceManager::CreateFallbackTexture(const wchar_t* Na
 		nullptr,
 		IID_PPV_ARGS(&newTexture.buffer));
 
-	if (FAILED(hResult) && !OutputErrorFromHResult(hResult, "couldn't create texture ", *mLogFilePtr)) return newTexture;
+	if (!DuckyLog::CheckHRESULT(hResult, std::wstring_view(L"couldn't create texture"))) return newTexture;
 
 	uint8_t pixel[4] =
 	{
@@ -596,7 +565,7 @@ DescriptorHeapResource D3DDeviceManager::CreateFallbackTexture(const wchar_t* Na
 	hResult = newTexture.buffer->WriteToSubresource(0, nullptr, pixel, 4, 4);
 	newTexture.buffer->SetName(Name);
 
-	if (FAILED(hResult) && !OutputErrorFromHResult(hResult, "couldn't write to subresource ", *mLogFilePtr)) return newTexture;
+	if (!DuckyLog::CheckHRESULT(hResult, std::wstring_view(L"couldn't write to sub resource"))) return newTexture;
 
 	// create the resource view
 	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
@@ -621,7 +590,7 @@ ComPtr<ID3D12Fence> D3DDeviceManager::CreateFence(UINT64 FenceVal)
 {
 	ComPtr<ID3D12Fence> fence = nullptr;
 	HRESULT hResult = mDevice->CreateFence(FenceVal, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(fence.ReleaseAndGetAddressOf()));
-	if (FAILED(hResult) && !OutputErrorFromHResult(hResult, "couldn't create fence ", *mLogFilePtr)) return {};
+	if (!DuckyLog::CheckHRESULT(hResult, std::wstring_view(L"couldn't create fence"))) return {};
 	return fence;
 }
 
@@ -638,7 +607,7 @@ int D3DDeviceManager::CreateDescriptorHeap(D3D12_DESCRIPTOR_HEAP_FLAGS flags, D3
 
 	HRESULT hResult = mDevice->CreateDescriptorHeap(&descHeapDesc, IID_PPV_ARGS(descHeap.ReleaseAndGetAddressOf()));
 
-	if (FAILED(hResult) && !OutputErrorFromHResult(hResult, "couldn't create desc heap ", *mLogFilePtr)) return -1;
+	if (!DuckyLog::CheckHRESULT(hResult, std::wstring_view(L"couldn't create desc heap"))) return -1;
 
 	mDescriptorHeaps.emplace_back(descHeap);
 

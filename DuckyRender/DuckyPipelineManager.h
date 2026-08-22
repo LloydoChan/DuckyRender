@@ -44,7 +44,7 @@ struct RootSignatureDesc
 class DuckyPipelineManager
 {
 	public:
-		bool Init(std::wofstream* FilePtr, ID3D12Device* DevicePtr);
+		bool Init(ID3D12Device* DevicePtr);
 		std::vector<D3D12_INPUT_ELEMENT_DESC> CreateInputLayout(ShaderCompilationOutput& shaderCompData);
 		PipelineAndRootSig CreatePSO(GraphicsPipelineDesc& MainDesc);
 		PipelineAndRootSig CreateComputePSO(ComputePipelineDesc& MainDesc);

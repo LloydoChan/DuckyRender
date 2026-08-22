@@ -4,7 +4,7 @@
 #include "DuckyTools.h"
 #include "DuckyGraphicsContext.h"
 
-bool DuckySwapChain::Init(D3DDeviceManager* DeviceManager, IDXGIFactory6* factory, HWND hWnd, UINT Width, UINT Height, std::wofstream* LogFile)
+bool DuckySwapChain::Init(D3DDeviceManager* DeviceManager, IDXGIFactory6* factory, HWND hWnd, UINT Width, UINT Height)
 {
 	mHWnd = hWnd;
 	DXGI_SWAP_CHAIN_DESC1 swapChainDesc = {};
@@ -25,10 +25,10 @@ bool DuckySwapChain::Init(D3DDeviceManager* DeviceManager, IDXGIFactory6* factor
 	ComPtr<IDXGISwapChain1> swapChain1;
 
 	HRESULT hResult = factory->CreateSwapChainForHwnd(DeviceManager->GetCommandQueue(), hWnd, &swapChainDesc, nullptr, nullptr, swapChain1.ReleaseAndGetAddressOf());
-	if (FAILED(hResult) && !OutputErrorFromHResult(hResult, "problem creating swapchain: ", *LogFile)) return false;
+	if (!DuckyLog::CheckHRESULT(hResult, std::wstring_view(L"Couldn't create Swap Chain"))) return false;
 
 	hResult = swapChain1.As(&mSwapChain);
-	if (FAILED(hResult) && !OutputErrorFromHResult(hResult, "problem exchanging swap chain pointers ", *LogFile)) return false;
+	if (!DuckyLog::CheckHRESULT(hResult, std::wstring_view(L"Problem Exchanging Swap Chain Pointers"))) return false;
 
 	D3D12_DESCRIPTOR_HEAP_DESC heapDesc = {};
 
@@ -42,9 +42,7 @@ bool DuckySwapChain::Init(D3DDeviceManager* DeviceManager, IDXGIFactory6* factor
 	ID3D12Device* device = DeviceManager->GetDevice();
 
 	hResult = device->CreateDescriptorHeap(&heapDesc, IID_PPV_ARGS(&mRtvHeaps));
-
-	if (FAILED(hResult) && !OutputErrorFromHResult(hResult, "problem creating desc heap: ", *LogFile)) return false;
-
+	if (!DuckyLog::CheckHRESULT(hResult, std::wstring_view(L"Problem creating desc heap"))) return false;
 
 	D3D12_CPU_DESCRIPTOR_HANDLE handle = mRtvHeaps->GetCPUDescriptorHandleForHeapStart();
 
@@ -59,7 +57,7 @@ bool DuckySwapChain::Init(D3DDeviceManager* DeviceManager, IDXGIFactory6* factor
 		mBackBuffers.push_back(ptr);
 		hResult = mSwapChain->GetBuffer(idx, IID_PPV_ARGS(&mBackBuffers[idx]));
 
-		if (FAILED(hResult) && !OutputErrorFromHResult(hResult, "problem getting back buffer: ", *LogFile)) return false;
+		if (!DuckyLog::CheckHRESULT(hResult, std::wstring_view(L"Problem creating back buffer"))) return false;
 
 		device->CreateRenderTargetView(mBackBuffers[idx].Get(), &rtvTargetDesc, handle);
 		handle.ptr += device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
@@ -69,7 +67,7 @@ bool DuckySwapChain::Init(D3DDeviceManager* DeviceManager, IDXGIFactory6* factor
 	return true;
 }
 
-bool DuckySwapChain::Resize(D3DDeviceManager* DeviceManager, UINT32 width, UINT32 height, std::wofstream* LogFile)
+bool DuckySwapChain::Resize(D3DDeviceManager* DeviceManager, UINT32 width, UINT32 height)
 {
     if (width == 0 || height == 0)
     {
@@ -90,7 +88,7 @@ bool DuckySwapChain::Resize(D3DDeviceManager* DeviceManager, UINT32 width, UINT3
 
     HRESULT hResult = mSwapChain->ResizeBuffers(bufferCount, width, height, format, flags);
 
-    if (FAILED(hResult) && !OutputErrorFromHResult(hResult, "couldn't resize swap-chain buffers: ", *LogFile)) return false;
+	if (!DuckyLog::CheckHRESULT(hResult, std::wstring_view(L"couldn't resize swap chain buffers"))) return false;
 
     ID3D12Device* device = DeviceManager->GetDevice();
 
@@ -103,7 +101,7 @@ bool DuckySwapChain::Resize(D3DDeviceManager* DeviceManager, UINT32 width, UINT3
     for (UINT index = 0; index < bufferCount; ++index)
     {
 		hResult = mSwapChain->GetBuffer(index, IID_PPV_ARGS(mBackBuffers[index].ReleaseAndGetAddressOf()));
-        if (FAILED(hResult) && !OutputErrorFromHResult(hResult, "couldn't retrieve resized back buffer: ", *LogFile))return false;
+		if (!DuckyLog::CheckHRESULT(hResult, std::wstring_view(L"Problem retrieve resized back buffer"))) return false;
         
         device->CreateRenderTargetView(mBackBuffers[index].Get(), nullptr, rtvHandle);
 		rtvHandle.ptr += rtvIncrement;

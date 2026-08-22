@@ -27,10 +27,10 @@ bool DuckyGraphicsContext::Init(D3DDeviceManager* DeviceManager, UINT64 CBVCapac
 	}
 
 	HRESULT hResult = DeviceManager->GetDevice()->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, mFrames[0].mCmdAllocator.Get(), nullptr, IID_PPV_ARGS(&mCommandList));
-	if (FAILED(hResult) && !OutputErrorFromHResult(hResult, "problem creating command list: ", *LogFile)) return false;
+	if (!DuckyLog::CheckHRESULT(hResult, std::wstring_view(L"Problem creating command list resource"))) return false;
 	
 	hResult = mCommandList->Close();
-	if (FAILED(hResult) && !OutputErrorFromHResult(hResult, "couldn't close on new cmd list: ", *LogFile)) return false;
+	if (!DuckyLog::CheckHRESULT(hResult, std::wstring_view(L"couldn't close on command list"))) return false;
 
 	return true;
 }
@@ -48,10 +48,10 @@ bool DuckyGraphicsContext::BeginFrame(UINT CurrentFrame, ID3D12Fence* Fence, ID3
 	}
 
 	hResult = context.mCmdAllocator.Get()->Reset();
-	if (FAILED(hResult) && !OutputErrorFromHResult(hResult, "problem resetting Command Allocator", *LogFile)) return false;
+	if(!DuckyLog::CheckHRESULT(hResult, std::wstring_view(L"Problem resetting command allocator"))) return false;
 
 	hResult = mCommandList->Reset(context.mCmdAllocator.Get(), PipelineState);
-	if (FAILED(hResult) && !OutputErrorFromHResult(hResult, "problem resetting Command List", *LogFile)) return false;
+	if (!DuckyLog::CheckHRESULT(hResult, std::wstring_view(L"Problem resetting command list"))) return false;
 
 	context.mBufferAllocator.Reset();
 

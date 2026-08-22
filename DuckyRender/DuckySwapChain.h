@@ -7,9 +7,9 @@ class D3DDeviceManager;
 class DuckySwapChain
 {
     public:
-        bool Init(D3DDeviceManager* DeviceManager, IDXGIFactory6* factory, HWND hWnd, UINT Width, UINT Height, std::wofstream* LogFile);
+        bool Init(D3DDeviceManager* DeviceManager, IDXGIFactory6* factory, HWND hWnd, UINT Width, UINT Height);
         void Present() { mSwapChain->Present(1, 0); };
-        bool Resize(D3DDeviceManager* DeviceManager, UINT32 width, UINT32 height, std::wofstream* LogFile);
+        bool Resize(D3DDeviceManager* DeviceManager, UINT32 width, UINT32 height);
 
         UINT32 GetCurrentBackBufferIndex() const { return  mSwapChain->GetCurrentBackBufferIndex(); };
         ID3D12Resource* GetCurrentBackBuffer() const;
