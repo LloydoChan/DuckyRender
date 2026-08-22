@@ -102,9 +102,18 @@ PipelineAndRootSig DuckyPipelineManager::CreatePSO(GraphicsPipelineDesc& mainDes
 	PipelineAndRootSig newPipeline;
 
 	ShaderCompilationOutput vertexShaderOutput;
-	if (!mCompiler->CompileShaderDXC(mainDesc.VSShader.File.c_str(), mainDesc.VSShader.Entry.c_str(), L"vs_6_6", vertexShaderOutput)) return newPipeline;
+	if (!mCompiler->CompileShaderDXC(mainDesc.VSShader.File.c_str(), mainDesc.VSShader.Entry.c_str(), L"vs_6_6", vertexShaderOutput))
+	{
+		DuckyLog::Error(std::wstring_view(L"Couldn't Compile vertex shader: " + mainDesc.VSShader.File));
+		return newPipeline;
+	}
+
 	ShaderCompilationOutput pixelShaderOutput;
 	if (!mCompiler->CompileShaderDXC(mainDesc.PSShader.File.c_str(), mainDesc.PSShader.Entry.c_str(), L"ps_6_6", pixelShaderOutput)) return newPipeline;
+	{
+		DuckyLog::Error(std::wstring_view(L"Couldn't Compile pixel shader: " + mainDesc.PSShader.File));
+		return newPipeline;
+	}
 
 	D3D12_ROOT_SIGNATURE_DESC rootSigDesc = {};
 	rootSigDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
@@ -167,7 +176,11 @@ PipelineAndRootSig DuckyPipelineManager::CreateComputePSO(ComputePipelineDesc& M
 	PipelineAndRootSig newPipeline;
 
 	ShaderCompilationOutput computeShaderOutput;
-	if (!mCompiler->CompileShaderDXC(MainDesc.CSShader.File.c_str(), MainDesc.CSShader.Entry.c_str(), L"cs_6_6", computeShaderOutput)) return newPipeline;
+	if (!mCompiler->CompileShaderDXC(MainDesc.CSShader.File.c_str(), MainDesc.CSShader.Entry.c_str(), L"cs_6_6", computeShaderOutput))
+	{
+		DuckyLog::Error(std::wstring_view(L"Couldn't Compile vertex shader: " + MainDesc.CSShader.File));
+		return newPipeline;
+	}
 
 	D3D12_ROOT_SIGNATURE_DESC rootSigDesc = {};
 	rootSigDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_NONE;
