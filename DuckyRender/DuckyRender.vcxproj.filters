@@ -117,9 +117,6 @@
     <FxCompile Include="BasicVertTransformation.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
-    <FxCompile Include="BasicColorPixelShader.hlsl">
-      <Filter>Shaders</Filter>
-    </FxCompile>
     <FxCompile Include="AABBVertexShader.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
@@ -130,6 +127,9 @@
       <Filter>Shaders</Filter>
     </FxCompile>
     <FxCompile Include="ClearCountersCompute.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="BasicColorPixelShader.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
   </ItemGroup>

@@ -19,17 +19,19 @@ bool DuckyPipelineManager::Init(ID3D12Device* DevicePtr)
 	mPipelineStateFactory[PipelineType::MASKED_DBL] = MakeDoubleSidedMaskedPipelineState;
 	mPipelineStateFactory[PipelineType::DEBUG]      = MakeDebugDrawPipelineState;
 
+	mShaderPath = GetExecutableDirectory();
+
 	return true;
 }
 
-std::vector<D3D12_INPUT_ELEMENT_DESC> DuckyPipelineManager::CreateInputLayout(ShaderCompilationOutput& shaderCompData)
+std::vector<D3D12_INPUT_ELEMENT_DESC> DuckyPipelineManager::CreateInputLayout(const void* ShaderData, size_t ShaderSize)
 {
 	std::vector<D3D12_INPUT_ELEMENT_DESC> Elems;
 
 	ComPtr<ID3D12ShaderReflection> vertReflectionData;
 
-	DxcBuffer reflectionData = { shaderCompData.reflectionBlob->GetBufferPointer(),
-								 shaderCompData.reflectionBlob->GetBufferSize(),
+	DxcBuffer reflectionData = { ShaderData,
+								 ShaderSize,
 								 0U };
 
 	if (!mCompiler->CreateReflectionData(&reflectionData, vertReflectionData.ReleaseAndGetAddressOf())) return Elems;
@@ -100,7 +102,7 @@ PipelineAndRootSig DuckyPipelineManager::CreatePSO(GraphicsPipelineDesc& mainDes
 	}
 
 	PipelineAndRootSig newPipeline;
-
+#ifdef _DEBUG
 	ShaderCompilationOutput vertexShaderOutput;
 	if (!mCompiler->CompileShaderDXC(mainDesc.VSShader.File.c_str(), mainDesc.VSShader.Entry.c_str(), L"vs_6_6", vertexShaderOutput))
 	{
@@ -109,11 +111,16 @@ PipelineAndRootSig DuckyPipelineManager::CreatePSO(GraphicsPipelineDesc& mainDes
 	}
 
 	ShaderCompilationOutput pixelShaderOutput;
-	if (!mCompiler->CompileShaderDXC(mainDesc.PSShader.File.c_str(), mainDesc.PSShader.Entry.c_str(), L"ps_6_6", pixelShaderOutput)) return newPipeline;
+	if (!mCompiler->CompileShaderDXC(mainDesc.PSShader.File.c_str(), mainDesc.PSShader.Entry.c_str(), L"ps_6_6", pixelShaderOutput))
 	{
 		DuckyLog::Error(std::wstring_view(L"Couldn't Compile pixel shader: " + mainDesc.PSShader.File));
 		return newPipeline;
 	}
+#else
+	std::vector<std::byte> vs = LoadShaderBytecode(mShaderPath / mainDesc.VSShader.File.c_str());
+	std::vector<std::byte> ps = LoadShaderBytecode(mShaderPath / mainDesc.PSShader.File.c_str());
+#endif
+
 
 	D3D12_ROOT_SIGNATURE_DESC rootSigDesc = {};
 	rootSigDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
@@ -142,12 +149,21 @@ PipelineAndRootSig DuckyPipelineManager::CreatePSO(GraphicsPipelineDesc& mainDes
 
 	desc.pRootSignature = newPipeline.rootSig.Get();
 
+#ifdef _DEBUG
 	desc.VS.pShaderBytecode = vertexShaderOutput.shaderBlob.Get()->GetBufferPointer();
-	desc.VS.BytecodeLength = vertexShaderOutput.shaderBlob.Get()->GetBufferSize();
+	desc.VS.BytecodeLength  = vertexShaderOutput.shaderBlob.Get()->GetBufferSize();
 	desc.PS.pShaderBytecode = pixelShaderOutput.shaderBlob.Get()->GetBufferPointer();
-	desc.PS.BytecodeLength = pixelShaderOutput.shaderBlob.Get()->GetBufferSize();
+	desc.PS.BytecodeLength  = pixelShaderOutput.shaderBlob.Get()->GetBufferSize();
 
-	std::vector<D3D12_INPUT_ELEMENT_DESC> elems = CreateInputLayout(vertexShaderOutput);
+	std::vector<D3D12_INPUT_ELEMENT_DESC> elems = CreateInputLayout(desc.VS.pShaderBytecode, desc.VS.BytecodeLength);
+#else
+	desc.VS.pShaderBytecode = vs.data();
+	desc.VS.BytecodeLength  = vs.size();
+	desc.PS.pShaderBytecode = ps.data();
+	desc.PS.BytecodeLength  = ps.size();
+
+	std::vector<D3D12_INPUT_ELEMENT_DESC> elems = CreateInputLayout(vs.data(), vs.size());
+#endif
 
 	desc.InputLayout.pInputElementDescs = elems.data();
 	desc.InputLayout.NumElements = elems.size();
@@ -215,4 +231,18 @@ PipelineAndRootSig DuckyPipelineManager::CreateComputePSO(ComputePipelineDesc& M
 	DuckyLog::CheckHRESULT(hResult, std::wstring_view(L"couldn't create compute pipeline"));
 
 	return newPipeline;
+}
+
+std::vector<std::byte> LoadShaderBytecode(const std::filesystem::path& path)
+{
+	std::ifstream file(path, std::ios::binary | std::ios::ate);
+
+	if (!file) throw std::runtime_error("Failed to open shader");
+
+	const auto size = file.tellg();
+	file.seekg(0);
+	std::vector<std::byte> data(static_cast<size_t>(size));
+	file.read(reinterpret_cast<char*>(data.data()),size);
+
+	return data;
 }

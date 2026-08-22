@@ -3,7 +3,7 @@
 #include "D3DDeviceManager.h"
 #include "DuckyTools.h"
 
-bool DuckyGraphicsContext::Init(D3DDeviceManager* DeviceManager, UINT64 CBVCapacity, UINT64 NumPossibleDraws, std::wofstream* LogFile)
+bool DuckyGraphicsContext::Init(D3DDeviceManager* DeviceManager, UINT64 CBVCapacity, UINT64 NumPossibleDraws)
 {
 	const size_t indirectBufferSize = NumPossibleDraws * sizeof(IndirectCommand);
 
@@ -35,7 +35,7 @@ bool DuckyGraphicsContext::Init(D3DDeviceManager* DeviceManager, UINT64 CBVCapac
 	return true;
 }
 
-bool DuckyGraphicsContext::BeginFrame(UINT CurrentFrame, ID3D12Fence* Fence, ID3D12PipelineState* PipelineState, HANDLE event, std::wofstream* LogFile)
+bool DuckyGraphicsContext::BeginFrame(UINT CurrentFrame, ID3D12Fence* Fence, ID3D12PipelineState* PipelineState, HANDLE event)
 {
 	HRESULT hResult;
 	FrameContext& context = mFrames[CurrentFrame];

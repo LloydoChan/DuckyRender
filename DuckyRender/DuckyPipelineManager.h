@@ -45,7 +45,7 @@ class DuckyPipelineManager
 {
 	public:
 		bool Init(ID3D12Device* DevicePtr);
-		std::vector<D3D12_INPUT_ELEMENT_DESC> CreateInputLayout(ShaderCompilationOutput& shaderCompData);
+		std::vector<D3D12_INPUT_ELEMENT_DESC> CreateInputLayout(const void* ShaderData, size_t ShaderSize);
 		PipelineAndRootSig CreatePSO(GraphicsPipelineDesc& MainDesc);
 		PipelineAndRootSig CreateComputePSO(ComputePipelineDesc& MainDesc);
 	private:
@@ -54,4 +54,8 @@ class DuckyPipelineManager
 		std::wofstream* mFilePtr;
 
 		std::map<PipelineType, std::function<D3D12_GRAPHICS_PIPELINE_STATE_DESC()>> mPipelineStateFactory;
+
+		std::filesystem::path mShaderPath;
 };
+
+std::vector<std::byte> LoadShaderBytecode(const std::filesystem::path& path);

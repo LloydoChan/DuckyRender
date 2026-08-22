@@ -44,7 +44,9 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 	if (!DuckyFile)
 	{
 		std::error_code ec(errno, std::generic_category());
-		mLogFile << ec.message().c_str() << std::endl;
+		std::string errorMessage = ec.message();
+		std::wstring w_str(errorMessage.begin(), errorMessage.end());
+		DuckyLog::Error(w_str);
 		return false;
 	}
 
@@ -148,8 +150,13 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 	samplerDesc.ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
 
 	ShaderDesc pbrShaderVS, pbrShaderPS;
+#ifdef _DEBUG
 	pbrShaderVS.File = L"BasicVertTransformation.hlsl";
 	pbrShaderPS.File = L"BasicColorPixelShader.hlsl";
+#else
+	pbrShaderVS.File = L"BasicVertTransformation.cso";
+	pbrShaderPS.File = L"BasicColorPixelShader.cso";
+#endif
 
 	GraphicsPipelineDesc mainDesc;
 	mainDesc.VSShader = pbrShaderVS;
@@ -187,8 +194,13 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 
 
 	ShaderDesc debugShaderVS, debugShaderPS;
+#ifdef _DEBUG
 	debugShaderVS.File = L"AABBVertexShader.hlsl";
 	debugShaderPS.File = L"AABBPixelShader.hlsl";
+#else
+	debugShaderVS.File = L"AABBVertexShader.cso";
+	debugShaderPS.File = L"AABBPixelShader.cso";
+#endif
 
 	GraphicsPipelineDesc debugDesc;
 	debugDesc.VSShader = debugShaderVS;
@@ -282,10 +294,8 @@ bool SimplestApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* Windo
 	UINT64 neededCapacity = FrameConstantSize  + TotalCullConstants;
 
 	mDuckyContext = new DuckyGraphicsContext;
-	if (!mDuckyContext->Init(mDeviceManager.get(), neededCapacity, mTotalPrimitiveDraws, &mLogFile)) return false;
+	if (!mDuckyContext->Init(mDeviceManager.get(), neededCapacity, mTotalPrimitiveDraws)) return false;
 
-	
-	
 	mWholeScreenViewPortScissor.scissor.left = 0;
 	mWholeScreenViewPortScissor.scissor.right = WindowWidth;
 	mWholeScreenViewPortScissor.scissor.top = 0;
@@ -640,7 +650,7 @@ void SimplestApp::AppMainLoop()
 
 
 		ID3D12PipelineState* opaqueState = mRenderer.GetPipelineSig(PipelineType::OPAQUE).pipeLineState.Get();
-		if (!mDuckyContext->BeginFrame(currentFrame, mFence.Get(), opaqueState, mFenceEvent, &mLogFile)) break;
+		if (!mDuckyContext->BeginFrame(currentFrame, mFence.Get(), opaqueState, mFenceEvent)) break;
 
 		ComPtr<ID3D12Resource> visibleBuffer = mDuckyContext->GetVisibleDrawCounts(currentFrame);
 

@@ -42,8 +42,6 @@ protected:
 	HINSTANCE mHInstance = nullptr;
 	LPCWSTR mLpszClassName = nullptr;
 
-	std::wofstream mLogFile;
-
 	HANDLE mFenceEvent = nullptr;
 	HWND mWindowHandle = 0;
 
@@ -52,7 +50,7 @@ protected:
 
 	bool mMinimized = false;
 
-	std::wstring mInputFilePath;
+	std::filesystem::path mInputFilePath;
 
 	ID3D12CommandQueue* mCommandQueue = nullptr;
 

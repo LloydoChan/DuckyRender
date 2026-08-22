@@ -2,6 +2,7 @@
 #include "DuckyApp.h"
 #include "D3DDeviceManager.h"
 #include "DuckyRenderTypes.h"
+#include "DuckyTools.h"
 
 DebugVertex boxVertices[8] =
 {
@@ -29,8 +30,6 @@ DuckyApp::~DuckyApp() = default;
 
 bool DuckyApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* WindowName)
 {
-	mLogFile.open("log.txt");
-
 	int argc;
 	LPWSTR* argv = CommandLineToArgvW(GetCommandLineW(), &argc);
 	for (int i = 0; i < argc; i++)
@@ -44,11 +43,13 @@ bool DuckyApp::Init(UINT WindowWidth, UINT WindowHeight, const wchar_t* WindowNa
 
 		if (wcscmp(argv[i], L"-input") == 0) {
 			// get the folder name
-			std::wstring path = L"..//Assets//CookedAssets//";
-			std::wstring asset(argv[i + 1]);
-			std::wstring suffix = L"//CookedData.Ducky";
+			std::filesystem::path homePath = GetExecutableDirectory();
 
-			mInputFilePath = path + asset + suffix;
+			auto assets = homePath / L"Assets" / L"CookedAssets";
+			std::wstring asset(argv[i + 1]);
+			std::wstring suffix = L"CookedData.Ducky";
+
+			mInputFilePath = assets / asset / suffix;
 		}
 	}
 	LocalFree(argv);

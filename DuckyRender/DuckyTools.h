@@ -48,3 +48,5 @@ constexpr UINT64 AlignConstantBufferSize(UINT64 size)
 {
 	return (size + 255) & ~255;
 }
+
+std::filesystem::path GetExecutableDirectory();

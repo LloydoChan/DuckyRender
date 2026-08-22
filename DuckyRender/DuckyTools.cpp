@@ -82,3 +82,10 @@ void DebugMatrix(XMMATRIX& nextTransform, std::wofstream& logFile)
 		<< std::setw(10) << debugMatrix._43 << ", "
 		<< std::setw(10) << debugMatrix._44 << std::endl;
 }
+
+std::filesystem::path GetExecutableDirectory()
+{
+    wchar_t path[MAX_PATH];
+    GetModuleFileNameW(nullptr, path, MAX_PATH);
+    return std::filesystem::path(path).parent_path();
+}
